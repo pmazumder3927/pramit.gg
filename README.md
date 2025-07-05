@@ -5,10 +5,12 @@ A personal digital space - a living, evolving journal of interests, projects, an
 ## Features
 
 - **Minimalist Design**: Black and white foundation with cyberpunk orange and purple accents
-- **Content Types**: Music clips, climbing videos, and notes
+- **Content Types**: Music clips, climbing videos, and notes with full markdown support
 - **Quick Publishing**: Create posts in under 60 seconds from your phone
 - **Mobile-First**: Optimized for viewing and creating content on mobile devices
 - **Fast & Modern**: Built with Next.js 14, TypeScript, and Tailwind CSS
+- **Live Spotify Integration**: Shows your current or last played track with album art
+- **Hidden Dashboard**: Secret keyboard shortcuts for content management
 
 ## Tech Stack
 
@@ -16,6 +18,7 @@ A personal digital space - a living, evolving journal of interests, projects, an
 - **Animations**: Framer Motion
 - **Backend**: Supabase (Database, Auth, Storage)
 - **Media**: React Player (YouTube, SoundCloud embeds)
+- **Music**: Spotify Web API integration
 - **Hosting**: Vercel
 
 ## Setup Instructions
@@ -72,7 +75,18 @@ CREATE POLICY "Users can delete their own posts" ON posts
    - Add your Google OAuth credentials
    - Set redirect URL to `https://your-domain.com/api/auth/callback`
 
-### 3. Configure Environment Variables
+### 3. Set up Spotify Integration
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app
+3. Add `http://localhost:3000` to redirect URIs for development
+4. Note your Client ID and Client Secret
+5. Get your refresh token:
+   - Use the [Spotify Web API Auth Examples](https://github.com/spotify/web-api-examples) or
+   - Use this [online tool](https://developer.spotify.com/console/get-current-user-recently-played-tracks/) to get authorization
+   - Exchange the authorization code for a refresh token
+
+### 4. Configure Environment Variables
 
 Create a `.env.local` file in the root directory:
 
@@ -81,11 +95,16 @@ Create a `.env.local` file in the root directory:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
+# Spotify API
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+SPOTIFY_REFRESH_TOKEN=your_spotify_refresh_token
+
 # Site URL (for production)
 NEXT_PUBLIC_SITE_URL=https://pramit.gg
 ```
 
-### 4. Run Development Server
+### 5. Run Development Server
 
 ```bash
 npm run dev
@@ -110,21 +129,32 @@ Visit `http://localhost:3000` to see your site.
 
 ## Usage Guide
 
+### Accessing the Dashboard
+
+The dashboard is hidden from public view. Access it using:
+- **Keyboard shortcut**: `Cmd/Ctrl + Shift + D`
+- **Konami code**: ↑↑↓↓←→←→BA (for fun!)
+
 ### Creating Posts (Dashboard)
 
-1. Navigate to `/dashboard` (you'll need to sign in with Google)
+1. Navigate to `/dashboard` using the secret shortcuts
 2. Click "+ create new post"
 3. For music/video posts: paste a YouTube or SoundCloud link
-4. Add a title and your thoughts
-5. Add tags (comma-separated)
-6. Choose to publish immediately or save as draft
-7. Click "publish"
+4. Add a title and your thoughts (supports full markdown)
+5. Switch to markdown editor for long-form content with math equations
+6. Add tags (comma-separated)
+7. Choose to publish immediately or save as draft
+8. Click "publish"
 
 ### Content Types
 
 - **Music**: Paste SoundCloud links for embedded audio players
 - **Climb**: Paste YouTube links for climbing videos
-- **Note**: Text-based posts for thoughts and ideas
+- **Note**: Text-based posts with full markdown support including:
+  - Headers, lists, blockquotes
+  - Code blocks with syntax highlighting
+  - Math equations (KaTeX)
+  - Tables and GitHub-flavored markdown
 
 ### Mobile Usage
 
@@ -132,7 +162,17 @@ The site is optimized for mobile creation and viewing:
 - Bottom navigation bar on mobile
 - Touch-friendly interface
 - Quick creation flow
-- Swipeable content cards
+- Swipeable featured content
+- Expandable "now playing" widget
+
+### Spotify Integration
+
+The "now playing" widget shows:
+- Your currently playing track (with live progress bar)
+- Your last played track if nothing is currently playing
+- Album artwork and track details
+- Click to expand for full details
+- Direct link to open in Spotify
 
 ## Customization
 
@@ -151,6 +191,13 @@ colors: {
 
 Modify animations in `tailwind.config.ts` or create new Framer Motion variants in components.
 
+### Spotify Refresh Rate
+
+The now playing widget refreshes every 30 seconds. Adjust in `components/NowPlaying.tsx`:
+```js
+refreshInterval: 30000, // milliseconds
+```
+
 ## Development
 
 ### Project Structure
@@ -158,18 +205,26 @@ Modify animations in `tailwind.config.ts` or create new Framer Motion variants i
 ```
 app/
 ├── components/       # Reusable components
+│   ├── PostCard.tsx     # Individual post display
+│   ├── Navigation.tsx   # Navigation component
+│   ├── NowPlaying.tsx   # Spotify integration
+│   └── SecretDashboard.tsx # Hidden dashboard access
 ├── lib/             # Utilities and configurations
 ├── api/             # API routes
+│   ├── auth/           # Authentication routes
+│   └── spotify/        # Spotify API integration
 ├── dashboard/       # Dashboard page
 ├── about/          # About page
+├── post/[id]/      # Individual post pages
 └── page.tsx        # Homepage
 ```
 
 ### Key Components
 
-- `PostCard.tsx`: Individual post display with media handling
+- `PostCard.tsx`: Individual post display with media handling and previews
 - `Navigation.tsx`: Responsive navigation component
-- `Dashboard`: Content management interface
+- `NowPlaying.tsx`: Live Spotify integration with expandable details
+- `Dashboard`: Content management interface with markdown editor
 
 ## License
 

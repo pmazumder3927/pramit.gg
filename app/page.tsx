@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Post, supabase } from '@/app/lib/supabase'
 import PostCard from '@/app/components/PostCard'
 import Navigation from '@/app/components/Navigation'
+import NowPlaying from '@/app/components/NowPlaying'
 import { useInView } from 'react-intersection-observer'
 
 export default function Home() {
@@ -22,13 +23,19 @@ export default function Home() {
 
   const fetchPosts = async () => {
     try {
+      console.log('Fetching posts...')
       const { data, error } = await supabase
         .from('posts')
         .select('*')
         .eq('is_draft', false)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+      
+      console.log('Posts fetched successfully:', data?.length || 0)
       
       if (data) {
         // Set first 3 posts as featured for horizontal scroll
@@ -37,6 +44,11 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error fetching posts:', error)
+      // Log more details about the error
+      if (error instanceof Error) {
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
+      }
     } finally {
       setLoading(false)
     }
@@ -142,8 +154,10 @@ export default function Home() {
       )}
       
       <footer className="mt-16 px-4 py-8 md:px-8">
+        <div className="flex items-center gap-4">
+          <NowPlaying />
+        </div>
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-gray-500">
-          <p>© 2024 pramit mazumder</p>
           <div className="flex items-center gap-4">
             <a
               href="/about"
@@ -151,10 +165,6 @@ export default function Home() {
             >
               about
             </a>
-            <span className="text-gray-700">•</span>
-            <span>
-              now playing: <span className="text-cyber-orange">nothing</span>
-            </span>
           </div>
         </div>
       </footer>

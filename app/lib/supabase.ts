@@ -3,7 +3,23 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Debug logging for production issues
+if (typeof window !== 'undefined') {
+  console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Missing')
+  console.log('Supabase Key:', supabaseAnonKey ? 'Set' : 'Missing')
+}
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables')
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
 
 export type Post = {
   id: string
