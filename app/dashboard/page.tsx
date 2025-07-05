@@ -4,15 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, Post } from '@/app/lib/supabase'
 import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
-import '@uiw/react-md-editor/markdown-editor.css'
-import '@uiw/react-markdown-preview/markdown.css'
-
-// Dynamic import to avoid SSR issues
-const MDEditor = dynamic(
-  () => import('@uiw/react-md-editor'),
-  { ssr: false }
-)
+import EnhancedMarkdownEditor from '@/app/components/EnhancedMarkdownEditor'
 
 const ACCENT_COLORS = ['#ff6b3d', '#9c5aff', '#1a1b22']
 
@@ -22,7 +14,7 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [isMarkdownMode, setIsMarkdownMode] = useState(false)
+  const [isMarkdownMode, setIsMarkdownMode] = useState(true)
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -185,29 +177,35 @@ export default function Dashboard() {
               />
               
               {/* Toggle between simple textarea and markdown editor */}
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center justify-between mb-3">
                 <button
                   type="button"
                   onClick={() => setIsMarkdownMode(!isMarkdownMode)}
-                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                    isMarkdownMode 
+                      ? 'bg-cyber-orange text-black' 
+                      : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                  }`}
                 >
-                  {isMarkdownMode ? 'switch to simple' : 'switch to markdown'} editor
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  {isMarkdownMode ? 'Enhanced Editor' : 'Simple Editor'}
                 </button>
+                {isMarkdownMode && (
+                  <span className="text-xs text-gray-500">
+                    ✨ Drag & drop images, markdown shortcuts, and more
+                  </span>
+                )}
               </div>
               
               {isMarkdownMode ? (
-                <div data-color-mode="dark">
-                  <MDEditor
-                    value={formData.content}
-                    onChange={(value) => setFormData({ ...formData, content: value || '' })}
-                    preview="edit"
-                    height={400}
-                    hideToolbar={false}
-                    textareaProps={{
-                      placeholder: 'write your content in markdown...'
-                    }}
-                  />
-                </div>
+                <EnhancedMarkdownEditor
+                  value={formData.content}
+                  onChange={(value) => setFormData({ ...formData, content: value })}
+                  placeholder="write your content in markdown..."
+                  height={400}
+                />
               ) : (
                 <textarea
                   placeholder="thoughts..."
