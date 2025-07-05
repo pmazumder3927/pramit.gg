@@ -50,6 +50,32 @@
   }
 }
 
+@layer utilities {
+  /* Hide scrollbar for horizontal scroll areas */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Line clamp utilities */
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  
+  .line-clamp-3 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+}
+
 @layer components {
   .card-hover {
     @apply transition-all duration-300 ease-out;
@@ -216,5 +242,23 @@
     100% {
       clip: rect(11px, 450px, 119px, 0);
     }
+  }
+  
+  /* Markdown editor dark theme overrides */
+  .w-md-editor {
+    background-color: #000 !important;
+  }
+  
+  .w-md-editor-toolbar {
+    background-color: #1a1b22 !important;
+    border-bottom: 1px solid #333 !important;
+  }
+  
+  .w-md-editor-content {
+    background-color: #000 !important;
+  }
+  
+  .w-md-editor-preview {
+    background-color: #000 !important;
   }
 } 

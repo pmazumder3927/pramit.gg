@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, Post } from '@/app/lib/supabase'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import '@uiw/react-md-editor/markdown-editor.css'
+import '@uiw/react-markdown-preview/markdown.css'
+
+// Dynamic import to avoid SSR issues
+const MDEditor = dynamic(
+  () => import('@uiw/react-md-editor'),
+  { ssr: false }
+)
 
 const ACCENT_COLORS = ['#ff6b3d', '#9c5aff', '#1a1b22']
 
@@ -13,6 +22,7 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [isMarkdownMode, setIsMarkdownMode] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -56,7 +66,7 @@ export default function Dashboard() {
     e.preventDefault()
     
     const randomColor = ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)]
-    const tags = formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+    const tags = formData.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean)
     
     try {
       const { error } = await supabase
@@ -81,6 +91,7 @@ export default function Dashboard() {
         is_draft: false,
       })
       setShowCreateForm(false)
+      setIsMarkdownMode(false)
       fetchPosts()
     } catch (error) {
       console.error('Error creating post:', error)
@@ -127,7 +138,7 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -173,13 +184,39 @@ export default function Dashboard() {
                 className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
               />
               
-              <textarea
-                placeholder="thoughts..."
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
-              />
+              {/* Toggle between simple textarea and markdown editor */}
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMarkdownMode(!isMarkdownMode)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  {isMarkdownMode ? 'switch to simple' : 'switch to markdown'} editor
+                </button>
+              </div>
+              
+              {isMarkdownMode ? (
+                <div data-color-mode="dark">
+                  <MDEditor
+                    value={formData.content}
+                    onChange={(value) => setFormData({ ...formData, content: value || '' })}
+                    preview="edit"
+                    height={400}
+                    hideToolbar={false}
+                    textareaProps={{
+                      placeholder: 'write your content in markdown...'
+                    }}
+                  />
+                </div>
+              ) : (
+                <textarea
+                  placeholder="thoughts..."
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  rows={6}
+                  className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
+                />
+              )}
               
               <input
                 type="text"
@@ -229,35 +266,53 @@ export default function Dashboard() {
         )}
 
         {/* Posts List */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {posts.map((post) => (
             <motion.div
               key={post.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-deep-graphite rounded-lg p-4 flex items-center justify-between"
+              className="bg-deep-graphite rounded-lg p-4"
             >
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-medium">{post.title}</h3>
-                  {post.is_draft && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-500">
-                      draft
-                    </span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-medium">{post.title}</h3>
+                    {post.is_draft && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-500">
+                        draft
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400 mb-2">
+                    {post.type} • {new Date(post.created_at).toLocaleDateString()} • {post.view_count} views
+                  </p>
+                  {post.content && (
+                    <p className="text-xs text-gray-500 line-clamp-2">
+                      {post.content.substring(0, 100)}...
+                    </p>
                   )}
                 </div>
-                <p className="text-sm text-gray-400">
-                  {post.type} • {new Date(post.created_at).toLocaleDateString()} • {post.view_count} views
-                </p>
+                <div className="flex gap-2 ml-4">
+                  <button
+                    onClick={() => router.push(`/post/${post.id}`)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => deletePost(post.id)}
+                    className="text-red-500 hover:text-red-400 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => deletePost(post.id)}
-                className="text-red-500 hover:text-red-400 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
             </motion.div>
           ))}
         </div>
