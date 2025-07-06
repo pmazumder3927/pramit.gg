@@ -1,4 +1,6 @@
-# Apple-Inspired "Gone Rogue" Design Transformation
+# Apple-Inspired Transformation
+
+thanks claude!
 
 ## Overview
 This document outlines the radical redesign of the website, transforming it from a basic dark theme to a sophisticated Apple-inspired "gone rogue" aesthetic with advanced animations, better desktop layout, and iOS-style interactions.
