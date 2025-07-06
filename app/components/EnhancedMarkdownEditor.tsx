@@ -263,7 +263,8 @@ export default function EnhancedMarkdownEditor({
 
       {/* Mobile-specific instructions */}
       <div className="md:hidden mt-2 text-xs text-gray-500 text-center">
-        💡 On mobile: Tap "Add Image" to upload from your camera or gallery
+        💡 On mobile: Tap &quot;Add Image&quot; to upload from your camera or
+        gallery
       </div>
     </div>
   );
