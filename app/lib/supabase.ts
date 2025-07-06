@@ -15,6 +15,7 @@ export type Post = {
   accent_color: string;
   is_draft: boolean;
   view_count: number;
+  slug?: string;
 };
 
 export type User = {
@@ -22,3 +23,24 @@ export type User = {
   email: string;
   created_at: string;
 };
+
+// Utility function to generate slug from title
+export function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Function to extract first image from markdown content
+export function extractFirstImage(content: string): string | null {
+  const imageRegex = /!\[.*?\]\((.*?)\)/;
+  const match = content.match(imageRegex);
+  return match ? match[1] : null;
+}
+
+// Function to check if content has images
+export function hasImages(content: string): boolean {
+  const imageRegex = /!\[.*?\]\(.*?\)/g;
+  return imageRegex.test(content);
+}

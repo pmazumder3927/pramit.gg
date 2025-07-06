@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Post } from "@/app/lib/supabase";
+import { Post, generateSlug, extractFirstImage, hasImages } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 interface PostCardProps {
   post: Post;
@@ -20,6 +21,7 @@ export default function PostCard({
   featured = false,
 }: PostCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
   const getAccentStyle = () => {
@@ -40,10 +42,56 @@ export default function PostCard({
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    router.push(`/post/${post.id}`);
+    const slug = post.slug || generateSlug(post.title);
+    router.push(`/post/${slug}`);
   };
 
   const renderMedia = () => {
+    // Check for images in content first
+    const firstImage = extractFirstImage(post.content || "");
+    const hasContentImages = hasImages(post.content || "");
+
+    if (firstImage && !imageError) {
+      return (
+        <div
+          className={`relative ${
+            featured ? "aspect-[16/10]" : "aspect-[4/3]"
+          } bg-gradient-to-br from-charcoal-black via-void-black to-charcoal-black rounded-xl overflow-hidden mb-6 group-hover:shadow-2xl transition-shadow duration-700`}
+        >
+          <Image
+            src={firstImage}
+            alt={post.title}
+            fill
+            className="object-cover transition-transform duration-700 group-hover:scale-105"
+            onError={() => setImageError(true)}
+            sizes={featured ? "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-br from-accent-orange/10 via-transparent to-accent-purple/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+          
+          {/* Image indicator */}
+          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+            <div className="w-8 h-8 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center">
+              <svg
+                className="w-4 h-4 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Fall back to existing media handling
     if (!post.media_url) return null;
 
     switch (post.type) {
