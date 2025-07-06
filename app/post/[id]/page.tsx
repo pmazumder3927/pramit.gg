@@ -1,69 +1,69 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import rehypeHighlight from 'rehype-highlight'
-import { Post, supabase } from '@/app/lib/supabase'
-import ReactPlayer from 'react-player'
-import Link from 'next/link'
-import { formatDistanceToNow } from 'date-fns'
-import 'katex/dist/katex.min.css'
-import 'highlight.js/styles/github-dark.css'
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
+import { Post, supabase } from "@/app/lib/supabase";
+import ReactPlayer from "react-player";
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import "katex/dist/katex.min.css";
+import "highlight.js/styles/github-dark.css";
 
 export default function PostPage() {
-  const params = useParams()
-  const router = useRouter()
-  const [post, setPost] = useState<Post | null>(null)
-  const [loading, setLoading] = useState(true)
+  const params = useParams();
+  const router = useRouter();
+  const [post, setPost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (params.id) {
-      fetchPost(params.id as string)
+      fetchPost(params.id as string);
     }
-  }, [params.id])
+  }, [params.id]);
 
   const fetchPost = async (id: string) => {
     try {
       const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('id', id)
-        .single()
+        .from("posts")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      if (error) throw error
-      setPost(data)
-      
+      if (error) throw error;
+      setPost(data);
+
       // Increment view count
       await supabase
-        .from('posts')
+        .from("posts")
         .update({ view_count: (data.view_count || 0) + 1 })
-        .eq('id', id)
+        .eq("id", id);
     } catch (error) {
-      console.error('Error fetching post:', error)
-      router.push('/')
+      console.error("Error fetching post:", error);
+      router.push("/");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="w-8 h-8 border-2 border-cyber-orange border-t-transparent rounded-full"
         />
       </div>
-    )
+    );
   }
 
-  if (!post) return null
+  if (!post) return null;
 
   return (
     <main className="min-h-screen px-4 py-8 md:px-8 md:py-16">
@@ -77,8 +77,18 @@ export default function PostPage() {
             href="/"
             className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             back
           </Link>
@@ -86,20 +96,21 @@ export default function PostPage() {
           {/* Post Header */}
           <header className="mb-12">
             <div className="flex items-center gap-4 mb-4">
-              <span 
-                className="text-sm px-3 py-1 rounded-full bg-white/10"
-                style={{ color: post.accent_color }}
-              >
+              <span className="text-sm px-3 py-1 rounded-full bg-white/10">
                 {post.type}
               </span>
               <span className="text-sm text-gray-500">
-                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                {formatDistanceToNow(new Date(post.created_at), {
+                  addSuffix: true,
+                })}
               </span>
               <span className="text-sm text-gray-500">
                 {post.view_count} views
               </span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-light mb-6">{post.title}</h1>
+            <h1 className="text-4xl md:text-6xl font-light mb-6">
+              {post.title}
+            </h1>
             {post.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {post.tags.map((tag) => (
@@ -117,7 +128,7 @@ export default function PostPage() {
           {/* Media */}
           {post.media_url && (
             <div className="mb-12">
-              {post.type === 'music' ? (
+              {post.type === "music" ? (
                 <div className="bg-deep-graphite rounded-lg p-8">
                   <ReactPlayer
                     url={post.media_url}
@@ -126,16 +137,16 @@ export default function PostPage() {
                     controls
                     config={{
                       soundcloud: {
-                        options: { 
+                        options: {
                           show_artwork: true,
                           show_playcount: true,
-                          show_user: true
-                        }
-                      }
+                          show_user: true,
+                        },
+                      },
                     }}
                   />
                 </div>
-              ) : post.type === 'climb' ? (
+              ) : post.type === "climb" ? (
                 <div className="relative aspect-video bg-deep-graphite rounded-lg overflow-hidden">
                   <ReactPlayer
                     url={post.media_url}
@@ -155,32 +166,61 @@ export default function PostPage() {
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex, rehypeHighlight]}
               components={{
-                h1: ({ children }) => <h1 className="text-3xl font-light mt-8 mb-4">{children}</h1>,
-                h2: ({ children }) => <h2 className="text-2xl font-light mt-6 mb-3">{children}</h2>,
-                h3: ({ children }) => <h3 className="text-xl font-light mt-4 mb-2">{children}</h3>,
-                p: ({ children }) => <p className="text-gray-300 leading-relaxed mb-4">{children}</p>,
+                h1: ({ children }) => (
+                  <h1 className="text-3xl font-light mt-8 mb-4">{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-2xl font-light mt-6 mb-3">{children}</h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-xl font-light mt-4 mb-2">{children}</h3>
+                ),
+                p: ({ children }) => (
+                  <p className="text-gray-300 leading-relaxed mb-4">
+                    {children}
+                  </p>
+                ),
                 a: ({ href, children }) => (
-                  <a href={href} className="text-cyber-orange hover:underline" target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={href}
+                    className="text-cyber-orange hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {children}
                   </a>
                 ),
-                code: (props: any) => 
+                code: (props: any) =>
                   props.inline ? (
-                    <code className="px-1 py-0.5 bg-white/10 rounded text-sm">{props.children}</code>
+                    <code className="px-1 py-0.5 bg-white/10 rounded text-sm">
+                      {props.children}
+                    </code>
                   ) : (
                     <code>{props.children}</code>
                   ),
                 pre: ({ children }) => (
-                  <pre className="bg-deep-graphite rounded-lg p-4 overflow-x-auto my-4">{children}</pre>
+                  <pre className="bg-deep-graphite rounded-lg p-4 overflow-x-auto my-4">
+                    {children}
+                  </pre>
                 ),
                 blockquote: ({ children }) => (
                   <blockquote className="border-l-4 border-cyber-orange pl-4 my-4 italic text-gray-400">
                     {children}
                   </blockquote>
                 ),
-                ul: ({ children }) => <ul className="list-disc list-inside space-y-2 my-4">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 my-4">{children}</ol>,
-                li: ({ children }) => <li className="text-gray-300">{children}</li>,
+                ul: ({ children }) => (
+                  <ul className="list-disc list-inside space-y-2 my-4">
+                    {children}
+                  </ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal list-inside space-y-2 my-4">
+                    {children}
+                  </ol>
+                ),
+                li: ({ children }) => (
+                  <li className="text-gray-300">{children}</li>
+                ),
               }}
             >
               {post.content}
@@ -189,5 +229,5 @@ export default function PostPage() {
         </motion.div>
       </article>
     </main>
-  )
-} 
+  );
+}
