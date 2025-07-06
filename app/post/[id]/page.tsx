@@ -30,47 +30,58 @@ export default function PostPage() {
 
   const fetchPost = async (identifier: string) => {
     try {
-      // Try to fetch by slug first, then by ID for backward compatibility
-      let { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .single();
-
-      // If not found by slug, try by ID
-      if (error || !data) {
-        const { data: idData, error: idError } = await supabase
+      let foundPost: Post | null = null;
+      
+      // First, try to find by ID (UUID format)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+      
+      if (isUUID) {
+        const { data, error } = await supabase
           .from("posts")
           .select("*")
           .eq("id", identifier)
           .single();
 
-        if (idError) throw idError;
-        data = idData;
-
-        // If found by ID but no slug exists, redirect to slug-based URL
-        if (data && !data.slug) {
-          const generatedSlug = generateSlug(data.title);
-          // Update the post with the generated slug
-          await supabase
-            .from("posts")
-            .update({ slug: generatedSlug })
-            .eq("id", data.id);
+        if (!error && data) {
+          foundPost = data;
           
-          // Redirect to the new slug-based URL
-          router.replace(`/post/${generatedSlug}`);
-          return;
+          // Redirect to slug-based URL
+          const slug = generateSlug(data.title);
+          if (slug !== identifier) {
+            router.replace(`/post/${slug}`);
+            return;
+          }
+        }
+      } else {
+        // Try to find by matching generated slug
+        const { data: allPosts, error } = await supabase
+          .from("posts")
+          .select("*")
+          .eq("is_draft", false);
+
+        if (!error && allPosts) {
+          const matchingPost = allPosts.find(post => generateSlug(post.title) === identifier);
+          
+          if (matchingPost) {
+            foundPost = matchingPost;
+          } else {
+            // If no match found, redirect to home
+            router.push("/");
+            return;
+          }
         }
       }
 
-      setPost(data);
-
-      // Increment view count
-      if (data) {
+      if (foundPost) {
+        setPost(foundPost);
+        
+        // Increment view count
         await supabase
           .from("posts")
-          .update({ view_count: (data.view_count || 0) + 1 })
-          .eq("id", data.id);
+          .update({ view_count: (foundPost.view_count || 0) + 1 })
+          .eq("id", foundPost.id);
+      } else {
+        router.push("/");
       }
     } catch (error) {
       console.error("Error fetching post:", error);

@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "migrate-slugs": "node utils/migrate-slugs.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
