@@ -6,12 +6,14 @@ import { Post, supabase } from '@/app/lib/supabase'
 import PostCard from '@/app/components/PostCard'
 import Navigation from '@/app/components/Navigation'
 import NowPlaying from '@/app/components/NowPlaying'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
+import { useLoading } from '@/app/hooks/useLoading'
 import { useInView } from 'react-intersection-observer'
 
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([])
+  const { isLoading, stopLoading } = useLoading(true)
   const { ref, inView } = useInView({
     threshold: 0.1,
     triggerOnce: true
@@ -50,7 +52,7 @@ export default function Home() {
         console.error('Error stack:', error.stack)
       }
     } finally {
-      setLoading(false)
+      stopLoading()
     }
   }
 
@@ -93,17 +95,10 @@ export default function Home() {
           </div>
         </motion.section>
 
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              className="w-12 h-12 border-2 border-accent-orange/20 border-t-accent-orange rounded-full"
-            />
-          </div>
-        ) : (
+                <LoadingSpinner isLoading={isLoading} className="h-64" />
+        
+        {!isLoading && (
           <div className="max-w-7xl mx-auto px-6 md:px-8">
-            
             {/* Featured Posts - Horizontal Momentum Scroll */}
             {featuredPosts.length > 0 && (
               <motion.section 
