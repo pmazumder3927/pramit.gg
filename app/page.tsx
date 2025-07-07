@@ -95,11 +95,58 @@ export default function Home() {
 
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              className="w-12 h-12 border-2 border-accent-orange/20 border-t-accent-orange rounded-full"
-            />
+            <div className="relative">
+              {/* Outer rotating ring */}
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                className="w-20 h-20 border border-accent-orange/20 rounded-full"
+              />
+              
+              {/* Inner pulsing core */}
+              <motion.div
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  opacity: [0.8, 0.4, 0.8]
+                }}
+                transition={{ 
+                  duration: 2, 
+                  repeat: Infinity, 
+                  ease: [0.25, 0.1, 0.25, 1]
+                }}
+                className="absolute inset-0 m-auto w-8 h-8 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full blur-sm"
+              />
+              
+              {/* Floating particles */}
+              {[...Array(6)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  animate={{
+                    x: [0, Math.cos(i * 60 * Math.PI / 180) * 30, 0],
+                    y: [0, Math.sin(i * 60 * Math.PI / 180) * 30, 0],
+                    scale: [0, 1, 0],
+                    opacity: [0, 1, 0]
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                    ease: [0.25, 0.1, 0.25, 1]
+                  }}
+                  className="absolute top-1/2 left-1/2 w-2 h-2 bg-accent-orange/60 rounded-full transform -translate-x-1/2 -translate-y-1/2"
+                />
+              ))}
+              
+              {/* Counter-rotating inner ring */}
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-0 m-auto w-14 h-14 border border-accent-purple/30 rounded-full border-dashed"
+              />
+              
+              {/* Glowing backdrop */}
+              <div className="absolute inset-0 m-auto w-24 h-24 bg-gradient-to-r from-accent-orange/5 to-accent-purple/5 rounded-full blur-xl -z-10" />
+            </div>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 md:px-8">
