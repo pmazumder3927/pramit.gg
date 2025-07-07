@@ -51,11 +51,9 @@ export default function Home() {
         console.error('Error stack:', error.stack)
       }
     } finally {
-      // Start the finishing sequence
+      // Trigger ripple effect and immediately set loading to false
       setLoadingFinishing(true)
-      setTimeout(() => {
-        setLoading(false)
-      }, 1000) // Give time for the ripple effect
+      setLoading(false)
     }
   }
 
@@ -181,30 +179,26 @@ export default function Home() {
                 }}
                 className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
               />
-            </div>
-            
-            {/* Ripple effect when finishing */}
-            {loadingFinishing && (
-              <motion.div
-                initial={{ scale: 0, opacity: 0.8 }}
-                animate={{ scale: 10, opacity: 0 }}
-                transition={{ 
-                  duration: 1, 
-                  ease: [0.25, 0.1, 0.25, 1] 
-                }}
-                className="absolute inset-0 w-32 h-32 bg-gradient-to-r from-accent-orange/20 to-accent-purple/20 rounded-full blur-xl"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)'
-                }}
-              />
-            )}
+                        </div>
           </div>
-        ) : (
-          <div className="max-w-7xl mx-auto px-6 md:px-8">
-            
-            {/* Featured Posts - Horizontal Momentum Scroll */}
+          ) : (
+            <div className="max-w-7xl mx-auto px-6 md:px-8">
+              {/* Non-blocking ripple overlay */}
+              {loadingFinishing && (
+                <motion.div
+                  initial={{ scale: 0, opacity: 0.6 }}
+                  animate={{ scale: 12, opacity: 0 }}
+                  transition={{ 
+                    duration: 0.8, 
+                    ease: [0.25, 0.1, 0.25, 1] 
+                  }}
+                  className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
+                >
+                  <div className="w-32 h-32 bg-gradient-to-r from-accent-orange/15 to-accent-purple/15 rounded-full blur-xl" />
+                </motion.div>
+              )}
+              
+              {/* Featured Posts - Horizontal Momentum Scroll */}
             {featuredPosts.length > 0 && (
               <motion.section 
                 className="mb-16 md:mb-24"

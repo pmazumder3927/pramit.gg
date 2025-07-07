@@ -84,11 +84,9 @@ export default function PostPage() {
       console.error("Error fetching post:", error);
       router.push("/");
     } finally {
-      // Start the finishing sequence
+      // Trigger ripple effect and immediately set loading to false
       setLoadingFinishing(true);
-      setTimeout(() => {
-        setLoading(false);
-      }, 1000); // Give time for the ripple effect
+      setLoading(false);
     }
   };
 
@@ -176,26 +174,8 @@ export default function PostPage() {
             }}
             className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
           />
+                  </div>
         </div>
-        
-        {/* Ripple effect when finishing */}
-        {loadingFinishing && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0.8 }}
-            animate={{ scale: 15, opacity: 0 }}
-            transition={{ 
-              duration: 1, 
-              ease: [0.25, 0.1, 0.25, 1] 
-            }}
-            className="absolute inset-0 w-32 h-32 bg-gradient-to-r from-accent-orange/20 to-accent-purple/20 rounded-full blur-xl"
-            style={{
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)'
-            }}
-          />
-        )}
-      </div>
     );
   }
 
@@ -205,6 +185,21 @@ export default function PostPage() {
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
+      
+      {/* Non-blocking ripple overlay */}
+      {loadingFinishing && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0.6 }}
+          animate={{ scale: 15, opacity: 0 }}
+          transition={{ 
+            duration: 0.8, 
+            ease: [0.25, 0.1, 0.25, 1] 
+          }}
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
+        >
+          <div className="w-32 h-32 bg-gradient-to-r from-accent-orange/15 to-accent-purple/15 rounded-full blur-xl" />
+        </motion.div>
+      )}
       
       <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
         <article className="max-w-4xl mx-auto">
