@@ -11,6 +11,7 @@ import { useInView } from 'react-intersection-observer'
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingFinishing, setLoadingFinishing] = useState(false)
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([])
   const { ref, inView } = useInView({
     threshold: 0.1,
@@ -50,7 +51,11 @@ export default function Home() {
         console.error('Error stack:', error.stack)
       }
     } finally {
-      setLoading(false)
+      // Start the finishing sequence
+      setLoadingFinishing(true)
+      setTimeout(() => {
+        setLoading(false)
+      }, 1000) // Give time for the ripple effect
     }
   }
 
@@ -94,12 +99,16 @@ export default function Home() {
         </motion.section>
 
         {loading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="flex items-center justify-center h-64 relative">
             <div className="relative">
               {/* Bold outer rotating ring */}
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                transition={{ 
+                  duration: 2, 
+                  repeat: loadingFinishing ? 0 : Infinity, 
+                  ease: 'linear' 
+                }}
                 className="w-32 h-32 border-2 border-accent-orange/30 rounded-full"
               />
               
@@ -111,7 +120,7 @@ export default function Home() {
                 }}
                 transition={{ 
                   duration: 1.5, 
-                  repeat: Infinity, 
+                  repeat: loadingFinishing ? 0 : Infinity, 
                   ease: [0.25, 0.1, 0.25, 1]
                 }}
                 className="absolute inset-0 m-auto w-12 h-12 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full"
@@ -129,7 +138,7 @@ export default function Home() {
                   }}
                   transition={{
                     duration: 2,
-                    repeat: Infinity,
+                    repeat: loadingFinishing ? 0 : Infinity,
                     delay: i * 0.1,
                     ease: [0.25, 0.1, 0.25, 1]
                   }}
@@ -140,7 +149,11 @@ export default function Home() {
               {/* Fast counter-rotating inner ring */}
               <motion.div
                 animate={{ rotate: -360 }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                transition={{ 
+                  duration: 1.5, 
+                  repeat: loadingFinishing ? 0 : Infinity, 
+                  ease: 'linear' 
+                }}
                 className="absolute inset-0 m-auto w-20 h-20 border-2 border-accent-purple/40 rounded-full border-dashed"
               />
               
@@ -152,7 +165,7 @@ export default function Home() {
                 }}
                 transition={{ 
                   duration: 2, 
-                  repeat: Infinity, 
+                  repeat: loadingFinishing ? 0 : Infinity, 
                   ease: [0.25, 0.1, 0.25, 1]
                 }}
                 className="absolute inset-0 m-auto w-40 h-40 bg-gradient-to-r from-accent-orange/10 to-accent-purple/10 rounded-full blur-2xl -z-10"
@@ -161,10 +174,32 @@ export default function Home() {
               {/* Sharp rotating diamond */}
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                transition={{ 
+                  duration: 3, 
+                  repeat: loadingFinishing ? 0 : Infinity, 
+                  ease: 'linear' 
+                }}
                 className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
               />
             </div>
+            
+            {/* Ripple effect when finishing */}
+            {loadingFinishing && (
+              <motion.div
+                initial={{ scale: 0, opacity: 0.8 }}
+                animate={{ scale: 10, opacity: 0 }}
+                transition={{ 
+                  duration: 1, 
+                  ease: [0.25, 0.1, 0.25, 1] 
+                }}
+                className="absolute inset-0 w-32 h-32 bg-gradient-to-r from-accent-orange/20 to-accent-purple/20 rounded-full blur-xl"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)'
+                }}
+              />
+            )}
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 md:px-8">

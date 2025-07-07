@@ -11,6 +11,7 @@ export default function PostPage() {
   const router = useRouter();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingFinishing, setLoadingFinishing] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -83,18 +84,26 @@ export default function PostPage() {
       console.error("Error fetching post:", error);
       router.push("/");
     } finally {
-      setLoading(false);
+      // Start the finishing sequence
+      setLoadingFinishing(true);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000); // Give time for the ripple effect
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black flex items-center justify-center relative">
         <div className="relative">
           {/* Bold outer rotating ring */}
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            transition={{ 
+              duration: 2, 
+              repeat: loadingFinishing ? 0 : Infinity, 
+              ease: 'linear' 
+            }}
             className="w-32 h-32 border-2 border-accent-orange/30 rounded-full"
           />
           
@@ -106,7 +115,7 @@ export default function PostPage() {
             }}
             transition={{ 
               duration: 1.5, 
-              repeat: Infinity, 
+              repeat: loadingFinishing ? 0 : Infinity, 
               ease: [0.25, 0.1, 0.25, 1]
             }}
             className="absolute inset-0 m-auto w-12 h-12 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full"
@@ -124,7 +133,7 @@ export default function PostPage() {
               }}
               transition={{
                 duration: 2,
-                repeat: Infinity,
+                repeat: loadingFinishing ? 0 : Infinity,
                 delay: i * 0.1,
                 ease: [0.25, 0.1, 0.25, 1]
               }}
@@ -135,7 +144,11 @@ export default function PostPage() {
           {/* Fast counter-rotating inner ring */}
           <motion.div
             animate={{ rotate: -360 }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+            transition={{ 
+              duration: 1.5, 
+              repeat: loadingFinishing ? 0 : Infinity, 
+              ease: 'linear' 
+            }}
             className="absolute inset-0 m-auto w-20 h-20 border-2 border-accent-purple/40 rounded-full border-dashed"
           />
           
@@ -147,7 +160,7 @@ export default function PostPage() {
             }}
             transition={{ 
               duration: 2, 
-              repeat: Infinity, 
+              repeat: loadingFinishing ? 0 : Infinity, 
               ease: [0.25, 0.1, 0.25, 1]
             }}
             className="absolute inset-0 m-auto w-40 h-40 bg-gradient-to-r from-accent-orange/10 to-accent-purple/10 rounded-full blur-2xl -z-10"
@@ -156,10 +169,32 @@ export default function PostPage() {
           {/* Sharp rotating diamond */}
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+            transition={{ 
+              duration: 3, 
+              repeat: loadingFinishing ? 0 : Infinity, 
+              ease: 'linear' 
+            }}
             className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
           />
         </div>
+        
+        {/* Ripple effect when finishing */}
+        {loadingFinishing && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0.8 }}
+            animate={{ scale: 15, opacity: 0 }}
+            transition={{ 
+              duration: 1, 
+              ease: [0.25, 0.1, 0.25, 1] 
+            }}
+            className="absolute inset-0 w-32 h-32 bg-gradient-to-r from-accent-orange/20 to-accent-purple/20 rounded-full blur-xl"
+            style={{
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)'
+            }}
+          />
+        )}
       </div>
     );
   }
