@@ -6,13 +6,14 @@ import { Post, supabase } from '@/app/lib/supabase'
 import PostCard from '@/app/components/PostCard'
 import Navigation from '@/app/components/Navigation'
 import NowPlaying from '@/app/components/NowPlaying'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
+import { useLoading } from '@/app/hooks/useLoading'
 import { useInView } from 'react-intersection-observer'
 
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingFinishing, setLoadingFinishing] = useState(false)
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([])
+  const { isLoading, stopLoading } = useLoading(true)
   const { ref, inView } = useInView({
     threshold: 0.1,
     triggerOnce: true
@@ -51,9 +52,7 @@ export default function Home() {
         console.error('Error stack:', error.stack)
       }
     } finally {
-      // Trigger ripple effect and immediately set loading to false
-      setLoadingFinishing(true)
-      setLoading(false)
+      stopLoading()
     }
   }
 
@@ -96,109 +95,11 @@ export default function Home() {
           </div>
         </motion.section>
 
-        {loading ? (
-          <div className="flex items-center justify-center h-64 relative">
-            <div className="relative">
-              {/* Bold outer rotating ring */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ 
-                  duration: 2, 
-                  repeat: loadingFinishing ? 0 : Infinity, 
-                  ease: 'linear' 
-                }}
-                className="w-32 h-32 border-2 border-accent-orange/30 rounded-full"
-              />
-              
-              {/* Dramatic pulsing core */}
-              <motion.div
-                animate={{ 
-                  scale: [1, 1.8, 1],
-                  opacity: [0.9, 0.3, 0.9]
-                }}
-                transition={{ 
-                  duration: 1.5, 
-                  repeat: loadingFinishing ? 0 : Infinity, 
-                  ease: [0.25, 0.1, 0.25, 1]
-                }}
-                className="absolute inset-0 m-auto w-12 h-12 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full"
-              />
-              
-              {/* Explosive particle burst */}
-              {[...Array(12)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  animate={{
-                    x: [0, Math.cos(i * 30 * Math.PI / 180) * 50, 0],
-                    y: [0, Math.sin(i * 30 * Math.PI / 180) * 50, 0],
-                    scale: [0, 1.5, 0],
-                    opacity: [0, 1, 0]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: loadingFinishing ? 0 : Infinity,
-                    delay: i * 0.1,
-                    ease: [0.25, 0.1, 0.25, 1]
-                  }}
-                  className="absolute top-1/2 left-1/2 w-3 h-3 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full transform -translate-x-1/2 -translate-y-1/2"
-                />
-              ))}
-              
-              {/* Fast counter-rotating inner ring */}
-              <motion.div
-                animate={{ rotate: -360 }}
-                transition={{ 
-                  duration: 1.5, 
-                  repeat: loadingFinishing ? 0 : Infinity, 
-                  ease: 'linear' 
-                }}
-                className="absolute inset-0 m-auto w-20 h-20 border-2 border-accent-purple/40 rounded-full border-dashed"
-              />
-              
-              {/* Intense glowing backdrop */}
-              <motion.div 
-                animate={{ 
-                  scale: [1, 1.2, 1],
-                  opacity: [0.3, 0.6, 0.3]
-                }}
-                transition={{ 
-                  duration: 2, 
-                  repeat: loadingFinishing ? 0 : Infinity, 
-                  ease: [0.25, 0.1, 0.25, 1]
-                }}
-                className="absolute inset-0 m-auto w-40 h-40 bg-gradient-to-r from-accent-orange/10 to-accent-purple/10 rounded-full blur-2xl -z-10"
-              />
-              
-              {/* Sharp rotating diamond */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ 
-                  duration: 3, 
-                  repeat: loadingFinishing ? 0 : Infinity, 
-                  ease: 'linear' 
-                }}
-                className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
-              />
-                        </div>
-          </div>
-          ) : (
-            <div className="max-w-7xl mx-auto px-6 md:px-8">
-              {/* Non-blocking ripple overlay */}
-              {loadingFinishing && (
-                <motion.div
-                  initial={{ scale: 0, opacity: 0.6 }}
-                  animate={{ scale: 12, opacity: 0 }}
-                  transition={{ 
-                    duration: 0.8, 
-                    ease: [0.25, 0.1, 0.25, 1] 
-                  }}
-                  className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
-                >
-                  <div className="w-32 h-32 bg-gradient-to-r from-accent-orange/15 to-accent-purple/15 rounded-full blur-xl" />
-                </motion.div>
-              )}
-              
-              {/* Featured Posts - Horizontal Momentum Scroll */}
+                <LoadingSpinner isLoading={isLoading} className="h-64" />
+        
+        {!isLoading && (
+          <div className="max-w-7xl mx-auto px-6 md:px-8">
+            {/* Featured Posts - Horizontal Momentum Scroll */}
             {featuredPosts.length > 0 && (
               <motion.section 
                 className="mb-16 md:mb-24"
