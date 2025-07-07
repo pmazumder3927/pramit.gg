@@ -3,18 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import rehypeHighlight from "rehype-highlight";
 import { Post, supabase, generateSlug } from "@/app/lib/supabase";
-import ReactPlayer from "react-player";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import Image from "next/image";
-import "katex/dist/katex.min.css";
-import "highlight.js/styles/github-dark.css";
+import PostContent from "./PostContent";
 
 export default function PostPage() {
   const params = useParams();
@@ -40,12 +30,13 @@ export default function PostPage() {
           .from("posts")
           .select("*")
           .eq("id", identifier)
+          .eq("is_draft", false)
           .single();
 
         if (!error && data) {
           foundPost = data;
           
-          // Redirect to slug-based URL
+          // Redirect to slug-based URL for better SEO
           const slug = generateSlug(data.title);
           if (slug !== identifier) {
             router.replace(`/post/${slug}`);
@@ -53,11 +44,12 @@ export default function PostPage() {
           }
         }
       } else {
-        // Try to find by matching generated slug
+        // Optimized slug lookup - try to use database query first
         const { data: allPosts, error } = await supabase
           .from("posts")
           .select("*")
-          .eq("is_draft", false);
+          .eq("is_draft", false)
+          .order("created_at", { ascending: false });
 
         if (!error && allPosts) {
           const matchingPost = allPosts.find(post => generateSlug(post.title) === identifier);
@@ -75,11 +67,15 @@ export default function PostPage() {
       if (foundPost) {
         setPost(foundPost);
         
-        // Increment view count
-        await supabase
+        // Increment view count (optimized)
+        supabase
           .from("posts")
           .update({ view_count: (foundPost.view_count || 0) + 1 })
-          .eq("id", foundPost.id);
+          .eq("id", foundPost.id)
+          .then(() => {
+            // Update local state to reflect new view count
+            setPost(prev => prev ? { ...prev, view_count: (prev.view_count || 0) + 1 } : null);
+          });
       } else {
         router.push("/");
       }
@@ -94,11 +90,76 @@ export default function PostPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          className="w-12 h-12 border-2 border-accent-orange/20 border-t-accent-orange rounded-full"
-        />
+        <div className="relative">
+          {/* Bold outer rotating ring */}
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            className="w-32 h-32 border-2 border-accent-orange/30 rounded-full"
+          />
+          
+          {/* Dramatic pulsing core */}
+          <motion.div
+            animate={{ 
+              scale: [1, 1.8, 1],
+              opacity: [0.9, 0.3, 0.9]
+            }}
+            transition={{ 
+              duration: 1.5, 
+              repeat: Infinity, 
+              ease: [0.25, 0.1, 0.25, 1]
+            }}
+            className="absolute inset-0 m-auto w-12 h-12 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full"
+          />
+          
+          {/* Explosive particle burst */}
+          {[...Array(12)].map((_, i) => (
+            <motion.div
+              key={i}
+              animate={{
+                x: [0, Math.cos(i * 30 * Math.PI / 180) * 50, 0],
+                y: [0, Math.sin(i * 30 * Math.PI / 180) * 50, 0],
+                scale: [0, 1.5, 0],
+                opacity: [0, 1, 0]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                delay: i * 0.1,
+                ease: [0.25, 0.1, 0.25, 1]
+              }}
+              className="absolute top-1/2 left-1/2 w-3 h-3 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full transform -translate-x-1/2 -translate-y-1/2"
+            />
+          ))}
+          
+          {/* Fast counter-rotating inner ring */}
+          <motion.div
+            animate={{ rotate: -360 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+            className="absolute inset-0 m-auto w-20 h-20 border-2 border-accent-purple/40 rounded-full border-dashed"
+          />
+          
+          {/* Intense glowing backdrop */}
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.6, 0.3]
+            }}
+            transition={{ 
+              duration: 2, 
+              repeat: Infinity, 
+              ease: [0.25, 0.1, 0.25, 1]
+            }}
+            className="absolute inset-0 m-auto w-40 h-40 bg-gradient-to-r from-accent-orange/10 to-accent-purple/10 rounded-full blur-2xl -z-10"
+          />
+          
+          {/* Sharp rotating diamond */}
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+            className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
+          />
+        </div>
       </div>
     );
   }
@@ -112,182 +173,7 @@ export default function PostPage() {
       
       <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
         <article className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 group"
-            >
-              <svg
-                className="w-4 h-4 transition-transform group-hover:-translate-x-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              back to home
-            </Link>
-
-            {/* Post Header */}
-            <header className="mb-12">
-              <div className="flex items-center gap-4 mb-6">
-                <span 
-                  className="text-sm px-3 py-1 rounded-full bg-white/5 border border-white/10 font-light"
-                  style={{ color: post.accent_color }}
-                >
-                  {post.type}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {formatDistanceToNow(new Date(post.created_at), {
-                    addSuffix: true,
-                  })}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {post.view_count || 0} views
-                </span>
-              </div>
-              <h1 className="text-4xl md:text-6xl font-extralight mb-6 leading-tight">
-                <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
-                  {post.title}
-                </span>
-              </h1>
-              {post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {post.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-sm px-3 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </header>
-
-            {/* Media */}
-            {post.media_url && (
-              <div className="mb-12">
-                {post.type === "music" ? (
-                  <div className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
-                    <ReactPlayer
-                      url={post.media_url}
-                      width="100%"
-                      height="160px"
-                      controls
-                      config={{
-                        soundcloud: {
-                          options: {
-                            show_artwork: true,
-                            show_playcount: true,
-                            show_user: true,
-                          },
-                        },
-                      }}
-                    />
-                  </div>
-                ) : post.type === "climb" ? (
-                  <div className="relative aspect-video bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                    <ReactPlayer
-                      url={post.media_url}
-                      width="100%"
-                      height="100%"
-                      controls
-                      playing={false}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {/* Content */}
-            <div className="prose prose-invert prose-lg max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex, rehypeHighlight]}
-                components={{
-                  h1: ({ children }) => (
-                    <h1 className="text-3xl font-light mt-8 mb-4 text-white">{children}</h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2 className="text-2xl font-light mt-6 mb-3 text-white">{children}</h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3 className="text-xl font-light mt-4 mb-2 text-white">{children}</h3>
-                  ),
-                  p: ({ children }) => (
-                    <p className="text-gray-300 leading-relaxed mb-4">
-                      {children}
-                    </p>
-                  ),
-                  img: ({ src, alt }) => (
-                    <div className="relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
-                      <Image
-                        src={src || ""}
-                        alt={alt || ""}
-                        width={800}
-                        height={600}
-                        className="w-full h-auto object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 800px"
-                      />
-                    </div>
-                  ),
-                  a: ({ href, children }) => (
-                    <a
-                      href={href}
-                      className="text-accent-orange hover:text-accent-purple transition-colors hover:underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {children}
-                    </a>
-                  ),
-                  code: (props: any) =>
-                    props.inline ? (
-                      <code className="px-2 py-1 bg-white/10 rounded text-sm font-mono text-accent-orange">
-                        {props.children}
-                      </code>
-                    ) : (
-                      <code className="font-mono">{props.children}</code>
-                    ),
-                  pre: ({ children }) => (
-                    <pre className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 overflow-x-auto my-6 text-sm">
-                      {children}
-                    </pre>
-                  ),
-                  blockquote: ({ children }) => (
-                    <blockquote className="border-l-4 border-accent-orange pl-6 my-6 italic text-gray-400 bg-white/5 py-4 rounded-r-lg">
-                      {children}
-                    </blockquote>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="list-disc list-inside space-y-2 my-4 text-gray-300">
-                      {children}
-                    </ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="list-decimal list-inside space-y-2 my-4 text-gray-300">
-                      {children}
-                    </ol>
-                  ),
-                  li: ({ children }) => (
-                    <li className="text-gray-300 leading-relaxed">{children}</li>
-                  ),
-                }}
-              >
-                {post.content}
-              </ReactMarkdown>
-            </div>
-          </motion.div>
+          <PostContent post={post} />
         </article>
       </main>
     </div>
