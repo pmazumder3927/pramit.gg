@@ -2,6 +2,8 @@
 
 my personal blog/journal/whatever
 
+https://www.pramit.gg/post/why-i-bothered
+
 ## Tech Stack
 
 - **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
