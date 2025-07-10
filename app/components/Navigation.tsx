@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Link from 'next/link'
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 
 export default function Navigation() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
@@ -13,32 +13,23 @@ export default function Navigation() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
         <div className="glass-dark backdrop-blur-3xl border-t border-white/10 shadow-2xl">
           <div className="flex items-center justify-around py-4 px-6">
-            <Link href="/" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
+            <Link
+              href="/"
+              className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
+            >
               <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-            </Link>
-            <Link href="/music" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
-              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
-              </div>
-            </Link>
-            <Link href="/about" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
-              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-            </Link>
-            <Link href="/connect" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
-              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                  />
                 </svg>
               </div>
             </Link>
@@ -47,15 +38,20 @@ export default function Navigation() {
               className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
             >
               <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <motion.svg 
-                  className="w-6 h-6" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <motion.svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                   animate={{ rotate: isOpen ? 45 : 0 }}
                   transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </motion.svg>
               </div>
             </button>
@@ -75,8 +71,18 @@ export default function Navigation() {
             animate={{ rotate: isOpen ? 45 : 0 }}
             transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
             </svg>
           </motion.div>
         </motion.button>
@@ -103,14 +109,22 @@ export default function Navigation() {
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 30, opacity: 0 }}
-              transition={{ delay: 0.1, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+              transition={{
+                delay: 0.1,
+                duration: 0.5,
+                ease: [0.25, 0.1, 0.25, 1],
+              }}
               className="relative flex flex-col items-center justify-center h-full space-y-12"
               onClick={(e) => e.stopPropagation()}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.2, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                transition={{
+                  delay: 0.2,
+                  duration: 0.5,
+                  ease: [0.25, 0.1, 0.25, 1],
+                }}
               >
                 <Link
                   href="/"
@@ -126,7 +140,11 @@ export default function Navigation() {
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                transition={{
+                  delay: 0.3,
+                  duration: 0.5,
+                  ease: [0.25, 0.1, 0.25, 1],
+                }}
               >
                 <Link
                   href="/music"
@@ -142,7 +160,11 @@ export default function Navigation() {
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.4, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                transition={{
+                  delay: 0.4,
+                  duration: 0.5,
+                  ease: [0.25, 0.1, 0.25, 1],
+                }}
               >
                 <Link
                   href="/about"
@@ -158,7 +180,11 @@ export default function Navigation() {
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.5, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                transition={{
+                  delay: 0.5,
+                  duration: 0.5,
+                  ease: [0.25, 0.1, 0.25, 1],
+                }}
               >
                 <Link
                   href="/connect"
@@ -179,7 +205,7 @@ export default function Navigation() {
                 className="absolute inset-0 opacity-[0.015] pointer-events-none"
                 style={{
                   backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)`,
-                  backgroundSize: '50px 50px'
+                  backgroundSize: "50px 50px",
                 }}
               />
             </motion.nav>
@@ -187,5 +213,5 @@ export default function Navigation() {
         )}
       </AnimatePresence>
     </>
-  )
-} 
+  );
+}
