@@ -173,7 +173,7 @@ END:VCARD`;
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                if you're here, we're friends now.
+                if you&apos;re here, we&apos;re friends now.
               </motion.p>
             </div>
 
