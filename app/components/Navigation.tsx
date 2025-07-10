@@ -132,7 +132,7 @@ export default function Navigation() {
                   onClick={() => setIsOpen(false)}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
-                    Home
+                    home
                   </span>
                 </Link>
               </motion.div>
@@ -152,7 +152,7 @@ export default function Navigation() {
                   onClick={() => setIsOpen(false)}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-purple hover:via-accent-purple hover:to-accent-purple transition-all duration-500">
-                    Music
+                    music
                   </span>
                 </Link>
               </motion.div>
@@ -172,7 +172,7 @@ export default function Navigation() {
                   onClick={() => setIsOpen(false)}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
-                    About
+                    about
                   </span>
                 </Link>
               </motion.div>
@@ -192,7 +192,7 @@ export default function Navigation() {
                   onClick={() => setIsOpen(false)}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-blue hover:via-accent-blue hover:to-accent-blue transition-all duration-500">
-                    Connect
+                    connect
                   </span>
                 </Link>
               </motion.div>
