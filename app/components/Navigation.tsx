@@ -20,6 +20,13 @@ export default function Navigation() {
                 </svg>
               </div>
             </Link>
+            <Link href="/music" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
+              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+            </Link>
             <Link href="/about" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
               <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,11 +121,27 @@ export default function Navigation() {
                 transition={{ delay: 0.3, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
               >
                 <Link
-                  href="/about"
+                  href="/music"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-purple transition-all duration-500 hover:scale-105 text-center"
                   onClick={() => setIsOpen(false)}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-purple hover:via-accent-purple hover:to-accent-purple transition-all duration-500">
+                    Music
+                  </span>
+                </Link>
+              </motion.div>
+
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+              >
+                <Link
+                  href="/about"
+                  className="block text-5xl md:text-7xl font-extralight hover:text-accent-orange transition-all duration-500 hover:scale-105 text-center"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     About
                   </span>
                 </Link>
@@ -128,7 +151,7 @@ export default function Navigation() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.4, duration: 0.6 }}
+                transition={{ delay: 0.5, duration: 0.6 }}
                 className="absolute inset-0 opacity-[0.015] pointer-events-none"
                 style={{
                   backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)`,
