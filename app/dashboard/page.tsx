@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isMarkdownMode, setIsMarkdownMode] = useState(true);
   const [formData, setFormData] = useState({
     title: "",
@@ -73,18 +74,38 @@ export default function Dashboard() {
       .replace(/^-+|-+$/g, "");
 
     try {
-      const { error } = await supabase.from("posts").insert([
-        {
-          ...formData,
-          tags,
-          accent_color: randomColor,
-          view_count: 0,
-          slug,
-        },
-      ]);
+      if (editingPost) {
+        // Update existing post
+        const { error } = await supabase
+          .from("posts")
+          .update({
+            title: formData.title,
+            content: formData.content,
+            type: formData.type,
+            media_url: formData.media_url,
+            tags,
+            is_draft: formData.is_draft,
+            slug,
+          })
+          .eq("id", editingPost.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Create new post
+        const { error } = await supabase.from("posts").insert([
+          {
+            ...formData,
+            tags,
+            accent_color: randomColor,
+            view_count: 0,
+            slug,
+          },
+        ]);
 
+        if (error) throw error;
+      }
+
+      // Reset form
       setFormData({
         title: "",
         content: "",
@@ -94,11 +115,39 @@ export default function Dashboard() {
         is_draft: false,
       });
       setShowCreateForm(false);
+      setEditingPost(null);
       setIsMarkdownMode(false);
       fetchPosts();
     } catch (error) {
-      console.error("Error creating post:", error);
+      console.error("Error saving post:", error);
     }
+  };
+
+  const startEditing = (post: Post) => {
+    setEditingPost(post);
+    setFormData({
+      title: post.title,
+      content: post.content || "",
+      type: post.type,
+      media_url: post.media_url || "",
+      tags: Array.isArray(post.tags) ? post.tags.join(", ") : "",
+      is_draft: post.is_draft || false,
+    });
+    setShowCreateForm(true);
+    setIsMarkdownMode(true);
+  };
+
+  const cancelEditing = () => {
+    setEditingPost(null);
+    setShowCreateForm(false);
+    setFormData({
+      title: "",
+      content: "",
+      type: "note",
+      media_url: "",
+      tags: "",
+      is_draft: false,
+    });
   };
 
   const deletePost = async (id: string) => {
@@ -152,13 +201,25 @@ export default function Dashboard() {
         <motion.button
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          onClick={() => setShowCreateForm(!showCreateForm)}
+          onClick={() => {
+            if (showCreateForm && !editingPost) {
+              setShowCreateForm(false);
+            } else if (editingPost) {
+              cancelEditing();
+            } else {
+              setShowCreateForm(true);
+            }
+          }}
           className="w-full md:w-auto px-6 py-3 bg-cyber-orange text-black rounded-lg hover:bg-opacity-90 transition-all mb-8"
         >
-          {showCreateForm ? "cancel" : "+ create new post"}
+          {showCreateForm
+            ? editingPost
+              ? "cancel editing"
+              : "cancel"
+            : "+ create new post"}
         </motion.button>
 
-        {/* Create Form */}
+        {/* Create/Edit Form */}
         {showCreateForm && (
           <motion.form
             initial={{ opacity: 0, y: -10 }}
@@ -166,6 +227,16 @@ export default function Dashboard() {
             onSubmit={handleSubmit}
             className="bg-deep-graphite rounded-lg p-6 mb-8"
           >
+            <div className="mb-4">
+              <h2 className="text-xl font-medium">
+                {editingPost ? "Edit Post" : "Create New Post"}
+              </h2>
+              {editingPost && (
+                <p className="text-sm text-gray-400 mt-1">
+                  Editing: {editingPost.title}
+                </p>
+              )}
+            </div>
             <div className="space-y-4">
               <input
                 type="text"
@@ -287,7 +358,7 @@ export default function Dashboard() {
                 type="submit"
                 className="w-full py-2 bg-white text-black rounded-lg hover:bg-opacity-90 transition-all"
               >
-                publish
+                {editingPost ? "update post" : "publish"}
               </button>
             </div>
           </motion.form>
@@ -327,6 +398,7 @@ export default function Dashboard() {
                   <button
                     onClick={() => router.push(`/post/${post.id}`)}
                     className="text-gray-400 hover:text-white transition-colors"
+                    title="View post"
                   >
                     <svg
                       className="w-5 h-5"
@@ -349,8 +421,28 @@ export default function Dashboard() {
                     </svg>
                   </button>
                   <button
+                    onClick={() => startEditing(post)}
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                    title="Edit post"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      />
+                    </svg>
+                  </button>
+                  <button
                     onClick={() => deletePost(post.id)}
                     className="text-red-500 hover:text-red-400 transition-colors"
+                    title="Delete post"
                   >
                     <svg
                       className="w-5 h-5"
