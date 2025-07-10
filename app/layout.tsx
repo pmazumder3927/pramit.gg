@@ -31,6 +31,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.documentElement.classList.add('js-enabled');
+            `,
+          }}
+        />
+      </head>
       <body className="grain min-h-screen">
         <SecretDashboard />
         <div className="relative z-10">

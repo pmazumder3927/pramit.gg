@@ -176,11 +176,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-2 border-cyber-orange border-t-transparent rounded-full"
-        />
+        <div className="spinner" />
       </div>
     );
   }
