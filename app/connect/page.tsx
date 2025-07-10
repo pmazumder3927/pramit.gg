@@ -173,7 +173,7 @@ END:VCARD`;
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                add me to your contacts or follow me on instagram
+                if you're here, we're friends now.
               </motion.p>
             </div>
 
@@ -191,8 +191,14 @@ END:VCARD`;
                 className="glass-dark backdrop-blur-3xl border border-white/10 rounded-3xl p-8 md:p-10"
               >
                 <div className="text-center mb-8">
-                  <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-accent-orange/20 to-accent-purple/20 border border-white/10 flex items-center justify-center">
-                    <span className="text-3xl font-light">PM</span>
+                  <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-accent-orange to-accent-purple border border-white/10 flex items-center justify-center p-1">
+                    <div className="w-full h-full rounded-full overflow-hidden">
+                      <img
+                        src="https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/1752126862158_8673ra.png"
+                        alt="Pramit Mazumder"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                   </div>
 
                   <h2 className="text-2xl font-light text-white mb-2">
@@ -452,14 +458,6 @@ END:VCARD`;
           className="pb-24"
         >
           <div className="max-w-4xl mx-auto px-6 md:px-8">
-            <div className="text-center mb-8">
-              <h2 className="text-xl md:text-2xl font-light text-white mb-2">
-                🤫 or whisper anonymously
-              </h2>
-              <p className="text-gray-500 font-light text-sm">
-                send me a message without leaving any trace
-              </p>
-            </div>
             <ConfessionalBooth />
           </div>
         </motion.section>
