@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Post, generateSlug, analyzeContent } from "@/app/lib/supabase";
+import { Post, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useLoading } from "@/app/hooks/useLoading";
 
 interface PostCardProps {
   post: Post;
@@ -23,6 +24,7 @@ export default function PostCard({
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
+  const { startLoading } = useLoading();
 
   const getAccentStyle = () => {
     return {
@@ -32,8 +34,10 @@ export default function PostCard({
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const slug = generateSlug(post.title);
-    router.push(`/post/${slug}`);
+    // Start loading immediately
+    startLoading();
+    // Use the database slug field instead of generating it
+    router.push(`/post/${post.slug}`);
   };
 
   // Analyze content to determine optimal preview layout
@@ -124,11 +128,11 @@ export default function PostCard({
     // Handle content-based previews
     if (contentAnalysis.hasImages && contentAnalysis.images.length > 0) {
       const primaryImage = contentAnalysis.images[0];
-      
+
       return (
         <div className="relative mb-6 rounded-xl overflow-hidden">
           {/* Visual-heavy content: larger image focus */}
-          {contentAnalysis.contentType === 'visual-heavy' ? (
+          {contentAnalysis.contentType === "visual-heavy" ? (
             <div className="relative aspect-[4/3] bg-gradient-to-br from-charcoal-black via-void-black to-charcoal-black">
               <Image
                 src={primaryImage}
@@ -136,7 +140,11 @@ export default function PostCard({
                 fill
                 className="object-cover transition-transform duration-700 group-hover:scale-105"
                 onError={() => setImageError(true)}
-                sizes={featured ? "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"}
+                sizes={
+                  featured
+                    ? "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                }
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               {contentAnalysis.hasMultipleImages && (
@@ -179,7 +187,7 @@ export default function PostCard({
     }
 
     // Text-heavy content: focus on text preview
-    if (contentAnalysis.contentType === 'text-heavy') {
+    if (contentAnalysis.contentType === "text-heavy") {
       return (
         <div className="mb-6">
           <div className="relative p-4 bg-gradient-to-br from-white/5 via-white/2 to-transparent rounded-xl border border-white/10 backdrop-blur-sm">

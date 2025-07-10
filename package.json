@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:slugs": "ts-node scripts/migrate-slugs.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -39,6 +40,7 @@
     "eslint-config-next": "14.0.4",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }

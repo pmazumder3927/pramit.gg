@@ -1,131 +1,139 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { supabase, Post } from '@/app/lib/supabase'
-import { useRouter } from 'next/navigation'
-import EnhancedMarkdownEditor from '@/app/components/EnhancedMarkdownEditor'
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { supabase, Post } from "@/app/lib/supabase";
+import { useRouter } from "next/navigation";
+import EnhancedMarkdownEditor from "@/app/components/EnhancedMarkdownEditor";
 
-const ACCENT_COLORS = ['#ff6b3d', '#9c5aff', '#1a1b22']
+const ACCENT_COLORS = ["#ff6b3d", "#9c5aff", "#1a1b22"];
 
 export default function Dashboard() {
-  const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [isMarkdownMode, setIsMarkdownMode] = useState(true)
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isMarkdownMode, setIsMarkdownMode] = useState(true);
   const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    type: 'note' as 'music' | 'climb' | 'note',
-    media_url: '',
-    tags: '',
+    title: "",
+    content: "",
+    type: "note" as "music" | "climb" | "note",
+    media_url: "",
+    tags: "",
     is_draft: false,
-  })
+  });
 
   useEffect(() => {
-    checkUser()
-    fetchPosts()
-  }, [])
+    checkUser();
+    fetchPosts();
+  }, []);
 
   const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
-      router.push('/api/auth/login')
+      router.push("/api/auth/login");
     } else {
-      setUser(user)
+      setUser(user);
     }
-  }
+  };
 
   const fetchPosts = async () => {
     try {
       const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .from("posts")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
-      setPosts(data || [])
+      if (error) throw error;
+      setPosts(data || []);
     } catch (error) {
-      console.error('Error fetching posts:', error)
+      console.error("Error fetching posts:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const randomColor = ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)]
-    const tags = formData.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean)
-    
-    try {
-      const { error } = await supabase
-        .from('posts')
-        .insert([
-          {
-            ...formData,
-            tags,
-            accent_color: randomColor,
-            view_count: 0,
-          }
-        ])
+    e.preventDefault();
 
-      if (error) throw error
-      
+    const randomColor =
+      ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)];
+    const tags = formData.tags
+      .split(",")
+      .map((tag: string) => tag.trim())
+      .filter(Boolean);
+
+    // Generate slug from title
+    const slug = formData.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    try {
+      const { error } = await supabase.from("posts").insert([
+        {
+          ...formData,
+          tags,
+          accent_color: randomColor,
+          view_count: 0,
+          slug,
+        },
+      ]);
+
+      if (error) throw error;
+
       setFormData({
-        title: '',
-        content: '',
-        type: 'note',
-        media_url: '',
-        tags: '',
+        title: "",
+        content: "",
+        type: "note",
+        media_url: "",
+        tags: "",
         is_draft: false,
-      })
-      setShowCreateForm(false)
-      setIsMarkdownMode(false)
-      fetchPosts()
+      });
+      setShowCreateForm(false);
+      setIsMarkdownMode(false);
+      fetchPosts();
     } catch (error) {
-      console.error('Error creating post:', error)
+      console.error("Error creating post:", error);
     }
-  }
+  };
 
   const deletePost = async (id: string) => {
-    if (!confirm('are you sure you want to delete this post?')) return
-    
-    try {
-      const { error } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', id)
+    if (!confirm("are you sure you want to delete this post?")) return;
 
-      if (error) throw error
-      fetchPosts()
+    try {
+      const { error } = await supabase.from("posts").delete().eq("id", id);
+
+      if (error) throw error;
+      fetchPosts();
     } catch (error) {
-      console.error('Error deleting post:', error)
+      console.error("Error deleting post:", error);
     }
-  }
+  };
 
   const detectMediaType = (url: string) => {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      setFormData({ ...formData, media_url: url, type: 'climb' })
-    } else if (url.includes('soundcloud.com')) {
-      setFormData({ ...formData, media_url: url, type: 'music' })
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      setFormData({ ...formData, media_url: url, type: "climb" });
+    } else if (url.includes("soundcloud.com")) {
+      setFormData({ ...formData, media_url: url, type: "music" });
     } else {
-      setFormData({ ...formData, media_url: url })
+      setFormData({ ...formData, media_url: url });
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="w-8 h-8 border-2 border-cyber-orange border-t-transparent rounded-full"
         />
       </div>
-    )
+    );
   }
 
   return (
@@ -147,7 +155,7 @@ export default function Dashboard() {
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="w-full md:w-auto px-6 py-3 bg-cyber-orange text-black rounded-lg hover:bg-opacity-90 transition-all mb-8"
         >
-          {showCreateForm ? 'cancel' : '+ create new post'}
+          {showCreateForm ? "cancel" : "+ create new post"}
         </motion.button>
 
         {/* Create Form */}
@@ -166,31 +174,43 @@ export default function Dashboard() {
                 onChange={(e) => detectMediaType(e.target.value)}
                 className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
               />
-              
+
               <input
                 type="text"
                 placeholder="title"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
                 required
                 className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
               />
-              
+
               {/* Toggle between simple textarea and markdown editor */}
               <div className="flex items-center justify-between mb-3">
                 <button
                   type="button"
                   onClick={() => setIsMarkdownMode(!isMarkdownMode)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                    isMarkdownMode 
-                      ? 'bg-cyber-orange text-black' 
-                      : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                    isMarkdownMode
+                      ? "bg-cyber-orange text-black"
+                      : "bg-white/10 text-gray-400 hover:bg-white/20"
                   }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
                   </svg>
-                  {isMarkdownMode ? 'Enhanced Editor' : 'Simple Editor'}
+                  {isMarkdownMode ? "Enhanced Editor" : "Simple Editor"}
                 </button>
                 {isMarkdownMode && (
                   <span className="text-xs text-gray-500">
@@ -198,11 +218,13 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-              
+
               {isMarkdownMode ? (
                 <EnhancedMarkdownEditor
                   value={formData.content}
-                  onChange={(value) => setFormData({ ...formData, content: value })}
+                  onChange={(value) =>
+                    setFormData({ ...formData, content: value })
+                  }
                   placeholder="write your content in markdown..."
                   height={400}
                 />
@@ -210,41 +232,49 @@ export default function Dashboard() {
                 <textarea
                   placeholder="thoughts..."
                   value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, content: e.target.value })
+                  }
                   rows={6}
                   className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
                 />
               )}
-              
+
               <input
                 type="text"
                 placeholder="tags (comma separated)"
                 value={formData.tags}
-                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, tags: e.target.value })
+                }
                 className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
               />
-              
+
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.is_draft}
-                    onChange={(e) => setFormData({ ...formData, is_draft: e.target.checked })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, is_draft: e.target.checked })
+                    }
                     className="w-4 h-4"
                   />
                   <span className="text-gray-400">save as draft</span>
                 </label>
-                
+
                 <div className="flex gap-2">
-                  {['note', 'music', 'climb'].map((type) => (
+                  {["note", "music", "climb"].map((type) => (
                     <button
                       key={type}
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: type as any })}
+                      onClick={() =>
+                        setFormData({ ...formData, type: type as any })
+                      }
                       className={`px-3 py-1 rounded-full text-sm transition-all ${
                         formData.type === type
-                          ? 'bg-white text-black'
-                          : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                          ? "bg-white text-black"
+                          : "bg-white/10 text-gray-400 hover:bg-white/20"
                       }`}
                     >
                       {type}
@@ -252,7 +282,7 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              
+
               <button
                 type="submit"
                 className="w-full py-2 bg-white text-black rounded-lg hover:bg-opacity-90 transition-all"
@@ -283,7 +313,9 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-sm text-gray-400 mb-2">
-                    {post.type} • {new Date(post.created_at).toLocaleDateString()} • {post.view_count} views
+                    {post.type} •{" "}
+                    {new Date(post.created_at).toLocaleDateString()} •{" "}
+                    {post.view_count} views
                   </p>
                   {post.content && (
                     <p className="text-xs text-gray-500 line-clamp-2">
@@ -296,17 +328,42 @@ export default function Dashboard() {
                     onClick={() => router.push(`/post/${post.id}`)}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
                     </svg>
                   </button>
                   <button
                     onClick={() => deletePost(post.id)}
                     className="text-red-500 hover:text-red-400 transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -316,5 +373,5 @@ export default function Dashboard() {
         </div>
       </div>
     </main>
-  )
-} 
+  );
+}
