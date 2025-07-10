@@ -34,6 +34,14 @@ export default function Navigation() {
                 </svg>
               </div>
             </Link>
+            <Link href="/connect" className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110">
+              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+            </Link>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
@@ -143,6 +151,22 @@ export default function Navigation() {
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     About
+                  </span>
+                </Link>
+              </motion.div>
+
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+              >
+                <Link
+                  href="/connect"
+                  className="block text-5xl md:text-7xl font-extralight hover:text-accent-blue transition-all duration-500 hover:scale-105 text-center"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-blue hover:via-accent-blue hover:to-accent-blue transition-all duration-500">
+                    Connect
                   </span>
                 </Link>
               </motion.div>
