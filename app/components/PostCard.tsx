@@ -6,9 +6,8 @@ import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useLoading } from "@/app/hooks/useLoading";
+import { useNavigationLoading } from "@/app/hooks/useNavigationLoading";
 
 interface PostCardProps {
   post: Post;
@@ -23,8 +22,7 @@ export default function PostCard({
 }: PostCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const router = useRouter();
-  const { startLoading } = useLoading();
+  const { startNavigationLoading } = useNavigationLoading();
 
   const getAccentStyle = () => {
     return {
@@ -34,10 +32,8 @@ export default function PostCard({
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Start loading immediately
-    startLoading();
-    // Use the database slug field instead of generating it
-    router.push(`/post/${post.slug}`);
+    // Start navigation loading immediately
+    startNavigationLoading(`/post/${post.slug}`);
   };
 
   // Analyze content to determine optimal preview layout
