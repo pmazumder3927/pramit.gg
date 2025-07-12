@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface BlobLoaderProps {
   /**
@@ -28,6 +28,8 @@ export default function BlobLoader({ active }: BlobLoaderProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationId = useRef<number>();
   const devicePixelRatioRef = useRef(1);
+  const [fps, setFps] = useState(60);
+  const fpsDataRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
 
   // Simple state machine handled through refs so we don’t re-render
   const phaseRef = useRef<'idle' | 'enter' | 'pause' | 'exit'>('idle');
@@ -101,6 +103,15 @@ export default function BlobLoader({ active }: BlobLoaderProps) {
     }
 
     const now = performance.now();
+
+    // FPS calculation --------------------------------------------------
+    const fpsData = fpsDataRef.current;
+    fpsData.frames += 1;
+    if (now - fpsData.last >= 1000) {
+      setFps(Math.round((fpsData.frames * 1000) / (now - fpsData.last)));
+      fpsData.frames = 0;
+      fpsData.last = now;
+    }
 
     // Determine phase progression
     let centreX = 0;
@@ -238,10 +249,28 @@ export default function BlobLoader({ active }: BlobLoaderProps) {
   if (typeof window === 'undefined') return null;
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full z-50 pointer-events-none"
-      style={{ opacity: active ? 1 : 0, transition: 'opacity 300ms ease' }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="fixed inset-0 w-full h-full z-50 pointer-events-none"
+        style={{ opacity: active ? 1 : 0, transition: 'opacity 300ms ease' }}
+      />
+      {process.env.NODE_ENV === 'development' && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 8,
+            left: 8,
+            fontSize: 12,
+            color: '#fff',
+            zIndex: 60,
+            pointerEvents: 'none',
+            fontFamily: 'monospace',
+          }}
+        >
+          {fps} fps
+        </div>
+      )}
+    </>
   );
 }
