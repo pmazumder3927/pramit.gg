@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
+import "katex/dist/katex.min.css";
 
 // Dynamic import to avoid SSR issues
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -19,12 +20,13 @@ interface EnhancedMarkdownEditorProps {
 export default function EnhancedMarkdownEditor({
   value,
   onChange,
-  placeholder = "Write your content in  lslkdfjl;sdkfjklsdjk;lf...",
+  placeholder = "Write your content in markdown...\n\nMath examples:\nInline: $E = mc^2$\nBlock: $$\n\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}\n$$",
   height = 400,
 }: EnhancedMarkdownEditorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewMode, setPreviewMode] = useState<"edit" | "preview">("edit");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadImage = useCallback(
@@ -229,10 +231,37 @@ export default function EnhancedMarkdownEditor({
           </button>
           <span className="text-xs text-gray-500">or drag & drop</span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>📱 Mobile friendly</span>
-          <span>•</span>
-          <span>Max 25MB</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPreviewMode(previewMode === "edit" ? "preview" : "edit")}
+            className="flex items-center gap-1 px-3 py-1 bg-cyber-orange/20 text-cyber-orange hover:bg-cyber-orange/30 rounded-lg transition-colors text-sm"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={previewMode === "edit" 
+                  ? "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  : "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                }
+              />
+            </svg>
+            {previewMode === "edit" ? "Preview" : "Edit"}
+          </button>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>📱 Mobile friendly</span>
+            <span>•</span>
+            <span>Max 25MB</span>
+            <span>•</span>
+            <span>✨ Math support</span>
+          </div>
         </div>
       </div>
 
@@ -247,9 +276,13 @@ export default function EnhancedMarkdownEditor({
         <MDEditor
           value={value}
           onChange={(val) => onChange(val || "")}
-          preview="edit"
+          preview={previewMode}
           height={height}
           hideToolbar={false}
+          previewOptions={{
+            remarkPlugins: [require("remark-math")],
+            rehypePlugins: [require("rehype-katex")],
+          }}
           textareaProps={{
             placeholder,
             style: {
@@ -265,6 +298,16 @@ export default function EnhancedMarkdownEditor({
       <div className="md:hidden mt-2 text-xs text-gray-500 text-center">
         💡 On mobile: Tap &quot;Add Image&quot; to upload from your camera or
         gallery
+      </div>
+
+      {/* Math help text */}
+      <div className="mt-2 text-xs text-gray-500">
+        <p className="mb-1">
+          <strong>Math support:</strong> Use <code className="bg-white/10 px-1 rounded">$formula$</code> for inline math and <code className="bg-white/10 px-1 rounded">$$formula$$</code> for block math.
+        </p>
+        <p className="text-gray-600">
+          Examples: <code className="bg-white/10 px-1 rounded">$E = mc^2$</code>, <code className="bg-white/10 px-1 rounded">$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$</code>
+        </p>
       </div>
     </div>
   );
