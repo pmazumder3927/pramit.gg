@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Post, supabase } from "@/app/lib/supabase";
+import { Post, supabase, analyzeContent } from "@/app/lib/supabase";
 import PostCard from "@/app/components/PostCard";
 import Navigation from "@/app/components/Navigation";
 import NowPlaying from "@/app/components/NowPlaying";
@@ -10,8 +10,14 @@ import LoadingSpinner from "@/app/components/LoadingSpinner";
 import { useLoading } from "@/app/hooks/useLoading";
 import { useInView } from "react-intersection-observer";
 
+interface PostWithLayout extends Post {
+  layoutWeight: number;
+  gridSpan: string;
+  priority: number;
+}
+
 export default function Home() {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PostWithLayout[]>([]);
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([]);
   const { isLoading, stopLoading } = useLoading(true);
   const { ref, inView } = useInView({
@@ -22,6 +28,115 @@ export default function Home() {
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  // Calculate layout weight based on content richness
+  const calculateLayoutWeight = (post: Post): number => {
+    const analysis = analyzeContent(post.content || "");
+    let weight = 1; // Base weight
+
+    // Content length factor
+    if (analysis.wordCount > 800) weight += 2;
+    else if (analysis.wordCount > 400) weight += 1;
+    else if (analysis.wordCount > 200) weight += 0.5;
+
+    // Media presence factor
+    if (post.media_url) weight += 1.5;
+    if (analysis.hasMultipleImages) weight += 1;
+    else if (analysis.hasImages) weight += 0.5;
+
+    // Content type factor
+    if (analysis.contentType === "visual-heavy") weight += 1;
+    else if (analysis.contentType === "text-heavy") weight += 0.5;
+
+    // Reading time factor
+    if (analysis.readingTime > 8) weight += 1;
+    else if (analysis.readingTime > 5) weight += 0.5;
+
+    // Type-specific bonuses
+    if (post.type === "climb") weight += 0.5;
+    if (post.type === "music") weight += 0.3;
+
+    return Math.min(weight, 4); // Cap at 4 for layout purposes
+  };
+
+  // Assign grid spans based on weight and position
+  const assignGridLayout = (posts: Post[]): PostWithLayout[] => {
+    const postsWithWeight = posts.map((post, index) => ({
+      ...post,
+      layoutWeight: calculateLayoutWeight(post),
+      priority: index,
+      gridSpan: "",
+    }));
+
+    // Sort by weight (heaviest first) while maintaining some original order
+    const sortedPosts = [...postsWithWeight].sort((a, b) => {
+      const weightDiff = b.layoutWeight - a.layoutWeight;
+      if (Math.abs(weightDiff) < 0.5) {
+        // If weights are similar, maintain original order
+        return a.priority - b.priority;
+      }
+      return weightDiff;
+    });
+
+    // Assign grid spans based on weight and create organic patterns
+    const layoutPosts = sortedPosts.map((post, layoutIndex) => {
+      let gridSpan = "";
+      
+      // Create organic patterns based on weight and position
+      if (post.layoutWeight >= 3.5) {
+        // Very heavy content - large feature
+        gridSpan = "col-span-2 row-span-2 lg:col-span-3 lg:row-span-2";
+      } else if (post.layoutWeight >= 2.5) {
+        // Heavy content - wide or tall
+        if (layoutIndex % 3 === 0) {
+          gridSpan = "col-span-2 lg:col-span-2 row-span-1";
+        } else {
+          gridSpan = "col-span-1 row-span-2 lg:col-span-1 lg:row-span-2";
+        }
+      } else if (post.layoutWeight >= 2) {
+        // Medium-heavy content - occasional wide
+        if (layoutIndex % 4 === 1) {
+          gridSpan = "col-span-2 lg:col-span-2";
+        } else {
+          gridSpan = "col-span-1";
+        }
+      } else if (post.layoutWeight >= 1.5) {
+        // Medium content - mix of sizes
+        if (layoutIndex % 5 === 2) {
+          gridSpan = "col-span-2 lg:col-span-1";
+        } else if (layoutIndex % 7 === 4) {
+          gridSpan = "col-span-1 row-span-2 lg:row-span-1";
+        } else {
+          gridSpan = "col-span-1";
+        }
+      } else {
+        // Light content - mostly standard with occasional variations
+        if (layoutIndex % 6 === 3) {
+          gridSpan = "col-span-2 lg:col-span-1";
+        } else {
+          gridSpan = "col-span-1";
+        }
+      }
+
+      return {
+        ...post,
+        gridSpan,
+      };
+    });
+
+    // Restore some chronological order while keeping the organic layout
+    const finalLayout = layoutPosts.sort((a, b) => {
+      const weightDiff = Math.abs(a.layoutWeight - b.layoutWeight);
+      if (weightDiff < 1) {
+        // If weights are close, prefer chronological order
+        return a.priority - b.priority;
+      }
+      // Otherwise, maintain weight-based ordering with some randomization
+      return (b.layoutWeight - a.layoutWeight) + (Math.random() - 0.5) * 0.3;
+    });
+
+    return finalLayout;
+  };
 
   const fetchPosts = async () => {
     try {
@@ -42,7 +157,10 @@ export default function Home() {
       if (data) {
         // Set first 3 posts as featured for horizontal scroll
         setFeaturedPosts(data.slice(0, 3));
-        setPosts(data.slice(3));
+        
+        // Apply organic layout to remaining posts
+        const organicPosts = assignGridLayout(data.slice(3));
+        setPosts(organicPosts);
       }
     } catch (error) {
       console.error("Error fetching posts:", error);
@@ -163,7 +281,7 @@ export default function Home() {
               </motion.section>
             )}
 
-            {/* Main Posts Grid */}
+            {/* Organic Posts Grid */}
             {posts.length === 0 && featuredPosts.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -226,7 +344,10 @@ export default function Home() {
 
                 <div
                   ref={ref}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8"
+                  className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 auto-rows-max"
+                  style={{
+                    gridAutoRows: 'minmax(200px, auto)',
+                  }}
                 >
                   <AnimatePresence mode="popLayout">
                     {posts.map((post, index) => (
@@ -241,16 +362,17 @@ export default function Home() {
                           transition: { duration: 0.3 },
                         }}
                         transition={{
-                          delay: 1.4 + index * 0.05,
+                          delay: 1.4 + index * 0.03,
                           duration: 0.6,
                           ease: [0.25, 0.1, 0.25, 1],
                         }}
-                        className="group"
+                        className={`group ${post.gridSpan}`}
                       >
                         <PostCard
                           post={post}
                           index={index + 3}
-                          featured={false}
+                          featured={post.layoutWeight >= 3}
+                          layoutWeight={post.layoutWeight}
                         />
                       </motion.div>
                     ))}
