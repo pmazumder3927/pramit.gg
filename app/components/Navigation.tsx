@@ -1,19 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useNavigationLoading } from "@/app/hooks/useNavigationLoading";
+import LoadingSpinner from "./LoadingSpinner";
 
-export default function Navigation() {
-  const [isOpen, setIsOpen] = useState(false);
+// Navigation link component that works with and without JavaScript
+function NavigationLink({ 
+  href, 
+  onClick, 
+  className, 
+  children, 
+  ...props 
+}: { 
+  href: string;
+  onClick?: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { startNavigationLoading } = useNavigationLoading();
+  
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    startNavigationLoading(href);
+    onClick?.();
+  };
 
   return (
     <>
+      {/* Progressive enhancement: Next.js Link for JavaScript-enabled navigation */}
+      <Link
+        href={href}
+        className={className}
+        onClick={handleClick}
+        {...props}
+      >
+        {children}
+      </Link>
+      
+      {/* Fallback: Regular anchor tag for JavaScript-free navigation */}
+      <noscript>
+        <a href={href} className={className} {...props}>
+          {children}
+        </a>
+      </noscript>
+    </>
+  );
+}
+
+export default function Navigation() {
+  const [isOpen, setIsOpen] = useState(false);
+  const { isNavigationLoading } = useNavigationLoading();
+
+  return (
+    <>
+      {/* Navigation Loading Overlay */}
+      {isNavigationLoading && (
+        <LoadingSpinner 
+          isLoading={isNavigationLoading} 
+          fullscreen={true} 
+          type="navigation" 
+        />
+      )}
+
       {/* Mobile Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
         <div className="glass-dark backdrop-blur-3xl border-t border-white/10 shadow-2xl">
           <div className="flex items-center justify-around py-4 px-6">
-            <Link
+            <NavigationLink
               href="/"
               className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
             >
@@ -32,7 +87,7 @@ export default function Navigation() {
                   />
                 </svg>
               </div>
-            </Link>
+            </NavigationLink>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
@@ -126,7 +181,7 @@ export default function Navigation() {
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                <Link
+                <NavigationLink
                   href="/"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-orange transition-all duration-500 hover:scale-105 text-center"
                   onClick={() => setIsOpen(false)}
@@ -134,7 +189,7 @@ export default function Navigation() {
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     home
                   </span>
-                </Link>
+                </NavigationLink>
               </motion.div>
 
               <motion.div
@@ -146,7 +201,7 @@ export default function Navigation() {
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                <Link
+                <NavigationLink
                   href="/music"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-purple transition-all duration-500 hover:scale-105 text-center"
                   onClick={() => setIsOpen(false)}
@@ -154,7 +209,7 @@ export default function Navigation() {
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-purple hover:via-accent-purple hover:to-accent-purple transition-all duration-500">
                     music
                   </span>
-                </Link>
+                </NavigationLink>
               </motion.div>
 
               <motion.div
@@ -166,7 +221,7 @@ export default function Navigation() {
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                <Link
+                <NavigationLink
                   href="/about"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-orange transition-all duration-500 hover:scale-105 text-center"
                   onClick={() => setIsOpen(false)}
@@ -174,7 +229,7 @@ export default function Navigation() {
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     about
                   </span>
-                </Link>
+                </NavigationLink>
               </motion.div>
 
               <motion.div
@@ -186,7 +241,7 @@ export default function Navigation() {
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
               >
-                <Link
+                <NavigationLink
                   href="/connect"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-blue transition-all duration-500 hover:scale-105 text-center"
                   onClick={() => setIsOpen(false)}
@@ -194,7 +249,7 @@ export default function Navigation() {
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-blue hover:via-accent-blue hover:to-accent-blue transition-all duration-500">
                     connect
                   </span>
-                </Link>
+                </NavigationLink>
               </motion.div>
 
               {/* Subtle grid pattern */}
