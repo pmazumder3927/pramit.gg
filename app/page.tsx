@@ -18,7 +18,7 @@ interface PostWithLayout extends Post {
 
 export default function Home() {
   const [posts, setPosts] = useState<PostWithLayout[]>([]);
-  const [featuredPosts, setFeaturedPosts] = useState<Post[]>([]);
+  const [featuredPosts, setFeaturedPosts] = useState<PostWithLayout[]>([]);
   const { isLoading, stopLoading } = useLoading(true);
   const { ref, inView } = useInView({
     threshold: 0.1,
@@ -155,8 +155,9 @@ export default function Home() {
       console.log("Posts fetched successfully:", data?.length || 0);
 
       if (data) {
-        // Set first 3 posts as featured for horizontal scroll
-        setFeaturedPosts(data.slice(0, 3));
+        // Apply organic layout to featured posts as well
+        const featuredWithLayout = assignGridLayout(data.slice(0, 3));
+        setFeaturedPosts(featuredWithLayout);
         
         // Apply organic layout to remaining posts
         const organicPosts = assignGridLayout(data.slice(3));
@@ -261,21 +262,36 @@ export default function Home() {
 
                 <div className="overflow-x-auto scrollbar-hide ios-momentum-scroll">
                   <div className="flex gap-6 md:gap-8 pb-4">
-                    {featuredPosts.map((post, index) => (
-                      <motion.div
-                        key={post.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{
-                          delay: 0.8 + index * 0.1,
-                          duration: 0.6,
-                          ease: [0.25, 0.1, 0.25, 1],
-                        }}
-                        className="flex-shrink-0 w-80 md:w-96 lg:w-[420px]"
-                      >
-                        <PostCard post={post} index={index} featured={true} />
-                      </motion.div>
-                    ))}
+                    {featuredPosts.map((post, index) => {
+                      // Dynamic width based on content weight
+                      const getFeatureWidth = (weight: number) => {
+                        if (weight >= 3.5) return "w-96 md:w-[500px] lg:w-[600px]"; // Extra large
+                        if (weight >= 2.5) return "w-80 md:w-[420px] lg:w-[500px]"; // Large
+                        if (weight >= 2) return "w-72 md:w-96 lg:w-[420px]"; // Medium
+                        return "w-64 md:w-80 lg:w-96"; // Compact
+                      };
+                      
+                      return (
+                        <motion.div
+                          key={post.id}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{
+                            delay: 0.8 + index * 0.1,
+                            duration: 0.6,
+                            ease: [0.25, 0.1, 0.25, 1],
+                          }}
+                          className={`flex-shrink-0 ${getFeatureWidth(post.layoutWeight)}`}
+                        >
+                          <PostCard 
+                            post={post} 
+                            index={index} 
+                            featured={true}
+                            layoutWeight={post.layoutWeight}
+                          />
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
               </motion.section>

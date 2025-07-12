@@ -151,7 +151,7 @@ export default function PostCard({
           {/* Visual-heavy content or large layouts: larger image focus */}
           {(contentAnalysis.contentType === "visual-heavy" || isLargeLayout) ? (
             <div className={`relative ${
-              isLargeLayout ? "aspect-[4/3]" : isMediumLayout ? "aspect-[3/2]" : "aspect-video"
+              isLargeLayout && featured ? "aspect-[5/3]" : isLargeLayout ? "aspect-[4/3]" : isMediumLayout ? "aspect-[3/2]" : "aspect-video"
             } bg-gradient-to-br from-charcoal-black via-void-black to-charcoal-black`}>
               <Image
                 src={primaryImage}
@@ -174,7 +174,9 @@ export default function PostCard({
               {/* Show preview text for large layouts */}
               {isLargeLayout && contentAnalysis.previewText && (
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent">
-                  <div className="text-sm text-white/90 leading-relaxed line-clamp-2">
+                  <div className={`${
+                    featured ? "text-base" : "text-sm"
+                  } text-white/90 leading-relaxed line-clamp-2`}>
                     {contentAnalysis.previewText}
                   </div>
                 </div>
@@ -227,9 +229,13 @@ export default function PostCard({
             isLargeLayout ? "p-6" : isMediumLayout ? "p-4" : "p-3"
           } bg-gradient-to-br from-white/5 via-white/2 to-transparent rounded-xl border border-white/10 backdrop-blur-sm`}>
             <div className={`${
-              isLargeLayout ? "text-base" : isMediumLayout ? "text-sm" : "text-xs"
+              isLargeLayout && featured ? "text-lg" : 
+              isLargeLayout ? "text-base" : 
+              isMediumLayout ? "text-sm" : "text-xs"
             } text-gray-300 leading-relaxed ${
-              isLargeLayout ? "line-clamp-6" : isMediumLayout ? "line-clamp-4" : "line-clamp-3"
+              isLargeLayout && featured ? "line-clamp-8" : 
+              isLargeLayout ? "line-clamp-6" : 
+              isMediumLayout ? "line-clamp-4" : "line-clamp-3"
             } ${isLargeLayout ? "mb-4" : "mb-3"}`}>
               {contentAnalysis.previewText}
             </div>
@@ -319,7 +325,9 @@ export default function PostCard({
           {/* Title with size-aware typography */}
           <h3
             className={`${
-              isLargeLayout ? "text-2xl md:text-3xl" : isMediumLayout ? "text-xl" : "text-lg"
+              isLargeLayout && featured ? "text-3xl md:text-4xl lg:text-5xl" : 
+              isLargeLayout ? "text-2xl md:text-3xl" : 
+              isMediumLayout ? "text-xl" : "text-lg"
             } font-light leading-tight text-white/90 group-hover:text-white transition-colors duration-300 ${
               isLargeLayout ? "mb-6" : isMediumLayout ? "mb-4" : "mb-3"
             }`}
