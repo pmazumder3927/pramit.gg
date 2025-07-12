@@ -5,8 +5,8 @@ import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
-import { getCodeString } from "rehype-rewrite";
-import katex from "katex";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.css";
 
 // Dynamic import to avoid SSR issues
@@ -22,7 +22,7 @@ interface EnhancedMarkdownEditorProps {
 export default function EnhancedMarkdownEditor({
   value,
   onChange,
-  placeholder = "Write your content here... You can use KaTeX for math: $$c = \\pm\\sqrt{a^2 + b^2}$$",
+  placeholder = "Write your content here... You can use KaTeX for math: $c = \\pm\\sqrt{a^2 + b^2}$ or $$c = \\pm\\sqrt{a^2 + b^2}$$",
   height = 400,
 }: EnhancedMarkdownEditorProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -254,47 +254,8 @@ export default function EnhancedMarkdownEditor({
           height={height}
           hideToolbar={false}
           previewOptions={{
-            components: {
-              code: ({ children = [], className, ...props }) => {
-                if (
-                  typeof children === "string" &&
-                  /^\$\$(.*)\$\$/.test(children)
-                ) {
-                  const html = katex.renderToString(
-                    children.replace(/^\$\$(.*)\$\$/, "$1"),
-                    {
-                      throwOnError: false,
-                    }
-                  );
-                  return (
-                    <code
-                      dangerouslySetInnerHTML={{ __html: html }}
-                      style={{ background: "transparent" }}
-                    />
-                  );
-                }
-                const code =
-                  props.node && props.node.children
-                    ? getCodeString(props.node.children)
-                    : children;
-                if (
-                  typeof code === "string" &&
-                  typeof className === "string" &&
-                  /^language-katex/.test(className.toLocaleLowerCase())
-                ) {
-                  const html = katex.renderToString(code, {
-                    throwOnError: false,
-                  });
-                  return (
-                    <code
-                      style={{ fontSize: "150%" }}
-                      dangerouslySetInnerHTML={{ __html: html }}
-                    />
-                  );
-                }
-                return <code className={String(className)}>{children}</code>;
-              },
-            },
+            remarkPlugins: [remarkMath],
+            rehypePlugins: [rehypeKatex],
           }}
           textareaProps={{
             placeholder,
