@@ -256,34 +256,125 @@
     }
   }
   
-  /* Markdown editor dark theme overrides */
+    /* Markdown editor dark theme overrides */
   .w-md-editor {
     background-color: #000 !important;
     color: white !important;
   }
-  
+
   .w-md-editor-toolbar {
     background-color: rgba(28, 28, 35, 0.8) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
     backdrop-filter: blur(20px);
   }
-  
+
   .w-md-editor-content {
     background-color: transparent !important;
     color: white !important;
   }
-  
+
   .w-md-editor-preview {
     background-color: transparent !important;
     color: white !important;
   }
-  
+
   .w-md-editor-text-container {
     background-color: transparent !important;
   }
-  
+
   .w-md-editor-text {
     background-color: transparent !important;
     color: white !important;
   }
-} 
+
+  /* Enhanced footnote styling */
+  .footnotes {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .footnotes ol {
+    list-style: none;
+    counter-reset: footnote-counter;
+    padding-left: 0;
+  }
+
+  .footnotes li {
+    counter-increment: footnote-counter;
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+    position: relative;
+    line-height: 1.6;
+  }
+
+  .footnotes li::before {
+    content: counter(footnote-counter);
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: #ff6b3d;
+    color: white;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Footnote backlinks */
+  .footnotes a[href^="#fnref"] {
+    color: #ff6b3d;
+    text-decoration: none;
+    margin-left: 0.5rem;
+    font-size: 0.875rem;
+    transition: color 0.2s;
+  }
+
+  .footnotes a[href^="#fnref"]:hover {
+    color: #7c77c6;
+  }
+
+  /* Footnote forward links */
+  a[href^="#fn"] {
+    color: #ff6b3d;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  a[href^="#fn"]:hover {
+    color: #7c77c6;
+  }
+
+  /* Smooth scrolling for footnote navigation */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Enhanced table styling for better visibility */
+  .prose table {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 1rem !important;
+    overflow: hidden !important;
+  }
+
+  .prose table th {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: rgb(209, 213, 219) !important;
+    font-weight: 500 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .prose table td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    color: rgb(209, 213, 219) !important;
+  }
+
+  .prose table tr:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+}  
