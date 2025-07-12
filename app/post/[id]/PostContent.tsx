@@ -178,18 +178,68 @@ export default function PostContent({ post }: PostContentProps) {
               </blockquote>
             ),
             ul: ({ children }) => (
-              <ul className="list-disc list-inside space-y-2 my-4 text-gray-300">
+              <ul className="space-y-3 my-6 text-gray-300">
                 {children}
               </ul>
             ),
             ol: ({ children }) => (
-              <ol className="list-decimal list-inside space-y-2 my-4 text-gray-300">
+              <ol className="list-decimal list-inside space-y-3 my-6 text-gray-300 [&>li]:pl-2">
                 {children}
               </ol>
             ),
             li: ({ children }) => (
-              <li className="text-gray-300 leading-relaxed">{children}</li>
+              <li className="text-gray-300 leading-relaxed pl-2 relative before:content-['•'] before:text-accent-orange before:absolute before:-left-4 before:top-0 before:text-lg before:font-bold ml-6">{children}</li>
             ),
+            table: ({ children }) => (
+              <div className="overflow-x-auto my-8 rounded-2xl bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
+                <table className="w-full text-sm">
+                  {children}
+                </table>
+              </div>
+            ),
+            thead: ({ children }) => (
+              <thead className="bg-white/5 border-b border-white/10">
+                {children}
+              </thead>
+            ),
+            tbody: ({ children }) => (
+              <tbody className="divide-y divide-white/10">
+                {children}
+              </tbody>
+            ),
+            tr: ({ children }) => (
+              <tr className="hover:bg-white/5 transition-colors duration-200">
+                {children}
+              </tr>
+            ),
+            th: ({ children }) => (
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td className="px-6 py-4 text-gray-300 whitespace-nowrap">
+                {children}
+              </td>
+            ),
+            // Enhanced footnote styling
+            sup: ({ children }) => (
+              <sup className="text-accent-orange hover:text-accent-purple transition-colors cursor-pointer">
+                {children}
+              </sup>
+            ),
+            // Style footnote references and definitions
+            section: ({ children, ...props }) => {
+              if (props.className?.includes('footnotes')) {
+                return (
+                  <section className="mt-12 pt-8 border-t border-white/20">
+                    <h2 className="text-xl font-light mb-6 text-gray-300">Footnotes</h2>
+                    {children}
+                  </section>
+                );
+              }
+              return <section {...props}>{children}</section>;
+            },
           }}
         >
           {post.content}
