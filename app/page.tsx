@@ -155,13 +155,35 @@ export default function Home() {
       console.log("Posts fetched successfully:", data?.length || 0);
 
       if (data) {
-        // Apply organic layout to featured posts as well
-        const featuredWithLayout = assignGridLayout(data.slice(0, 3));
-        setFeaturedPosts(featuredWithLayout);
+        // Select truly featured posts based on content weight, not just chronological
+        const allPostsWithLayout = assignGridLayout(data);
         
-        // Apply organic layout to remaining posts
-        const organicPosts = assignGridLayout(data.slice(3));
-        setPosts(organicPosts);
+        // Smart featured post selection - avoid overwhelming layout
+        const sortedByWeight = allPostsWithLayout.sort((a, b) => b.layoutWeight - a.layoutWeight);
+        const topPosts: PostWithLayout[] = [];
+        
+        if (sortedByWeight.length > 0) {
+          const firstPost = sortedByWeight[0];
+          topPosts.push(firstPost);
+          
+          // Only add a second featured post if:
+          // 1. There are more posts available
+          // 2. The first post isn't extremely heavy (to avoid overwhelming layout)
+          // 3. The second post has decent weight too
+          if (sortedByWeight.length > 1 && 
+              firstPost.layoutWeight < 3.8 && 
+              sortedByWeight[1].layoutWeight >= 1.8) {
+            topPosts.push(sortedByWeight[1]);
+          }
+        }
+        
+        // Remaining posts for the organic grid
+        const remainingPosts = allPostsWithLayout.filter(
+          post => !topPosts.find(featured => featured.id === post.id)
+        );
+        
+        setFeaturedPosts(topPosts);
+        setPosts(remainingPosts);
       }
     } catch (error) {
       console.error("Error fetching posts:", error);
@@ -260,39 +282,32 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="overflow-x-auto scrollbar-hide ios-momentum-scroll">
-                  <div className="flex gap-6 md:gap-8 pb-4">
-                    {featuredPosts.map((post, index) => {
-                      // Dynamic width based on content weight
-                      const getFeatureWidth = (weight: number) => {
-                        if (weight >= 3.5) return "w-96 md:w-[500px] lg:w-[600px]"; // Extra large
-                        if (weight >= 2.5) return "w-80 md:w-[420px] lg:w-[500px]"; // Large
-                        if (weight >= 2) return "w-72 md:w-96 lg:w-[420px]"; // Medium
-                        return "w-64 md:w-80 lg:w-96"; // Compact
-                      };
-                      
-                      return (
-                        <motion.div
-                          key={post.id}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{
-                            delay: 0.8 + index * 0.1,
-                            duration: 0.6,
-                            ease: [0.25, 0.1, 0.25, 1],
-                          }}
-                          className={`flex-shrink-0 ${getFeatureWidth(post.layoutWeight)}`}
-                        >
-                          <PostCard 
-                            post={post} 
-                            index={index} 
-                            featured={true}
-                            layoutWeight={post.layoutWeight}
-                          />
-                        </motion.div>
-                      );
-                    })}
-                  </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                  {featuredPosts.map((post: PostWithLayout, index: number) => (
+                    <motion.div
+                      key={post.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{
+                        delay: 0.8 + index * 0.1,
+                        duration: 0.6,
+                        ease: [0.25, 0.1, 0.25, 1],
+                      }}
+                      className={`${
+                        // First post gets full width if it's significantly heavier
+                        index === 0 && post.layoutWeight >= 3.5 && featuredPosts.length > 1 
+                          ? "lg:col-span-2" 
+                          : ""
+                      }`}
+                    >
+                      <PostCard 
+                        post={post} 
+                        index={index} 
+                        featured={true}
+                        layoutWeight={post.layoutWeight}
+                      />
+                    </motion.div>
+                  ))}
                 </div>
               </motion.section>
             )}

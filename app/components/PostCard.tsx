@@ -273,7 +273,9 @@ export default function PostCard({
     >
       <div
         className={`relative h-full bg-gradient-to-br from-charcoal-black/90 via-charcoal-black/70 to-void-black/90 backdrop-blur-xl border border-white/5 ${
-          isLargeLayout ? "rounded-3xl p-8" : isMediumLayout ? "rounded-2xl p-6" : "rounded-xl p-4"
+          isLargeLayout ? "rounded-2xl md:rounded-3xl p-4 md:p-6 lg:p-8" : 
+          isMediumLayout ? "rounded-xl md:rounded-2xl p-4 md:p-6" : 
+          "rounded-lg md:rounded-xl p-3 md:p-4"
         } overflow-hidden transition-all duration-700 hover:border-white/10 hover:shadow-2xl hover:shadow-black/50`}
       >
         {/* Enhanced Ambient Light Effect for larger layouts */}
@@ -325,11 +327,11 @@ export default function PostCard({
           {/* Title with size-aware typography */}
           <h3
             className={`${
-              isLargeLayout && featured ? "text-3xl md:text-4xl lg:text-5xl" : 
-              isLargeLayout ? "text-2xl md:text-3xl" : 
-              isMediumLayout ? "text-xl" : "text-lg"
+              isLargeLayout && featured ? "text-2xl md:text-3xl lg:text-4xl" : 
+              isLargeLayout ? "text-xl md:text-2xl lg:text-3xl" : 
+              isMediumLayout ? "text-lg md:text-xl" : "text-base md:text-lg"
             } font-light leading-tight text-white/90 group-hover:text-white transition-colors duration-300 ${
-              isLargeLayout ? "mb-6" : isMediumLayout ? "mb-4" : "mb-3"
+              isLargeLayout ? "mb-4 md:mb-6" : isMediumLayout ? "mb-3 md:mb-4" : "mb-3"
             }`}
           >
             {post.title}
