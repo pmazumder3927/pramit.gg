@@ -1,8 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Link from 'next/link'
-import PageLoadRipple from '@/app/components/PageLoadRipple'
+import NavigationLink from '@/app/components/NavigationLink'
 
 export default function About() {
   const content = {
@@ -19,22 +18,21 @@ export default function About() {
 
   return (
     <main className="min-h-screen px-4 py-8 md:px-8 md:py-16">
-      <PageLoadRipple />
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <a
+          <NavigationLink
             href="/"
             className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            {content.back}
-          </a>
+                          {content.back}
+            </NavigationLink>
 
           <h1 className="text-4xl md:text-5xl font-light mb-8">
             <span className="text-glitch" data-text={content.title}>{content.title}</span>

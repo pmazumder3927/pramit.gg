@@ -8,7 +8,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import { Post } from "@/app/lib/supabase";
 import ReactPlayer from "react-player";
-import Link from "next/link";
+import NavigationLink from "@/app/components/NavigationLink";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import "katex/dist/katex.min.css";
@@ -25,7 +25,7 @@ export default function PostContent({ post }: PostContentProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <Link
+      <NavigationLink
         href="/"
         className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 group"
       >
@@ -43,7 +43,7 @@ export default function PostContent({ post }: PostContentProps) {
           />
         </svg>
         back to home
-      </Link>
+      </NavigationLink>
 
       {/* Post Header */}
       <header className="mb-12">

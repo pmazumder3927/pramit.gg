@@ -6,15 +6,12 @@ import { Post, supabase } from "@/app/lib/supabase";
 import PostCard from "@/app/components/PostCard";
 import Navigation from "@/app/components/Navigation";
 import NowPlaying from "@/app/components/NowPlaying";
-import LoadingSpinner from "@/app/components/LoadingSpinner";
-import PageLoadRipple from "@/app/components/PageLoadRipple";
-import { useLoading } from "@/app/hooks/useLoading";
 import { useInView } from "react-intersection-observer";
 
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([]);
-  const { isLoading, stopLoading } = useLoading(true);
+  const [isLoading, setIsLoading] = useState(true);
   const { ref, inView } = useInView({
     threshold: 0.1,
     triggerOnce: true,
@@ -53,7 +50,7 @@ export default function Home() {
         console.error("Error stack:", error.stack);
       }
     } finally {
-      stopLoading();
+      setIsLoading(false);
     }
   };
 
@@ -61,8 +58,6 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      <PageLoadRipple />
 
       <main className="relative z-10 min-h-screen">
         <Navigation />
@@ -106,8 +101,6 @@ export default function Home() {
             </div>
           </div>
         </motion.section>
-
-        <LoadingSpinner isLoading={isLoading} className="h-64" />
 
         {!isLoading && (
           <div className="max-w-7xl mx-auto px-6 md:px-8">

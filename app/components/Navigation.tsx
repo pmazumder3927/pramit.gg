@@ -2,67 +2,13 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-import { useNavigationLoading } from "@/app/hooks/useNavigationLoading";
-import LoadingSpinner from "./LoadingSpinner";
-
-// Navigation link component that works with and without JavaScript
-function NavigationLink({ 
-  href, 
-  onClick, 
-  className, 
-  children, 
-  ...props 
-}: { 
-  href: string;
-  onClick?: () => void;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const { startNavigationLoading } = useNavigationLoading();
-  
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    startNavigationLoading(href);
-    onClick?.();
-  };
-
-  return (
-    <>
-      {/* Progressive enhancement: Next.js Link for JavaScript-enabled navigation */}
-      <Link
-        href={href}
-        className={className}
-        onClick={handleClick}
-        {...props}
-      >
-        {children}
-      </Link>
-      
-      {/* Fallback: Regular anchor tag for JavaScript-free navigation */}
-      <noscript>
-        <a href={href} className={className} {...props}>
-          {children}
-        </a>
-      </noscript>
-    </>
-  );
-}
+import NavigationLink from "./NavigationLink";
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
-  const { isNavigationLoading } = useNavigationLoading();
 
   return (
     <>
-      {/* Navigation Loading Overlay */}
-      {isNavigationLoading && (
-        <LoadingSpinner 
-          isLoading={isNavigationLoading} 
-          fullscreen={true} 
-          type="navigation" 
-        />
-      )}
 
       {/* Mobile Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">

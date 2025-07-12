@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import SecretDashboard from './components/SecretDashboard'
+import { LoadingProvider } from './providers/LoadingProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -32,10 +33,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.className}>
       <body className="grain min-h-screen">
-        <SecretDashboard />
-        <div className="relative z-10">
-          {children}
-        </div>
+        <LoadingProvider>
+          <SecretDashboard />
+          <div className="relative z-10">
+            {children}
+          </div>
+        </LoadingProvider>
       </body>
     </html>
   )

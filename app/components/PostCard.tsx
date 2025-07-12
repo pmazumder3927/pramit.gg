@@ -5,9 +5,8 @@ import { Post, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
-import Link from "next/link";
 import Image from "next/image";
-import { useNavigationLoading } from "@/app/hooks/useNavigationLoading";
+import NavigationLink from "./NavigationLink";
 
 interface PostCardProps {
   post: Post;
@@ -22,18 +21,11 @@ export default function PostCard({
 }: PostCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const { startNavigationLoading } = useNavigationLoading();
 
   const getAccentStyle = () => {
     return {
       "--accent-color": post.accent_color,
     } as React.CSSProperties;
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Start navigation loading immediately
-    startNavigationLoading(`/post/${post.slug}`);
   };
 
   // Analyze content to determine optimal preview layout
@@ -204,24 +196,24 @@ export default function PostCard({
   };
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        delay: index * 0.05,
-        duration: 0.6,
-        ease: [0.25, 0.1, 0.25, 1],
-      }}
-      whileHover={{
-        y: -8,
-        transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
-      }}
-      className="group cursor-pointer h-full"
-      style={getAccentStyle()}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
-    >
+    <NavigationLink href={`/post/${post.slug}`} className="block h-full">
+      <motion.article
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          delay: index * 0.05,
+          duration: 0.6,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+        whileHover={{
+          y: -8,
+          transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
+        }}
+        className="group cursor-pointer h-full"
+        style={getAccentStyle()}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
       <div
         className={`relative h-full bg-gradient-to-br from-charcoal-black/90 via-charcoal-black/70 to-void-black/90 backdrop-blur-xl border border-white/5 ${
           featured ? "rounded-3xl p-8" : "rounded-2xl p-6"
@@ -319,5 +311,6 @@ export default function PostCard({
         </div>
       </div>
     </motion.article>
+    </NavigationLink>
   );
 }
