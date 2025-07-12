@@ -42,24 +42,26 @@ I've completely restructured the loading animation system to create a true overl
 - Server-side rendering safe
 
 ### 2. Loading Overlay Design
-**Swirling Particles:**
-- 20 particles with random sizes (4-12px)
-- 6 vibrant colors from the design system
-- Organic sine/cosine motion paths
-- Random initial positions across viewport
-- Exit animation: particles swirl outward and fade
+**Cohesive Blob System:**
+- 40 particles arranged in concentric layers
+- Gaussian distribution for natural blob shape
+- Particles move together with synchronized motion
+- Flattened vertically for organic blob appearance
+- Gradient coloring from bright center to dimmer edges
 
-**Central Vortex:**
-- 3 rotating rings at different speeds
-- Central glowing core
-- Counter-rotating motion for depth
-- Scales and fades on exit
+**Travel Animation:**
+- Blob enters from left side of screen
+- Settles in center while loading
+- Travels across screen to the right on exit
+- Creates sense of movement between pages
+- No teleporting - smooth journey animation
 
-**Flowing Lines:**
-- 6 curved SVG paths radiating from center
-- Animated path drawing effect
-- Staggered delays for wave effect
-- Smooth bezier curves for organic feel
+**Visual Effects:**
+- Layered blur increases with distance from center
+- Bright orange/red core with HSL color gradients
+- Leading edge particles move ahead of blob
+- Trailing particles create motion blur effect
+- Horizontal motion blur lines during exit
 
 ### 3. NavigationLink Component (`app/components/NavigationLink.tsx`)
 - Replaces all Link components
@@ -84,23 +86,25 @@ I've completely restructured the loading animation system to create a true overl
 
 ## Animation Sequences
 
-### Loading Start (0-500ms)
-1. Dark overlay fades in (80% opacity)
-2. Particles scale from 0 to 1 with swirling motion
-3. Central vortex scales up with rotation
-4. SVG paths draw from center outward
+### Loading Start (0-600ms)
+1. Subtle overlay fades in (40% opacity)
+2. Blob enters from left side of screen
+3. Particles scale up as blob moves to center
+4. Synchronized wave motion creates organic feel
+5. Leading particles glow brighter
 
-### Loading Active (500ms+)
-1. Particles continuously swirl in sine/cosine patterns
-2. Rings rotate at different speeds (counter-rotation)
-3. SVG paths pulse opacity
-4. All animations loop seamlessly
+### Loading Active (600ms+)
+1. Blob breathes with gentle sine/cosine motion
+2. All particles move together as cohesive unit
+3. Core glow pulses subtly
+4. Trailing particles create depth
 
-### Loading Exit (500-1300ms)
-1. Particles swirl outward dramatically and fade
-2. Central vortex scales up and fades
-3. SVG paths retract toward center
-4. Overlay fades to transparent
+### Loading Exit (600-1600ms)
+1. Blob accelerates toward right side of screen
+2. Motion blur lines streak across viewport
+3. Particles compress slightly during travel
+4. Blob fades as it exits right side
+5. Creates feeling of traveling to next page
 
 ## User Experience Benefits
 
