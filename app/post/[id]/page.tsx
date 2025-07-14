@@ -1,82 +1,62 @@
-"use client";
+import { notFound } from 'next/navigation';
+import { getPostBySlug, getAllPostSlugs } from '@/app/lib/server-utils';
+import { generatePostMetadata, generateStructuredData } from '@/app/lib/seo';
+import PostContent from './PostContent';
+import ClientViewTracker from '@/app/components/ClientViewTracker';
+import { Metadata } from 'next';
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Post, supabase, generateSlug } from "@/app/lib/supabase";
-import LoadingSpinner from "@/app/components/LoadingSpinner";
-import { useLoading } from "@/app/hooks/useLoading";
-import PostContent from "./PostContent";
-
-export default function PostPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [post, setPost] = useState<Post | null>(null);
-  const { isLoading, stopLoading } = useLoading(true);
-
-  useEffect(() => {
-    if (params.id) {
-      fetchPost(params.id as string);
-    }
-  }, [params.id]);
-
-  const fetchPost = async (identifier: string) => {
-    try {
-      let foundPost: Post | null = null;
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .eq("is_draft", false)
-        .single();
-
-      if (!error && data) {
-        foundPost = data;
-      } else {
-        // If no match found, redirect to home
-        router.push("/");
-        return;
-      }
-      if (foundPost) {
-        setPost(foundPost);
-
-        // Increment view count (optimized)
-        supabase
-          .from("posts")
-          .update({ view_count: (foundPost.view_count || 0) + 1 })
-          .eq("id", foundPost.id)
-          .then(() => {
-            // Update local state to reflect new view count
-            setPost((prev) =>
-              prev ? { ...prev, view_count: (prev.view_count || 0) + 1 } : null
-            );
-          });
-      } else {
-        router.push("/");
-      }
-    } catch (error) {
-      console.error("Error fetching post:", error);
-      router.push("/");
-    } finally {
-      stopLoading();
-    }
+interface PostPageProps {
+  params: {
+    id: string;
   };
+}
 
-  if (isLoading) {
-    return <LoadingSpinner isLoading={isLoading} fullscreen={true} />;
+export async function generateStaticParams() {
+  const slugs = await getAllPostSlugs();
+  return slugs.map((slug) => ({
+    id: slug,
+  }));
+}
+
+export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const post = await getPostBySlug(params.id);
+  
+  if (!post) {
+    return {
+      title: 'Post Not Found | pramit.gg',
+    };
   }
 
-  if (!post) return null;
+  return generatePostMetadata(post);
+}
+
+export default async function PostPage({ params }: PostPageProps) {
+  const post = await getPostBySlug(params.id);
+
+  if (!post) {
+    notFound();
+  }
+
+  const structuredData = generateStructuredData(post);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
-        <article className="max-w-4xl mx-auto">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData),
+        }}
+      />
+      
+      <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
+        
+        <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+          <ClientViewTracker postId={post.id} />
           <PostContent post={post} />
-        </article>
-      </main>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
