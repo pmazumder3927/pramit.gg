@@ -1,6 +1,8 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { getPostBySlug, generatePostMetadata } from "@/app/lib/server-actions";
 import PostContent from "./PostContent";
+import Loading from "./loading";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -43,18 +45,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function PostPage({ params }: PageProps) {
-  const { id } = await params;
+async function PostPageContent({ id }: { id: string }) {
   const post = await getPostBySlug(id);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
-        <article className="max-w-4xl mx-auto">
-          <PostContent post={post} />
+    <>
+      <PostContent post={post} />
           
           {/* JSON-LD structured data for better SEO */}
           <script
@@ -85,6 +81,23 @@ export default async function PostPage({ params }: PageProps) {
               }),
             }}
           />
+    </>
+  );
+}
+
+export default async function PostPage({ params }: PageProps) {
+  const { id } = await params;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
+
+      <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
+        <article className="max-w-4xl mx-auto">
+          <Suspense fallback={<Loading />}>
+            <PostPageContent id={id} />
+          </Suspense>
         </article>
       </main>
     </div>
