@@ -144,7 +144,7 @@ function TrackCard({
               href={track.songUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
               className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-2 rounded-full bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/20"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
@@ -242,7 +242,7 @@ function PlaylistCard({
             href={playlist.playlistUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
             className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-2 rounded-full bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/20"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
@@ -517,7 +517,11 @@ export default function MusicPage() {
                 className="space-y-4"
               >
                 {recentlyPlayed?.tracks.map((track, index) => (
-                  <TrackCard key={track.id} track={track} index={index} />
+                  <TrackCard
+                    key={track.id + index}
+                    track={track}
+                    index={index}
+                  />
                 ))}
                 {(!recentlyPlayed || recentlyPlayed.tracks.length === 0) && (
                   <div className="text-center py-12 text-gray-500">

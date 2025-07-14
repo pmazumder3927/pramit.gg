@@ -48,7 +48,7 @@ export default function PostContent({ post }: PostContentProps) {
       {/* Post Header */}
       <header className="mb-12">
         <div className="flex items-center gap-4 mb-6">
-          <span 
+          <span
             className="text-sm px-3 py-1 rounded-full bg-white/5 border border-white/10 font-light"
             style={{ color: post.accent_color }}
           >
@@ -124,31 +124,38 @@ export default function PostContent({ post }: PostContentProps) {
           rehypePlugins={[rehypeKatex, rehypeHighlight]}
           components={{
             h1: ({ children }) => (
-              <h1 className="text-3xl font-light mt-8 mb-4 text-white">{children}</h1>
+              <h1 className="text-3xl font-light mt-8 mb-4 text-white">
+                {children}
+              </h1>
             ),
             h2: ({ children }) => (
-              <h2 className="text-2xl font-light mt-6 mb-3 text-white">{children}</h2>
+              <h2 className="text-2xl font-light mt-6 mb-3 text-white">
+                {children}
+              </h2>
             ),
             h3: ({ children }) => (
-              <h3 className="text-xl font-light mt-4 mb-2 text-white">{children}</h3>
+              <h3 className="text-xl font-light mt-4 mb-2 text-white">
+                {children}
+              </h3>
             ),
             p: ({ children }) => (
-              <p className="text-gray-300 leading-relaxed mb-4">
-                {children}
-              </p>
+              <p className="text-gray-300 leading-relaxed mb-4">{children}</p>
             ),
-            img: ({ src, alt }) => (
-              <div className="relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
-                <Image
-                  src={src || ""}
-                  alt={alt || ""}
-                  width={800}
-                  height={600}
-                  className="w-full h-auto object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 800px"
-                />
-              </div>
-            ),
+            img: (props) => {
+              const { src, alt } = props;
+              return (
+                <div className="relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
+                  <Image
+                    src={typeof src === "string" ? src : ""}
+                    alt={typeof alt === "string" ? alt : ""}
+                    width={800}
+                    height={600}
+                    className="w-full h-auto object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 800px"
+                  />
+                </div>
+              );
+            },
             a: ({ href, children }) => (
               <a
                 href={href}
@@ -178,9 +185,7 @@ export default function PostContent({ post }: PostContentProps) {
               </blockquote>
             ),
             ul: ({ children }) => (
-              <ul className="space-y-3 my-6 text-gray-300">
-                {children}
-              </ul>
+              <ul className="space-y-3 my-6 text-gray-300">{children}</ul>
             ),
             ol: ({ children }) => (
               <ol className="list-decimal list-inside space-y-3 my-6 text-gray-300 [&>li]:pl-2">
@@ -188,13 +193,13 @@ export default function PostContent({ post }: PostContentProps) {
               </ol>
             ),
             li: ({ children }) => (
-              <li className="text-gray-300 leading-relaxed pl-2 relative before:content-['•'] before:text-accent-orange before:absolute before:-left-4 before:top-0 before:text-lg before:font-bold ml-6">{children}</li>
+              <li className="text-gray-300 leading-relaxed pl-2 relative before:content-['•'] before:text-accent-orange before:absolute before:-left-4 before:top-0 before:text-lg before:font-bold ml-6">
+                {children}
+              </li>
             ),
             table: ({ children }) => (
               <div className="overflow-x-auto my-8 rounded-2xl bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
-                <table className="w-full text-sm">
-                  {children}
-                </table>
+                <table className="w-full text-sm">{children}</table>
               </div>
             ),
             thead: ({ children }) => (
@@ -203,9 +208,7 @@ export default function PostContent({ post }: PostContentProps) {
               </thead>
             ),
             tbody: ({ children }) => (
-              <tbody className="divide-y divide-white/10">
-                {children}
-              </tbody>
+              <tbody className="divide-y divide-white/10">{children}</tbody>
             ),
             tr: ({ children }) => (
               <tr className="hover:bg-white/5 transition-colors duration-200">
@@ -230,10 +233,9 @@ export default function PostContent({ post }: PostContentProps) {
             ),
             // Style footnote references and definitions
             section: ({ children, ...props }) => {
-              if (props.className?.includes('footnotes')) {
+              if (props.className?.includes("footnotes")) {
                 return (
                   <section className="mt-12 pt-8 border-t border-white/20">
-                    <h2 className="text-xl font-light mb-6 text-gray-300">Footnotes</h2>
                     {children}
                   </section>
                 );
