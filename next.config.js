@@ -11,6 +11,12 @@ const nextConfig = {
       },
     ],
   },
+  // Enable better SEO
+  trailingSlash: true,
+  // Enable experimental features for better performance
+  experimental: {
+    optimizePackageImports: ['@supabase/supabase-js'],
+  },
 }
 
 module.exports = nextConfig 

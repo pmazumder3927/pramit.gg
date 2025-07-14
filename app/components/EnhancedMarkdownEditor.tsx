@@ -149,7 +149,16 @@ export default function EnhancedMarkdownEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center rounded-lg"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 50,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '0.5rem'
+            }}
           >
             <div className="bg-deep-graphite p-6 rounded-lg flex flex-col items-center">
               <div className="w-16 h-16 mb-4 relative">
@@ -195,7 +204,17 @@ export default function EnhancedMarkdownEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-cyber-orange/20 border-2 border-cyber-orange border-dashed z-40 flex items-center justify-center rounded-lg"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(255, 107, 61, 0.2)',
+              border: '2px dashed #ff6b3d',
+              zIndex: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '0.5rem'
+            }}
           >
             <div className="text-center">
               <div className="text-4xl mb-2">📸</div>

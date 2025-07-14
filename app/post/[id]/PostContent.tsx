@@ -140,7 +140,7 @@ export default function PostContent({ post }: PostContentProps) {
             img: ({ src, alt }) => (
               <div className="relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
                 <Image
-                  src={src || ""}
+                  src={typeof src === 'string' ? src : ""}
                   alt={alt || ""}
                   width={800}
                   height={600}
