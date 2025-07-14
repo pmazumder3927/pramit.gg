@@ -1,8 +1,10 @@
 import { createClient } from '@/utils/supabase/server';
 import { Post } from './supabase';
+import { cache } from 'react';
 
-export async function getAllPosts(): Promise<Post[]> {
-  const supabase = createClient();
+// Cache the database calls for better performance
+export const getPosts = cache(async (): Promise<Post[]> => {
+  const supabase = await createClient();
   
   const { data, error } = await supabase
     .from('posts')
@@ -16,10 +18,10 @@ export async function getAllPosts(): Promise<Post[]> {
   }
 
   return data || [];
-}
+});
 
-export async function getPostBySlug(slug: string): Promise<Post | null> {
-  const supabase = createClient();
+export const getPost = cache(async (slug: string): Promise<Post | null> => {
+  const supabase = await createClient();
   
   const { data, error } = await supabase
     .from('posts')
@@ -34,10 +36,10 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
   }
 
   return data;
-}
+});
 
-export async function getAllPostSlugs(): Promise<string[]> {
-  const supabase = createClient();
+export const getPostSlugs = cache(async (): Promise<string[]> => {
+  const supabase = await createClient();
   
   const { data, error } = await supabase
     .from('posts')
@@ -50,16 +52,4 @@ export async function getAllPostSlugs(): Promise<string[]> {
   }
 
   return data?.map(post => post.slug) || [];
-}
-
-export async function incrementViewCount(postId: string): Promise<void> {
-  const supabase = createClient();
-  
-  const { error } = await supabase.rpc('increment_view_count', {
-    post_id: postId
-  });
-
-  if (error) {
-    console.error('Error incrementing view count:', error);
-  }
-}
+});
