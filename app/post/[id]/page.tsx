@@ -1,71 +1,63 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Post, supabase, generateSlug } from "@/app/lib/supabase";
-import LoadingSpinner from "@/app/components/LoadingSpinner";
-import { useLoading } from "@/app/hooks/useLoading";
+import { notFound } from "next/navigation";
+import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
+import { createClient } from "@/utils/supabase/server";
 
-export default function PostPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [post, setPost] = useState<Post | null>(null);
-  const { isLoading, stopLoading } = useLoading(true);
+interface PostPageProps {
+  params: Promise<{ id: string }>;
+}
 
-  useEffect(() => {
-    if (params.id) {
-      fetchPost(params.id as string);
+async function fetchPost(identifier: string): Promise<Post | null> {
+  try {
+    const supabase = await createClient();
+    console.log("Fetching post server-side for:", identifier);
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("slug", identifier)
+      .eq("is_draft", false)
+      .single();
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return null;
     }
-  }, [params.id]);
 
-  const fetchPost = async (identifier: string) => {
-    try {
-      let foundPost: Post | null = null;
-      const { data, error } = await supabase
+    if (data) {
+      console.log("Post fetched successfully server-side:", data.title);
+
+      // Increment view count server-side
+      const { error: updateError } = await supabase
         .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .eq("is_draft", false)
-        .single();
+        .update({ view_count: (data.view_count || 0) + 1 })
+        .eq("id", data.id);
 
-      if (!error && data) {
-        foundPost = data;
-      } else {
-        // If no match found, redirect to home
-        router.push("/");
-        return;
+      if (updateError) {
+        console.error("Error updating view count:", updateError);
       }
-      if (foundPost) {
-        setPost(foundPost);
 
-        // Increment view count (optimized)
-        supabase
-          .from("posts")
-          .update({ view_count: (foundPost.view_count || 0) + 1 })
-          .eq("id", foundPost.id)
-          .then(() => {
-            // Update local state to reflect new view count
-            setPost((prev) =>
-              prev ? { ...prev, view_count: (prev.view_count || 0) + 1 } : null
-            );
-          });
-      } else {
-        router.push("/");
-      }
-    } catch (error) {
-      console.error("Error fetching post:", error);
-      router.push("/");
-    } finally {
-      stopLoading();
+      // Return the post with incremented view count
+      return {
+        ...data,
+        view_count: (data.view_count || 0) + 1,
+      };
     }
-  };
 
-  if (isLoading) {
-    return <LoadingSpinner isLoading={isLoading} fullscreen={true} />;
+    return null;
+  } catch (error) {
+    console.error("Error fetching post:", error);
+    return null;
   }
+}
 
-  if (!post) return null;
+export default async function PostPage({ params }: PostPageProps) {
+  const { id } = await params;
+  const post = await fetchPost(id);
+
+  if (!post) {
+    notFound();
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">

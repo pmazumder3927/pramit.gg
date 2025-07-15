@@ -1,20 +1,23 @@
-'use client'
+"use client";
 
-import { motion } from 'framer-motion'
-import Link from 'next/link'
+import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function About() {
   const content = {
-    back: 'back',
-    title: 'about',
-    intro: "hey, i'm pramit. this is my digital space — a living journal where i share things that capture my attention",
-    philosophy: "i believe in building things that feels personal and alive. this site is an experiment in that philosophy",
-    interests: "currently interested in: reinforcement learning, robotics, bouldering, electronic music production, and spending way too much time optimizing my life",
-    connect: 'connect',
-    github: 'github',
-    instagram: 'instagram',
-    email: 'email'
-  }
+    back: "back",
+    title: "about",
+    intro:
+      "hey, i'm pramit. this is my digital space — a living journal where i share things that capture my attention",
+    philosophy:
+      "i believe in building things that feels personal and alive. this site is an experiment in that philosophy",
+    interests:
+      "currently interested in: reinforcement learning, robotics, bouldering, electronic music production, and spending way too much time optimizing my life",
+    connect: "connect",
+    github: "github",
+    instagram: "instagram",
+    email: "email",
+  };
 
   return (
     <main className="min-h-screen px-4 py-8 md:px-8 md:py-16">
@@ -28,14 +31,26 @@ export default function About() {
             href="/"
             className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             {content.back}
           </Link>
 
           <h1 className="text-4xl md:text-5xl font-light mb-8">
-            <span className="text-glitch" data-text={content.title}>{content.title}</span>
+            <span className="text-glitch" data-text={content.title}>
+              {content.title}
+            </span>
           </h1>
 
           <div className="space-y-6 text-gray-300 leading-relaxed">
@@ -46,7 +61,9 @@ export default function About() {
             <p>{content.interests}</p>
 
             <div className="pt-8 space-y-4">
-              <h2 className="text-xl font-light text-white">{content.connect}</h2>
+              <h2 className="text-xl font-light text-white">
+                {content.connect}
+              </h2>
               <div className="flex flex-wrap gap-4">
                 <a
                   href="https://github.com/pmazumder3927"
@@ -76,5 +93,5 @@ export default function About() {
         </motion.div>
       </div>
     </main>
-  )
-} 
+  );
+}

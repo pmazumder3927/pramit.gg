@@ -1,11 +1,8 @@
-"use client";
-
 import { motion } from "motion/react";
 import { Post, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useLoading } from "@/app/hooks/useLoading";
