@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { supabase, Post } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -25,12 +25,7 @@ export default function Dashboard() {
     is_draft: false,
   });
 
-  useEffect(() => {
-    checkUser();
-    fetchPosts();
-  }, []);
-
-  const checkUser = async () => {
+  const checkUser = useCallback(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -39,9 +34,9 @@ export default function Dashboard() {
     } else {
       setUser(user);
     }
-  };
+  }, [router]);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("posts")
@@ -55,7 +50,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkUser();
+    fetchPosts();
+  }, [checkUser, fetchPosts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

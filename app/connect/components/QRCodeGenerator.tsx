@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import QRCode from "qrcode";
 
 interface QRCodeGeneratorProps {
@@ -18,11 +18,7 @@ export default function QRCodeGenerator({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    generateQRCode();
-  }, [data, size]);
-
-  const generateQRCode = async () => {
+  const generateQRCode = useCallback(async () => {
     setIsLoading(true);
     try {
       // Generate actual QR code using the qrcode library
@@ -41,7 +37,11 @@ export default function QRCodeGenerator({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [data, size]);
+
+  useEffect(() => {
+    generateQRCode();
+  }, [generateQRCode]);
 
   if (isLoading) {
     return (
