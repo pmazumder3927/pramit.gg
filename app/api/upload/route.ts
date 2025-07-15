@@ -26,19 +26,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Check if file is an image
-    if (!file.type.startsWith("image/")) {
+    // Check if file is an image or video
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type === "video/mp4";
+    
+    if (!isImage && !isVideo) {
       return NextResponse.json(
-        { error: "File must be an image" },
+        { error: "File must be an image or MP4 video" },
         { status: 400 }
       );
     }
 
-    // Check file size (max 25MB)
-    const MAX_FILE_SIZE = 25 * 1024 * 1024;
+    // Check file size (max 100MB for all media)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024;
+    
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "File size must be less than 25MB" },
+        { error: "File size must be less than 100MB" },
         { status: 400 }
       );
     }
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer();
     const fileBuffer = new Uint8Array(buffer);
 
-    // Upload to Supabase Storage (now with user context)
+    // Upload to images bucket (for all media)
     const { data, error } = await supabase.storage
       .from("images")
       .upload(filePath, fileBuffer, {
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest) {
       filename: fileName,
       size: file.size,
       type: file.type,
+      isVideo,
     });
   } catch (error) {
     console.error("Upload error:", error);
