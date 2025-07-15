@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure content is visible by default (no-JS scenario) */
+[data-animate] {
+  @apply transition-none;
+}
+
+/* When JS is available, animations will add these classes dynamically */
+.js-enabled [data-animate] {
+  @apply transition-all;
+}
+
 @layer base {
   html {
     @apply antialiased;
