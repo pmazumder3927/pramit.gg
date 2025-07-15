@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
 import { createClient } from "@/utils/supabase/server";
+import { createMetadata } from "@/app/lib/metadata";
+import { Metadata } from "next";
 
 interface PostPageProps {
   params: Promise<{ id: string }>;
@@ -37,6 +39,47 @@ async function fetchPost(identifier: string): Promise<Post | null> {
     console.error("Error fetching post:", error);
     return null;
   }
+}
+
+// Helper function to generate excerpt from content
+function generateExcerpt(content: string): string {
+  const cleanText = content
+    .replace(/!\[.*?\]\(.*?\)/g, "") // Remove images
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Convert links to text
+    .replace(/[#*`_~]/g, "") // Remove markdown formatting
+    .replace(/\n+/g, " ") // Replace newlines with spaces
+    .trim();
+
+  return cleanText.length > 160
+    ? cleanText.substring(0, 160) + "..."
+    : cleanText;
+}
+
+export async function generateMetadata({
+  params,
+}: PostPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const post = await fetchPost(id);
+
+  if (!post) {
+    return createMetadata({
+      title: "Post Not Found",
+      description: "The requested post could not be found.",
+      noIndex: true,
+    });
+  }
+
+  return createMetadata({
+    title: post.title,
+    description: generateExcerpt(post.content),
+    image: post.media_url,
+    openGraph: {
+      type: "article",
+      publishedTime: post.created_at,
+      modifiedTime: post.updated_at || post.created_at,
+      authors: ["Pramit Mazumder"],
+    },
+  });
 }
 
 export default async function PostPage({ params }: PostPageProps) {
