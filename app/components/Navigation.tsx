@@ -6,6 +6,16 @@ import Link from "next/link";
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleNavClick = () => {
+    setIsNavigating(true);
+    // Delay closing to allow navigation to start
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsNavigating(false);
+    }, 150);
+  };
 
   return (
     <>
@@ -129,7 +139,8 @@ export default function Navigation() {
                 <Link
                   href="/"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-orange transition-all duration-500 hover:scale-105 text-center"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleNavClick}
+                  prefetch={true}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     home
@@ -149,7 +160,8 @@ export default function Navigation() {
                 <Link
                   href="/music"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-purple transition-all duration-500 hover:scale-105 text-center"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleNavClick}
+                  prefetch={true}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-purple hover:via-accent-purple hover:to-accent-purple transition-all duration-500">
                     music
@@ -169,7 +181,8 @@ export default function Navigation() {
                 <Link
                   href="/about"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-orange transition-all duration-500 hover:scale-105 text-center"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleNavClick}
+                  prefetch={true}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-orange hover:via-accent-orange hover:to-accent-orange transition-all duration-500">
                     about
@@ -189,7 +202,8 @@ export default function Navigation() {
                 <Link
                   href="/connect"
                   className="block text-5xl md:text-7xl font-extralight hover:text-accent-blue transition-all duration-500 hover:scale-105 text-center"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleNavClick}
+                  prefetch={true}
                 >
                   <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent hover:from-accent-blue hover:via-accent-blue hover:to-accent-blue transition-all duration-500">
                     connect

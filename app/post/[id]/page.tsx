@@ -1,71 +1,51 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Post, supabase, generateSlug } from "@/app/lib/supabase";
-import LoadingSpinner from "@/app/components/LoadingSpinner";
-import { useLoading } from "@/app/hooks/useLoading";
+import { Metadata } from "next";
+import { getPostBySlug, generatePostMetadata } from "@/app/lib/server-actions";
 import PostContent from "./PostContent";
 
-export default function PostPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [post, setPost] = useState<Post | null>(null);
-  const { isLoading, stopLoading } = useLoading(true);
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-  useEffect(() => {
-    if (params.id) {
-      fetchPost(params.id as string);
-    }
-  }, [params.id]);
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const post = await getPostBySlug(id);
+  const metadata = await generatePostMetadata(post);
 
-  const fetchPost = async (identifier: string) => {
-    try {
-      let foundPost: Post | null = null;
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .eq("is_draft", false)
-        .single();
-
-      if (!error && data) {
-        foundPost = data;
-      } else {
-        // If no match found, redirect to home
-        router.push("/");
-        return;
-      }
-      if (foundPost) {
-        setPost(foundPost);
-
-        // Increment view count (optimized)
-        supabase
-          .from("posts")
-          .update({ view_count: (foundPost.view_count || 0) + 1 })
-          .eq("id", foundPost.id)
-          .then(() => {
-            // Update local state to reflect new view count
-            setPost((prev) =>
-              prev ? { ...prev, view_count: (prev.view_count || 0) + 1 } : null
-            );
-          });
-      } else {
-        router.push("/");
-      }
-    } catch (error) {
-      console.error("Error fetching post:", error);
-      router.push("/");
-    } finally {
-      stopLoading();
-    }
+  return {
+    title: `${metadata.title} | pramit.gg`,
+    description: metadata.description,
+    openGraph: {
+      title: metadata.title,
+      description: metadata.description,
+      type: "article",
+      publishedTime: metadata.publishedTime,
+      modifiedTime: metadata.modifiedTime,
+      authors: ["Pramit"],
+      tags: metadata.tags,
+      images: metadata.ogImage ? [
+        {
+          url: metadata.ogImage,
+          width: 1200,
+          height: 630,
+          alt: metadata.title,
+        }
+      ] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: metadata.title,
+      description: metadata.description,
+      images: metadata.ogImage ? [metadata.ogImage] : undefined,
+    },
+    alternates: {
+      canonical: `/post/${id}`,
+    },
   };
+}
 
-  if (isLoading) {
-    return <LoadingSpinner isLoading={isLoading} fullscreen={true} />;
-  }
-
-  if (!post) return null;
+export default async function PostPage({ params }: PageProps) {
+  const { id } = await params;
+  const post = await getPostBySlug(id);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
@@ -75,6 +55,36 @@ export default function PostPage() {
       <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
         <article className="max-w-4xl mx-auto">
           <PostContent post={post} />
+          
+          {/* JSON-LD structured data for better SEO */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "BlogPosting",
+                headline: post.title,
+                datePublished: post.created_at,
+                dateModified: post.updated_at,
+                author: {
+                  "@type": "Person",
+                  name: "Pramit",
+                  url: "https://pramit.gg/about"
+                },
+                publisher: {
+                  "@type": "Person",
+                  name: "Pramit",
+                  url: "https://pramit.gg"
+                },
+                description: post.content.substring(0, 160),
+                keywords: post.tags.join(", "),
+                mainEntityOfPage: {
+                  "@type": "WebPage",
+                  "@id": `https://pramit.gg/post/${id}`
+                }
+              }),
+            }}
+          />
         </article>
       </main>
     </div>

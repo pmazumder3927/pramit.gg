@@ -6,7 +6,6 @@ import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useLoading } from "@/app/hooks/useLoading";
 
@@ -23,7 +22,6 @@ export default function PostCard({
 }: PostCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const router = useRouter();
   const { startLoading } = useLoading();
 
   const getAccentStyle = () => {
@@ -32,12 +30,9 @@ export default function PostCard({
     } as React.CSSProperties;
   };
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Start loading immediately
+  const handleClick = () => {
+    // Start loading immediately for visual feedback
     startLoading();
-    // Use the database slug field instead of generating it
-    router.push(`/post/${post.slug}`);
   };
 
   // Analyze content to determine optimal preview layout
@@ -208,7 +203,8 @@ export default function PostCard({
   };
 
   return (
-    <motion.article
+    <Link href={`/post/${post.slug}`} prefetch={true} onClick={handleClick} className="block h-full">
+      <motion.article
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -224,7 +220,6 @@ export default function PostCard({
       style={getAccentStyle()}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
     >
       <div
         className={`relative h-full bg-gradient-to-br from-charcoal-black/90 via-charcoal-black/70 to-void-black/90 backdrop-blur-xl border border-white/5 ${
@@ -323,5 +318,6 @@ export default function PostCard({
         </div>
       </div>
     </motion.article>
+    </Link>
   );
 }

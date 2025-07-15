@@ -2,6 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Progressive Enhancement Animations */
+@layer utilities {
+  /* Initial states for elements that will be animated */
+  .hero-title,
+  .hero-subtitle,
+  .featured-section,
+  .posts-section,
+  .post-card,
+  .about-content,
+  .music-section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  /* Animation classes applied by JavaScript */
+  @media (prefers-reduced-motion: no-preference) {
+    .animate-fade-in {
+      animation: fadeIn 1s ease-out forwards;
+    }
+
+    .animate-fade-in-delayed {
+      animation: fadeIn 0.8s ease-out 0.4s forwards;
+    }
+
+    .animate-slide-up {
+      animation: slideUp 0.8s ease-out forwards;
+    }
+
+    .animate-scale-in {
+      animation: scaleIn 0.6s ease-out forwards;
+    }
+
+    /* Hide elements before animation when JS is available */
+    .js-enabled .hero-title,
+    .js-enabled .hero-subtitle,
+    .js-enabled .featured-section,
+    .js-enabled .posts-section,
+    .js-enabled .post-card,
+    .js-enabled .about-content,
+    .js-enabled .music-section {
+      opacity: 0;
+    }
+
+    .js-enabled .hero-title,
+    .js-enabled .hero-subtitle {
+      transform: translateY(30px);
+    }
+
+    .js-enabled .featured-section,
+    .js-enabled .posts-section {
+      transform: translateY(40px);
+    }
+
+    .js-enabled .post-card {
+      transform: scale(0.9) translateY(40px);
+    }
+  }
+
+  @keyframes fadeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+}
+
 @layer base {
   html {
     @apply antialiased;
