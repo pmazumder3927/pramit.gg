@@ -17,8 +17,7 @@ https://www.pramit.gg/post/why-i-bothered
 
 ### Content Management
 - **Enhanced Markdown Editor**: Rich text editing with drag & drop support
-- **Image Uploads**: Drag & drop or click to upload images (max 25MB)
-- **Video Uploads**: Upload MP4 videos (max 100MB) with automatic insertion at cursor position
+- **Media Uploads**: Upload images and MP4 videos (max 100MB) with automatic insertion at cursor position
 - **Math Support**: KaTeX integration for mathematical expressions
 - **Code Highlighting**: Syntax highlighting for code blocks
 
@@ -31,15 +30,10 @@ https://www.pramit.gg/post/why-i-bothered
 ## Setup
 
 ### Storage Buckets
-The application requires two Supabase storage buckets:
-- `images` - for image uploads (max 25MB per file)
-- `videos` - for video uploads (max 100MB per file)
+The application requires one Supabase storage bucket:
+- `images` - for all media uploads (images and videos, max 100MB per file)
 
-Run the setup script to create the required buckets:
-```bash
-node setup-storage.js
-```
-
-Make sure to set the following environment variables:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+The bucket should be configured with:
+- Public access enabled
+- Allowed MIME types: `image/*` and `video/mp4`
+- File size limit: 100MB

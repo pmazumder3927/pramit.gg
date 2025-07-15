@@ -28,8 +28,7 @@ export default function EnhancedMarkdownEditor({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<any>(null);
 
   const insertAtCursor = useCallback((text: string) => {
@@ -71,11 +70,8 @@ export default function EnhancedMarkdownEditor({
         return;
       }
 
-      const maxSize = isImage ? 25 * 1024 * 1024 : 100 * 1024 * 1024;
-      const maxSizeMB = isImage ? 25 : 100;
-      
-      if (file.size > maxSize) {
-        alert(`${isImage ? 'Image' : 'Video'} must be less than ${maxSizeMB}MB`);
+      if (file.size > 100 * 1024 * 1024) {
+        alert("File must be less than 100MB");
         return;
       }
 
@@ -167,28 +163,17 @@ export default function EnhancedMarkdownEditor({
     [uploadFile]
   );
 
-  const insertImageClick = useCallback(() => {
-    imageInputRef.current?.click();
-  }, []);
-
-  const insertVideoClick = useCallback(() => {
-    videoInputRef.current?.click();
+  const insertMediaClick = useCallback(() => {
+    mediaInputRef.current?.click();
   }, []);
 
   return (
     <div className="relative">
-      {/* Hidden file inputs */}
+      {/* Hidden file input */}
       <input
-        ref={imageInputRef}
+        ref={mediaInputRef}
         type="file"
-        accept="image/*"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/mp4"
+        accept="image/*,video/mp4"
         onChange={handleFileSelect}
         className="hidden"
       />
@@ -258,12 +243,12 @@ export default function EnhancedMarkdownEditor({
         )}
       </AnimatePresence>
 
-      {/* Media upload buttons */}
+      {/* Media upload button */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={insertImageClick}
+            onClick={insertMediaClick}
             className="flex items-center gap-1 px-3 py-1 bg-cyber-orange/20 text-cyber-orange hover:bg-cyber-orange/30 rounded-lg transition-colors text-sm"
           >
             <svg
@@ -279,34 +264,14 @@ export default function EnhancedMarkdownEditor({
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            Add Image
-          </button>
-          <button
-            type="button"
-            onClick={insertVideoClick}
-            className="flex items-center gap-1 px-3 py-1 bg-cyber-orange/20 text-cyber-orange hover:bg-cyber-orange/30 rounded-lg transition-colors text-sm"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-            Add Video
+            Upload Media
           </button>
           <span className="text-xs text-gray-500">or drag & drop</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <span>📱 Mobile friendly</span>
           <span>•</span>
-          <span>Images: 25MB • Videos: 100MB</span>
+          <span>Max 100MB</span>
         </div>
       </div>
 
@@ -342,7 +307,7 @@ export default function EnhancedMarkdownEditor({
 
       {/* Mobile-specific instructions */}
       <div className="md:hidden mt-2 text-xs text-gray-500 text-center">
-        💡 On mobile: Tap &quot;Add Image&quot; or &quot;Add Video&quot; to upload from your camera or gallery
+        💡 On mobile: Tap &quot;Upload Media&quot; to upload from your camera or gallery
       </div>
     </div>
   );

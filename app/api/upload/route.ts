@@ -37,20 +37,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check file size (max 25MB for images, 100MB for videos)
-    const MAX_IMAGE_SIZE = 25 * 1024 * 1024;
-    const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
+    // Check file size (max 100MB for all media)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024;
     
-    if (isImage && file.size > MAX_IMAGE_SIZE) {
+    if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Image size must be less than 25MB" },
-        { status: 400 }
-      );
-    }
-    
-    if (isVideo && file.size > MAX_VIDEO_SIZE) {
-      return NextResponse.json(
-        { error: "Video size must be less than 100MB" },
+        { error: "File size must be less than 100MB" },
         { status: 400 }
       );
     }
@@ -66,27 +58,13 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer();
     const fileBuffer = new Uint8Array(buffer);
 
-    // Upload to appropriate Supabase Storage bucket
-    // For videos, try videos bucket first, fallback to images bucket
-    let bucketName = isImage ? "images" : "videos";
-    let { data, error } = await supabase.storage
-      .from(bucketName)
+    // Upload to images bucket (for all media)
+    const { data, error } = await supabase.storage
+      .from("images")
       .upload(filePath, fileBuffer, {
         contentType: file.type,
         upsert: false,
       });
-
-    // If videos bucket doesn't exist, fallback to images bucket
-    if (error && isVideo && error.message.includes("bucket")) {
-      console.warn("Videos bucket not found, falling back to images bucket");
-      bucketName = "images";
-      ({ data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, fileBuffer, {
-          contentType: file.type,
-          upsert: false,
-        }));
-    }
 
     if (error) {
       console.error("Supabase upload error:", error);
@@ -96,7 +74,7 @@ export async function POST(req: NextRequest) {
     // Get public URL
     const {
       data: { publicUrl },
-    } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+    } = supabase.storage.from("images").getPublicUrl(filePath);
 
     return NextResponse.json({
       url: publicUrl,
