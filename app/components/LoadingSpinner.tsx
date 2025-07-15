@@ -4,34 +4,20 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 
 interface LoadingSpinnerProps {
-  isLoading: boolean;
+  isLoading?: boolean;
   fullscreen?: boolean;
   className?: string;
 }
 
 export default function LoadingSpinner({
-  isLoading,
+  isLoading = true,
   fullscreen = false,
   className = "",
 }: LoadingSpinnerProps) {
-  const [isFinishing, setIsFinishing] = useState(false);
   const [shouldShow, setShouldShow] = useState(isLoading);
 
   useEffect(() => {
-    if (isLoading) {
-      setShouldShow(true);
-      setIsFinishing(false);
-    } else {
-      // Start finishing sequence
-      setIsFinishing(true);
-      // Keep showing until animation completes
-      const timer = setTimeout(() => {
-        setShouldShow(false);
-        setIsFinishing(false);
-      }, 800);
-
-      return () => clearTimeout(timer);
-    }
+    setShouldShow(isLoading);
   }, [isLoading]);
 
   if (!shouldShow) return null;
@@ -50,7 +36,7 @@ export default function LoadingSpinner({
             animate={{ rotate: 360 }}
             transition={{
               duration: 2,
-              repeat: isFinishing ? 0 : Infinity,
+              repeat: Infinity,
               ease: "linear",
             }}
             className="w-32 h-32 border-2 border-accent-orange/30 rounded-full"
@@ -64,7 +50,7 @@ export default function LoadingSpinner({
             }}
             transition={{
               duration: 1.5,
-              repeat: isFinishing ? 0 : Infinity,
+              repeat: Infinity,
               ease: [0.25, 0.1, 0.25, 1],
             }}
             className="absolute inset-0 m-auto w-12 h-12 bg-gradient-to-r from-accent-orange to-accent-purple rounded-full"
@@ -82,7 +68,7 @@ export default function LoadingSpinner({
               }}
               transition={{
                 duration: 2,
-                repeat: isFinishing ? 0 : Infinity,
+                repeat: Infinity,
                 delay: i * 0.1,
                 ease: [0.25, 0.1, 0.25, 1],
               }}
@@ -95,7 +81,7 @@ export default function LoadingSpinner({
             animate={{ rotate: -360 }}
             transition={{
               duration: 1.5,
-              repeat: isFinishing ? 0 : Infinity,
+              repeat: Infinity,
               ease: "linear",
             }}
             className="absolute inset-0 m-auto w-20 h-20 border-2 border-accent-purple/40 rounded-full border-dashed"
@@ -109,7 +95,7 @@ export default function LoadingSpinner({
             }}
             transition={{
               duration: 2,
-              repeat: isFinishing ? 0 : Infinity,
+              repeat: Infinity,
               ease: [0.25, 0.1, 0.25, 1],
             }}
             className="absolute inset-0 m-auto w-40 h-40 bg-gradient-to-r from-accent-orange/10 to-accent-purple/10 rounded-full blur-2xl -z-10"
@@ -120,28 +106,13 @@ export default function LoadingSpinner({
             animate={{ rotate: 360 }}
             transition={{
               duration: 3,
-              repeat: isFinishing ? 0 : Infinity,
+              repeat: Infinity,
               ease: "linear",
             }}
             className="absolute inset-0 m-auto w-6 h-6 bg-white/20 rounded-sm transform rotate-45"
           />
         </div>
       </div>
-
-      {/* Non-blocking ripple overlay */}
-      {isFinishing && (
-        <motion.div
-          initial={{ scale: 0, opacity: 0.6 }}
-          animate={{ scale: fullscreen ? 15 : 12, opacity: 0 }}
-          transition={{
-            duration: 0.8,
-            ease: [0.25, 0.1, 0.25, 1],
-          }}
-          className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
-        >
-          <div className="w-32 h-32 bg-gradient-to-r from-accent-orange/15 to-accent-purple/15 rounded-full blur-xl" />
-        </motion.div>
-      )}
     </>
   );
 }

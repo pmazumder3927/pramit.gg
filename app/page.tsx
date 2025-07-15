@@ -4,6 +4,7 @@ import NowPlaying from "@/app/components/NowPlaying";
 import AnimatedHomePage from "@/app/components/AnimatedHomePage";
 import AnimatedHero from "@/app/components/AnimatedHero";
 import { createClient } from "@/utils/supabase/server";
+import Link from "next/link";
 
 async function fetchPosts() {
   try {
@@ -28,6 +29,9 @@ async function fetchPosts() {
     return [];
   }
 }
+
+// Enable ISR with 60 second revalidation
+export const revalidate = 60;
 
 export default async function Home() {
   const allPosts = await fetchPosts();
@@ -58,12 +62,12 @@ export default async function Home() {
                 <NowPlaying />
               </div>
               <div className="flex items-center gap-6 text-sm text-gray-500">
-                <a
+                <Link
                   href="/about"
                   className="hover:text-white transition-colors duration-300 font-light"
                 >
                   About
-                </a>
+                </Link>
                 <div className="w-1 h-1 bg-gray-700 rounded-full" />
                 <span className="font-light">© 2025 pramit mazumder</span>
               </div>

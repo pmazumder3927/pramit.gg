@@ -7,6 +7,9 @@ interface PostPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Enable ISR with 5 minute revalidation for posts
+export const revalidate = 300;
+
 async function fetchPost(identifier: string): Promise<Post | null> {
   try {
     const supabase = await createClient();
@@ -26,22 +29,7 @@ async function fetchPost(identifier: string): Promise<Post | null> {
 
     if (data) {
       console.log("Post fetched successfully server-side:", data.title);
-
-      // Increment view count server-side
-      const { error: updateError } = await supabase
-        .from("posts")
-        .update({ view_count: (data.view_count || 0) + 1 })
-        .eq("id", data.id);
-
-      if (updateError) {
-        console.error("Error updating view count:", updateError);
-      }
-
-      // Return the post with incremented view count
-      return {
-        ...data,
-        view_count: (data.view_count || 0) + 1,
-      };
+      return data;
     }
 
     return null;

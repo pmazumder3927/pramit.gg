@@ -11,6 +11,7 @@ import ReactPlayer from "react-player";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
+import ViewCountTracker from "./ViewCountTracker";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github-dark.css";
 
@@ -59,9 +60,10 @@ export default function PostContent({ post }: PostContentProps) {
               addSuffix: true,
             })}
           </span>
-          <span className="text-sm text-gray-500">
-            {post.view_count || 0} views
-          </span>
+          <ViewCountTracker
+            postId={post.id}
+            initialViewCount={post.view_count || 0}
+          />
         </div>
         <h1 className="text-4xl md:text-6xl font-extralight mb-6 leading-tight">
           <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">

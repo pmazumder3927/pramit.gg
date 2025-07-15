@@ -3,9 +3,8 @@ import { Post, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import ReactPlayer from "react-player";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
-import { useLoading } from "@/app/hooks/useLoading";
 
 interface PostCardProps {
   post: Post;
@@ -20,21 +19,11 @@ export default function PostCard({
 }: PostCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const router = useRouter();
-  const { startLoading } = useLoading();
 
   const getAccentStyle = () => {
     return {
       "--accent-color": post.accent_color,
     } as React.CSSProperties;
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Start loading immediately
-    startLoading();
-    // Use the database slug field instead of generating it
-    router.push(`/post/${post.slug}`);
   };
 
   // Analyze content to determine optimal preview layout
@@ -205,120 +194,121 @@ export default function PostCard({
   };
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        delay: index * 0.05,
-        duration: 0.6,
-        ease: [0.25, 0.1, 0.25, 1],
-      }}
-      whileHover={{
-        y: -8,
-        transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
-      }}
-      className="group cursor-pointer h-full"
-      style={getAccentStyle()}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
-    >
-      <div
-        className={`relative h-full bg-gradient-to-br from-charcoal-black/90 via-charcoal-black/70 to-void-black/90 backdrop-blur-xl border border-white/5 ${
-          featured ? "rounded-3xl p-8" : "rounded-2xl p-6"
-        } overflow-hidden transition-all duration-700 hover:border-white/10 hover:shadow-2xl hover:shadow-black/50`}
+    <Link href={`/post/${post.slug}`} className="block h-full">
+      <motion.article
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          delay: index * 0.05,
+          duration: 0.6,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+        whileHover={{
+          y: -8,
+          transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
+        }}
+        className="group cursor-pointer h-full"
+        style={getAccentStyle()}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Ambient Light Effect */}
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-          <div
-            className="absolute inset-0 bg-gradient-to-br opacity-20 blur-3xl"
-            style={{
-              background: `radial-gradient(circle at 30% 20%, ${post.accent_color}15 0%, transparent 50%)`,
-            }}
-          />
-        </div>
+        <div
+          className={`relative h-full bg-gradient-to-br from-charcoal-black/90 via-charcoal-black/70 to-void-black/90 backdrop-blur-xl border border-white/5 ${
+            featured ? "rounded-3xl p-8" : "rounded-2xl p-6"
+          } overflow-hidden transition-all duration-700 hover:border-white/10 hover:shadow-2xl hover:shadow-black/50`}
+        >
+          {/* Ambient Light Effect */}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+            <div
+              className="absolute inset-0 bg-gradient-to-br opacity-20 blur-3xl"
+              style={{
+                background: `radial-gradient(circle at 30% 20%, ${post.accent_color}15 0%, transparent 50%)`,
+              }}
+            />
+          </div>
 
-        {/* Subtle Grid Pattern */}
-        <div className="absolute inset-0 opacity-[0.02] group-hover:opacity-[0.04] transition-opacity duration-700">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)`,
-              backgroundSize: "20px 20px",
-            }}
-          />
-        </div>
+          {/* Subtle Grid Pattern */}
+          <div className="absolute inset-0 opacity-[0.02] group-hover:opacity-[0.04] transition-opacity duration-700">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)`,
+                backgroundSize: "20px 20px",
+              }}
+            />
+          </div>
 
-        <div className="relative z-10 h-full flex flex-col">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs text-gray-500 font-light">
-              {formatDistanceToNow(new Date(post.created_at), {
-                addSuffix: true,
-              })}
-            </span>
-            <div className="w-1 h-1 bg-gray-700 rounded-full" />
-            <span
-              className={`text-xs px-2.5 py-1 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-300 group-hover:bg-white/10 ${
-                featured ? "font-medium" : "font-light"
-              }`}
-              style={{ color: post.accent_color }}
+          <div className="relative z-10 h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-gray-500 font-light">
+                {formatDistanceToNow(new Date(post.created_at), {
+                  addSuffix: true,
+                })}
+              </span>
+              <div className="w-1 h-1 bg-gray-700 rounded-full" />
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 transition-all duration-300 group-hover:bg-white/10 ${
+                  featured ? "font-medium" : "font-light"
+                }`}
+                style={{ color: post.accent_color }}
+              >
+                {post.type}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h3
+              className={`${
+                featured ? "text-2xl md:text-3xl" : "text-xl"
+              } font-light leading-tight text-white/90 group-hover:text-white transition-colors duration-300 mb-4`}
             >
-              {post.type}
-            </span>
+              {post.title}
+            </h3>
+
+            {/* Content Preview */}
+            {renderPreview()}
+
+            {/* Footer */}
+            <div className="mt-auto">
+              {post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {post.tags.slice(0, featured ? 4 : 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2 py-1 rounded-full bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-400 transition-all duration-300 font-light"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                  {post.tags.length > (featured ? 4 : 3) && (
+                    <span className="text-xs text-gray-500 font-light">
+                      +{post.tags.length - (featured ? 4 : 3)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Title */}
-          <h3
-            className={`${
-              featured ? "text-2xl md:text-3xl" : "text-xl"
-            } font-light leading-tight text-white/90 group-hover:text-white transition-colors duration-300 mb-4`}
-          >
-            {post.title}
-          </h3>
-
-          {/* Content Preview */}
-          {renderPreview()}
-
-          {/* Footer */}
-          <div className="mt-auto">
-            {post.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {post.tags.slice(0, featured ? 4 : 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2 py-1 rounded-full bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-400 transition-all duration-300 font-light"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-                {post.tags.length > (featured ? 4 : 3) && (
-                  <span className="text-xs text-gray-500 font-light">
-                    +{post.tags.length - (featured ? 4 : 3)}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Accent Line */}
-        <motion.div
-          className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-transparent via-current to-transparent opacity-0 group-hover:opacity-100"
-          style={{ color: post.accent_color }}
-          initial={{ width: "0%" }}
-          animate={{ width: isHovered ? "100%" : "0%" }}
-          transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
-        />
-
-        {/* Corner Accent */}
-        <div className="absolute top-0 right-0 w-20 h-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-          <div
-            className="absolute inset-0 bg-gradient-to-bl from-current to-transparent opacity-10 rounded-bl-full"
+          {/* Accent Line */}
+          <motion.div
+            className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-transparent via-current to-transparent opacity-0 group-hover:opacity-100"
             style={{ color: post.accent_color }}
+            initial={{ width: "0%" }}
+            animate={{ width: isHovered ? "100%" : "0%" }}
+            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
           />
+
+          {/* Corner Accent */}
+          <div className="absolute top-0 right-0 w-20 h-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+            <div
+              className="absolute inset-0 bg-gradient-to-bl from-current to-transparent opacity-10 rounded-bl-full"
+              style={{ color: post.accent_color }}
+            />
+          </div>
         </div>
-      </div>
-    </motion.article>
+      </motion.article>
+    </Link>
   );
 }
