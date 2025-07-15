@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { supabase, Post } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import EnhancedMarkdownEditor from "@/app/components/EnhancedMarkdownEditor";

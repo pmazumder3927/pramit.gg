@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Post, supabase } from "@/app/lib/supabase";
 import PostCard from "@/app/components/PostCard";
 import Navigation from "@/app/components/Navigation";
