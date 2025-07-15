@@ -144,7 +144,7 @@ export default function PostContent({ post }: PostContentProps) {
             img: (props) => {
               const { src, alt } = props;
               return (
-                <div className="relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
+                <span className="block relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
                   <Image
                     src={typeof src === "string" ? src : ""}
                     alt={typeof alt === "string" ? alt : ""}
@@ -153,7 +153,7 @@ export default function PostContent({ post }: PostContentProps) {
                     className="w-full h-auto object-cover"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 800px"
                   />
-                </div>
+                </span>
               );
             },
             a: ({ href, children }) => (
