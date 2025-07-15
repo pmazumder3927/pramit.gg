@@ -1,71 +1,64 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Post, supabase, generateSlug } from "@/app/lib/supabase";
-import LoadingSpinner from "@/app/components/LoadingSpinner";
-import { useLoading } from "@/app/hooks/useLoading";
+import { Metadata } from "next";
+import { getPost } from "@/app/lib/server-data";
+import { generatePreviewText, extractImages } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
 
-export default function PostPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [post, setPost] = useState<Post | null>(null);
-  const { isLoading, stopLoading } = useLoading(true);
+interface PostPageProps {
+  params: Promise<{ id: string }>;
+}
 
-  useEffect(() => {
-    if (params.id) {
-      fetchPost(params.id as string);
-    }
-  }, [params.id]);
-
-  const fetchPost = async (identifier: string) => {
-    try {
-      let foundPost: Post | null = null;
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .eq("is_draft", false)
-        .single();
-
-      if (!error && data) {
-        foundPost = data;
-      } else {
-        // If no match found, redirect to home
-        router.push("/");
-        return;
-      }
-      if (foundPost) {
-        setPost(foundPost);
-
-        // Increment view count (optimized)
-        supabase
-          .from("posts")
-          .update({ view_count: (foundPost.view_count || 0) + 1 })
-          .eq("id", foundPost.id)
-          .then(() => {
-            // Update local state to reflect new view count
-            setPost((prev) =>
-              prev ? { ...prev, view_count: (prev.view_count || 0) + 1 } : null
-            );
-          });
-      } else {
-        router.push("/");
-      }
-    } catch (error) {
-      console.error("Error fetching post:", error);
-      router.push("/");
-    } finally {
-      stopLoading();
-    }
+export async function generateMetadata({
+  params,
+}: PostPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const post = await getPost(id);
+  
+  // Extract first image or use a default
+  const images = extractImages(post.content);
+  const ogImage = post.media_url || (images.length > 0 ? images[0] : null);
+  
+  // Generate description from content
+  const description = generatePreviewText(post.content).substring(0, 160);
+  
+  // Use dynamic OG image or fallback to media_url/extracted image
+  const dynamicOgImage = `/api/og?title=${encodeURIComponent(post.title)}&description=${encodeURIComponent(description || '')}&type=${post.type}`;
+  const finalOgImage = ogImage || dynamicOgImage;
+  
+  return {
+    title: `${post.title} | pramit.gg`,
+    description: description || `Read "${post.title}" on pramit.gg`,
+    openGraph: {
+      title: post.title,
+      description: description || `Read "${post.title}" on pramit.gg`,
+      type: "article",
+      publishedTime: post.created_at,
+      modifiedTime: post.updated_at,
+      authors: ["Pramit"],
+      tags: post.tags,
+      images: [
+        {
+          url: finalOgImage,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        }
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: description || `Read "${post.title}" on pramit.gg`,
+      images: [finalOgImage],
+    },
+    alternates: {
+      canonical: `/post/${post.slug}`,
+    },
   };
+}
 
-  if (isLoading) {
-    return <LoadingSpinner isLoading={isLoading} fullscreen={true} />;
-  }
-
-  if (!post) return null;
+export default async function PostPage({ params }: PostPageProps) {
+  const { id } = await params;
+  const post = await getPost(id);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
@@ -74,6 +67,28 @@ export default function PostPage() {
 
       <main className="relative z-10 min-h-screen px-4 py-8 md:px-8 md:py-16">
         <article className="max-w-4xl mx-auto">
+          {/* Add structured data for SEO */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "BlogPosting",
+                headline: post.title,
+                datePublished: post.created_at,
+                dateModified: post.updated_at,
+                author: {
+                  "@type": "Person",
+                  name: "Pramit",
+                },
+                description: generatePreviewText(post.content).substring(0, 160),
+                mainEntityOfPage: {
+                  "@type": "WebPage",
+                  "@id": `https://pramit.gg/post/${post.slug}`,
+                },
+              }),
+            }}
+          />
           <PostContent post={post} />
         </article>
       </main>

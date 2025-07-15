@@ -17,6 +17,11 @@ const nextConfig = {
       },
     ],
   },
+  // SEO optimizations
+  trailingSlash: false,
+  generateEtags: true,
+  poweredByHeader: false,
+  compress: true,
 };
 
 module.exports = nextConfig;
