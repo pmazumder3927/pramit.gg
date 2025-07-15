@@ -53,5 +53,9 @@ export default function About() {
     footer: "thanks for stopping by. feel free to explore, and don't hesitate to reach out if something resonates.",
   }
 
-  return <AboutClient content={content} />
+  return (
+    <div suppressHydrationWarning>
+      <AboutClient content={content} serverRendered={true} />
+    </div>
+  )
 } 

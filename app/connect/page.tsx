@@ -15,5 +15,9 @@ export const metadata: Metadata = {
 }
 
 export default function ConnectPage() {
-  return <ConnectClient />
+  return (
+    <div suppressHydrationWarning>
+      <ConnectClient serverRendered={true} />
+    </div>
+  )
 }

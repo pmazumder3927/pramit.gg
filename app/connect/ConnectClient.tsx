@@ -6,7 +6,11 @@ import QRCodeGenerator from "./components/QRCodeGenerator";
 import ConfessionalBooth from "./components/ConfessionalBooth";
 import Link from "next/link";
 
-export default function ConnectClient() {
+interface ConnectClientProps {
+  serverRendered?: boolean;
+}
+
+export default function ConnectClient({ serverRendered = false }: ConnectClientProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
 

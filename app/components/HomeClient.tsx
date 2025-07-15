@@ -10,13 +10,18 @@ import { useInView } from "react-intersection-observer";
 interface HomeClientProps {
   featuredPosts: Post[];
   posts: Post[];
+  serverRendered?: boolean;
 }
 
-export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
+export default function HomeClient({ featuredPosts, posts, serverRendered = false }: HomeClientProps) {
   const { ref, inView } = useInView({
     threshold: 0.1,
     triggerOnce: true,
   });
+
+  // When server-rendered, we skip animations on first render to ensure
+  // content is immediately visible to crawlers
+  const shouldAnimate = !serverRendered;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black">
@@ -28,7 +33,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
 
         {/* Hero Section */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
           className="relative pt-20 pb-12 md:pt-32 md:pb-20"
@@ -37,7 +42,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
             <div className="text-center">
               <motion.h1
                 className="text-5xl md:text-7xl lg:text-8xl font-extralight tracking-tight mb-6"
-                initial={{ opacity: 0, y: 30 }}
+                initial={shouldAnimate ? { opacity: 0, y: 30 } : false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
                   duration: 1,
@@ -51,7 +56,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
               </motion.h1>
               <motion.p
                 className="text-xl md:text-2xl text-gray-400 font-light max-w-2xl mx-auto leading-relaxed"
-                initial={{ opacity: 0, y: 20 }}
+                initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
                   duration: 0.8,
@@ -71,7 +76,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
           {featuredPosts.length > 0 && (
             <motion.section
               className="mb-16 md:mb-24"
-              initial={{ opacity: 0, y: 40 }}
+              initial={shouldAnimate ? { opacity: 0, y: 40 } : false}
               animate={{ opacity: 1, y: 0 }}
               transition={{
                 duration: 0.8,
@@ -82,7 +87,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
               <div className="mb-8">
                 <motion.h2
                   className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2"
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={shouldAnimate ? { opacity: 0, x: -20 } : false}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.6, delay: 0.8 }}
                 >
@@ -90,7 +95,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                 </motion.h2>
                 <motion.div
                   className="h-px bg-gradient-to-r from-accent-orange/20 via-accent-purple/20 to-transparent"
-                  initial={{ scaleX: 0 }}
+                  initial={shouldAnimate ? { scaleX: 0 } : false}
                   animate={{ scaleX: 1 }}
                   transition={{
                     duration: 0.8,
@@ -105,10 +110,10 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                   {featuredPosts.map((post, index) => (
                     <motion.div
                       key={post.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
+                      initial={shouldAnimate ? { opacity: 0, scale: 0.9 } : false}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{
-                        delay: 0.8 + index * 0.1,
+                        delay: shouldAnimate ? 0.8 + index * 0.1 : 0,
                         duration: 0.6,
                         ease: [0.25, 0.1, 0.25, 1],
                       }}
@@ -125,7 +130,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
           {/* Main Posts Grid */}
           {posts.length === 0 && featuredPosts.length === 0 ? (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={shouldAnimate ? { opacity: 0 } : false}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 1 }}
               className="text-center py-24"
@@ -152,7 +157,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
           ) : (
             <motion.section
               className="mb-16"
-              initial={{ opacity: 0, y: 40 }}
+              initial={shouldAnimate ? { opacity: 0, y: 40 } : false}
               animate={{ opacity: 1, y: 0 }}
               transition={{
                 duration: 0.8,
@@ -164,7 +169,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                 <div className="mb-8">
                   <motion.h2
                     className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2"
-                    initial={{ opacity: 0, x: -20 }}
+                    initial={shouldAnimate ? { opacity: 0, x: -20 } : false}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.6, delay: 1.2 }}
                   >
@@ -172,7 +177,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                   </motion.h2>
                   <motion.div
                     className="h-px bg-gradient-to-r from-accent-purple/20 via-accent-orange/20 to-transparent"
-                    initial={{ scaleX: 0 }}
+                    initial={shouldAnimate ? { scaleX: 0 } : false}
                     animate={{ scaleX: 1 }}
                     transition={{
                       duration: 0.8,
@@ -192,7 +197,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                     <motion.div
                       key={post.id}
                       layout
-                      initial={{ opacity: 0, y: 40, scale: 0.9 }}
+                      initial={shouldAnimate ? { opacity: 0, y: 40, scale: 0.9 } : false}
                       animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
                       exit={{
                         opacity: 0,
@@ -200,7 +205,7 @@ export default function HomeClient({ featuredPosts, posts }: HomeClientProps) {
                         transition: { duration: 0.3 },
                       }}
                       transition={{
-                        delay: 1.4 + index * 0.05,
+                        delay: shouldAnimate ? 1.4 + index * 0.05 : 0,
                         duration: 0.6,
                         ease: [0.25, 0.1, 0.25, 1],
                       }}

@@ -17,5 +17,16 @@ export default async function Home() {
   const featuredPosts = posts?.slice(0, 3) || [];
   const remainingPosts = posts?.slice(3) || [];
 
-  return <HomeClient featuredPosts={featuredPosts} posts={remainingPosts} />;
+  // Pass the server-fetched data to the client component
+  // The component will render immediately with this data (no loading state needed)
+  // This ensures content is available for crawlers on first load
+  return (
+    <div suppressHydrationWarning>
+      <HomeClient 
+        featuredPosts={featuredPosts} 
+        posts={remainingPosts} 
+        serverRendered={true}
+      />
+    </div>
+  );
 }

@@ -14,12 +14,19 @@ interface AboutContent {
   footer: string
 }
 
-export default function AboutClient({ content }: { content: AboutContent }) {
+interface AboutClientProps {
+  content: AboutContent
+  serverRendered?: boolean
+}
+
+export default function AboutClient({ content, serverRendered = false }: AboutClientProps) {
+  const shouldAnimate = !serverRendered;
+
   return (
     <main className="min-h-screen px-4 py-8 md:px-8 md:py-16">
       <div className="max-w-3xl mx-auto">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
@@ -40,7 +47,7 @@ export default function AboutClient({ content }: { content: AboutContent }) {
           <div className="space-y-12">
             <motion.p 
               className="text-lg text-gray-300 leading-relaxed"
-              initial={{ opacity: 0, y: 20 }}
+              initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
             >
@@ -50,9 +57,9 @@ export default function AboutClient({ content }: { content: AboutContent }) {
             {content.sections.map((section, sectionIndex) => (
               <motion.div
                 key={section.title}
-                initial={{ opacity: 0, y: 20 }}
+                initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 + sectionIndex * 0.1 }}
+                transition={{ duration: 0.5, delay: shouldAnimate ? 0.2 + sectionIndex * 0.1 : 0 }}
                 className="space-y-4"
               >
                 <h2 className="text-xl font-light text-white">{section.title}</h2>
@@ -60,11 +67,11 @@ export default function AboutClient({ content }: { content: AboutContent }) {
                   {section.items.map((item, itemIndex) => (
                     <motion.li
                       key={itemIndex}
-                      initial={{ opacity: 0, x: -20 }}
+                      initial={shouldAnimate ? { opacity: 0, x: -20 } : false}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ 
                         duration: 0.3, 
-                        delay: 0.3 + sectionIndex * 0.1 + itemIndex * 0.05 
+                        delay: shouldAnimate ? 0.3 + sectionIndex * 0.1 + itemIndex * 0.05 : 0
                       }}
                       className="text-gray-400 flex items-center gap-2"
                     >
@@ -78,17 +85,17 @@ export default function AboutClient({ content }: { content: AboutContent }) {
 
             <motion.p
               className="text-gray-300 leading-relaxed pt-8 border-t border-gray-800"
-              initial={{ opacity: 0, y: 20 }}
+              initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
+              transition={{ duration: 0.5, delay: shouldAnimate ? 0.6 : 0 }}
             >
               {content.footer}
             </motion.p>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={shouldAnimate ? { opacity: 0, y: 20 } : false}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.7 }}
+              transition={{ duration: 0.5, delay: shouldAnimate ? 0.7 : 0 }}
               className="pt-8 space-y-4"
             >
               <h2 className="text-xl font-light text-white">connect</h2>
