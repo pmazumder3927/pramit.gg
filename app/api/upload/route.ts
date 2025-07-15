@@ -26,19 +26,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Check if file is an image
-    if (!file.type.startsWith("image/")) {
+    // Check if file is an image or video
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type === "video/mp4";
+    
+    if (!isImage && !isVideo) {
       return NextResponse.json(
-        { error: "File must be an image" },
+        { error: "File must be an image or MP4 video" },
         { status: 400 }
       );
     }
 
-    // Check file size (max 25MB)
-    const MAX_FILE_SIZE = 25 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
+    // Check file size (max 25MB for images, 100MB for videos)
+    const MAX_IMAGE_SIZE = 25 * 1024 * 1024;
+    const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
+    
+    if (isImage && file.size > MAX_IMAGE_SIZE) {
       return NextResponse.json(
-        { error: "File size must be less than 25MB" },
+        { error: "Image size must be less than 25MB" },
+        { status: 400 }
+      );
+    }
+    
+    if (isVideo && file.size > MAX_VIDEO_SIZE) {
+      return NextResponse.json(
+        { error: "Video size must be less than 100MB" },
         { status: 400 }
       );
     }
@@ -54,13 +66,27 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer();
     const fileBuffer = new Uint8Array(buffer);
 
-    // Upload to Supabase Storage (now with user context)
-    const { data, error } = await supabase.storage
-      .from("images")
+    // Upload to appropriate Supabase Storage bucket
+    // For videos, try videos bucket first, fallback to images bucket
+    let bucketName = isImage ? "images" : "videos";
+    let { data, error } = await supabase.storage
+      .from(bucketName)
       .upload(filePath, fileBuffer, {
         contentType: file.type,
         upsert: false,
       });
+
+    // If videos bucket doesn't exist, fallback to images bucket
+    if (error && isVideo && error.message.includes("bucket")) {
+      console.warn("Videos bucket not found, falling back to images bucket");
+      bucketName = "images";
+      ({ data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, fileBuffer, {
+          contentType: file.type,
+          upsert: false,
+        }));
+    }
 
     if (error) {
       console.error("Supabase upload error:", error);
@@ -70,13 +96,14 @@ export async function POST(req: NextRequest) {
     // Get public URL
     const {
       data: { publicUrl },
-    } = supabase.storage.from("images").getPublicUrl(filePath);
+    } = supabase.storage.from(bucketName).getPublicUrl(filePath);
 
     return NextResponse.json({
       url: publicUrl,
       filename: fileName,
       size: file.size,
       type: file.type,
+      isVideo,
     });
   } catch (error) {
     console.error("Upload error:", error);

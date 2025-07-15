@@ -158,6 +158,20 @@ export default function PostContent({ post }: PostContentProps) {
                 </span>
               );
             },
+            video: ({ children, ...props }) => {
+              return (
+                <div className="block relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
+                  <video
+                    {...props}
+                    className="w-full h-auto"
+                    controls
+                    preload="metadata"
+                  >
+                    {children}
+                  </video>
+                </div>
+              );
+            },
             a: ({ href, children }) => (
               <a
                 href={href}
