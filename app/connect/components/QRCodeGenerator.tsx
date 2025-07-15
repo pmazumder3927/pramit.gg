@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import QRCode from "qrcode";
 
 interface QRCodeGeneratorProps {
@@ -67,9 +68,11 @@ export default function QRCodeGenerator({
       style={{ width: size, height: size }}
     >
       {qrCodeDataUrl ? (
-        <img
+        <Image
           src={qrCodeDataUrl}
           alt="QR Code"
+          width={size}
+          height={size}
           className="w-full h-full object-cover"
           style={{ imageRendering: "pixelated" }}
         />

@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { useState } from "react";
+import Image from "next/image";
 import QRCodeGenerator from "./components/QRCodeGenerator";
 import ConfessionalBooth from "./components/ConfessionalBooth";
 import Link from "next/link";
@@ -193,9 +194,11 @@ END:VCARD`;
                 <div className="text-center mb-8">
                   <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-accent-orange to-accent-purple border border-white/10 flex items-center justify-center p-1">
                     <div className="w-full h-full rounded-full overflow-hidden">
-                      <img
+                      <Image
                         src="https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/1752126862158_8673ra.png"
                         alt="Pramit Mazumder"
+                        width={96}
+                        height={96}
                         className="w-full h-full object-cover"
                       />
                     </div>
