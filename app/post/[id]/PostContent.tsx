@@ -14,6 +14,7 @@ import Image from "next/image";
 import ViewCountTracker from "./ViewCountTracker";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github-dark.css";
+import rehypeRaw from "rehype-raw";
 
 interface PostContentProps {
   post: Post;
@@ -123,7 +124,7 @@ export default function PostContent({ post }: PostContentProps) {
       <div className="prose prose-invert prose-lg max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[rehypeKatex, rehypeHighlight]}
+          rehypePlugins={[rehypeKatex, rehypeHighlight, rehypeRaw]}
           components={{
             h1: ({ children }) => (
               <h1 className="text-3xl font-light mt-8 mb-4 text-white">
