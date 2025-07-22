@@ -31,41 +31,46 @@ export default function EnhancedMarkdownEditor({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<any>(null);
 
-  const insertAtCursor = useCallback((text: string) => {
-    if (editorRef.current) {
-      const textarea = editorRef.current.textarea;
-      if (textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const before = value.substring(0, start);
-        const after = value.substring(end);
-        const newValue = before + text + after;
-        onChange(newValue);
-        
-        // Set cursor position after inserted text
-        setTimeout(() => {
-          const newCursorPos = start + text.length;
-          textarea.setSelectionRange(newCursorPos, newCursorPos);
-          textarea.focus();
-        }, 0);
+  const insertAtCursor = useCallback(
+    (text: string) => {
+      if (editorRef.current) {
+        const textarea = editorRef.current.textarea;
+        if (textarea) {
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const before = value.substring(0, start);
+          const after = value.substring(end);
+          const newValue = before + text + after;
+          onChange(newValue);
+
+          // Set cursor position after inserted text
+          setTimeout(() => {
+            const newCursorPos = start + text.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+            textarea.focus();
+          }, 0);
+        } else {
+          // Fallback: append to end
+          const newValue =
+            value + (value.endsWith("\n") ? "" : "\n\n") + text + "\n\n";
+          onChange(newValue);
+        }
       } else {
         // Fallback: append to end
-        const newValue = value + (value.endsWith("\n") ? "" : "\n\n") + text + "\n\n";
+        const newValue =
+          value + (value.endsWith("\n") ? "" : "\n\n") + text + "\n\n";
         onChange(newValue);
       }
-    } else {
-      // Fallback: append to end
-      const newValue = value + (value.endsWith("\n") ? "" : "\n\n") + text + "\n\n";
-      onChange(newValue);
-    }
-  }, [value, onChange]);
+    },
+    [value, onChange]
+  );
 
   const uploadFile = useCallback(
     async (file: File) => {
       const isImage = file.type.startsWith("image/");
       const isVideo = file.type === "video/mp4";
       const isHtml = file.type === "text/html" || file.name.endsWith(".html");
-      
+
       if (!isImage && !isVideo && !isHtml) {
         alert("Please select an image, MP4 video, or HTML file");
         return;
@@ -80,28 +85,68 @@ export default function EnhancedMarkdownEditor({
       setUploadProgress(0);
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        // Simulate upload progress
-        const progressInterval = setInterval(() => {
-          setUploadProgress((prev: number) => Math.min(prev + 10, 90));
-        }, 100);
-
-        const response = await fetch("/api/upload", {
+        // Step 1: Get presigned URL from our API
+        const uploadUrlResponse = await fetch("/api/upload", {
           method: "POST",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type,
+            fileSize: file.size,
+          }),
         });
 
-        clearInterval(progressInterval);
-        setUploadProgress(100);
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Upload failed");
+        if (!uploadUrlResponse.ok) {
+          const error = await uploadUrlResponse.json();
+          throw new Error(error.error || "Failed to get upload URL");
         }
 
-        const { url, filename, isVideo, isHtml } = await response.json();
+        const { uploadUrl, publicUrl, fileName, isVideo, isHtml } =
+          await uploadUrlResponse.json();
+
+        // Step 2: Upload directly to Supabase using presigned URL
+        setUploadProgress(20);
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Direct upload to storage failed");
+        }
+
+        setUploadProgress(80);
+
+        // Step 3: Optional - verify upload completion
+        const completionResponse = await fetch("/api/upload/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            path: fileName,
+            fileName,
+            publicUrl,
+            isVideo,
+            isHtml,
+          }),
+        });
+
+        if (!completionResponse.ok) {
+          console.warn(
+            "Upload completion verification failed, but file was uploaded"
+          );
+        }
+
+        setUploadProgress(100);
+
+        const url = publicUrl;
 
         // Insert markdown at cursor position
         let markdown = "";
@@ -109,13 +154,16 @@ export default function EnhancedMarkdownEditor({
           markdown = `<video controls width="100%">\n  <source src="${url}" type="video/mp4">\n  Your browser does not support the video tag.\n</video>`;
         } else if (isHtml) {
           // Extract title from filename (remove timestamp and extension)
-          const title = filename.replace(/^\d+_[a-z0-9]+_/, '').replace(/\.html$/, '').replace(/_/g, ' ');
+          const title = fileName
+            .replace(/^\d+_[a-z0-9]+_/, "")
+            .replace(/\.html$/, "")
+            .replace(/_/g, " ");
           // Ensure plotly-graph is on its own line to avoid hydration issues
           markdown = `\n\n<plotly-graph src="${url}" title="${title}" height="500px"></plotly-graph>\n\n`;
         } else {
-          markdown = `![${filename}](${url})`;
+          markdown = `![${fileName}](${url})`;
         }
-        
+
         insertAtCursor(markdown);
 
         // Success notification
@@ -149,8 +197,12 @@ export default function EnhancedMarkdownEditor({
       setIsDragging(false);
 
       const files = Array.from(e.dataTransfer.files) as File[];
-      const mediaFile = files.find((file) => 
-        file.type.startsWith("image/") || file.type === "video/mp4" || file.type === "text/html" || file.name.endsWith(".html")
+      const mediaFile = files.find(
+        (file) =>
+          file.type.startsWith("image/") ||
+          file.type === "video/mp4" ||
+          file.type === "text/html" ||
+          file.name.endsWith(".html")
       );
 
       if (mediaFile) {
@@ -316,7 +368,8 @@ export default function EnhancedMarkdownEditor({
 
       {/* Mobile-specific instructions */}
       <div className="md:hidden mt-2 text-xs text-gray-500 text-center">
-        💡 On mobile: Tap &quot;Upload Media&quot; to upload from your camera or gallery
+        💡 On mobile: Tap &quot;Upload Media&quot; to upload from your camera or
+        gallery
       </div>
     </div>
   );

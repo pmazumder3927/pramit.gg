@@ -19,18 +19,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const { fileName, fileType, fileSize } = await req.json();
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (!fileName || !fileType || !fileSize) {
+      return NextResponse.json(
+        { error: "fileName, fileType, and fileSize are required" },
+        { status: 400 }
+      );
     }
 
     // Check if file is an image, video, or HTML
-    const isImage = file.type.startsWith("image/");
-    const isVideo = file.type === "video/mp4";
-    const isHtml = file.type === "text/html" || file.name.endsWith(".html");
-    
+    const isImage = fileType.startsWith("image/");
+    const isVideo = fileType === "video/mp4";
+    const isHtml = fileType === "text/html" || fileName.endsWith(".html");
+
     if (!isImage && !isVideo && !isHtml) {
       return NextResponse.json(
         { error: "File must be an image, MP4 video, or HTML file" },
@@ -40,8 +42,8 @@ export async function POST(req: NextRequest) {
 
     // Check file size (max 100MB for all media)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
-    
-    if (file.size > MAX_FILE_SIZE) {
+
+    if (fileSize > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File size must be less than 100MB" },
         { status: 400 }
@@ -49,44 +51,43 @@ export async function POST(req: NextRequest) {
     }
 
     // Create unique filename
-    const fileExtension = file.name.split(".").pop();
+    const fileExtension = fileName.split(".").pop();
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
-    const fileName = `${timestamp}_${random}.${fileExtension}`;
-    const filePath = `uploads/${fileName}`;
+    const uniqueFileName = `${timestamp}_${random}.${fileExtension}`;
+    const filePath = `uploads/${uniqueFileName}`;
 
-    // Convert file to buffer
-    const buffer = await file.arrayBuffer();
-    const fileBuffer = new Uint8Array(buffer);
+    // Create presigned URL for upload
+    const { data: signedUrlData, error: signedUrlError } =
+      await supabase.storage.from("images").createSignedUploadUrl(filePath);
 
-    // Upload to images bucket (for all media)
-    const { data, error } = await supabase.storage
-      .from("images")
-      .upload(filePath, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      });
-
-    if (error) {
-      console.error("Supabase upload error:", error);
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    if (signedUrlError) {
+      console.error("Supabase signed URL error:", signedUrlError);
+      return NextResponse.json(
+        { error: "Failed to create upload URL" },
+        { status: 500 }
+      );
     }
 
-    // Get public URL
+    // Get the public URL that will be available after upload
     const {
       data: { publicUrl },
     } = supabase.storage.from("images").getPublicUrl(filePath);
 
     return NextResponse.json({
-      url: publicUrl,
-      filename: fileName,
-      size: file.size,
-      type: file.type,
+      uploadUrl: signedUrlData.signedUrl,
+      token: signedUrlData.token,
+      path: signedUrlData.path,
+      publicUrl,
+      fileName: uniqueFileName,
       isVideo,
       isHtml,
     });
   } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    console.error("Upload URL generation error:", error);
+    return NextResponse.json(
+      { error: "Failed to generate upload URL" },
+      { status: 500 }
+    );
   }
 }
