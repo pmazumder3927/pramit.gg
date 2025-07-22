@@ -127,7 +127,7 @@ export default function PostContent({ post }: PostContentProps) {
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex, rehypeHighlight, rehypeRaw]}
           components={{
-            ...{} as any,
+            ...({} as any),
             h1: ({ children }) => (
               <h1 className="text-3xl font-light mt-8 mb-4 text-white">
                 {children}
@@ -143,9 +143,26 @@ export default function PostContent({ post }: PostContentProps) {
                 {children}
               </h3>
             ),
-            p: ({ children }) => (
-              <p className="text-gray-300 leading-relaxed mb-4">{children}</p>
-            ),
+            p: ({ children }) => {
+              // Check if children contains a plotly-graph element
+              const hasPlotlyGraph =
+                Array.isArray(children) &&
+                children.some(
+                  (child) =>
+                    child?.type?.name === "plotly-graph" ||
+                    child?.props?.mdxType === "plotly-graph" ||
+                    (typeof child === "object" &&
+                      child?.props?.["data-component"] === "plotly-graph")
+                );
+              // If it contains block-level elements, return children without p wrapper
+              if (hasPlotlyGraph) {
+                return <>{children}</>;
+              }
+
+              return (
+                <p className="text-gray-300 leading-relaxed mb-4">{children}</p>
+              );
+            },
             img: (props) => {
               const { src, alt } = props;
               return (
@@ -162,13 +179,17 @@ export default function PostContent({ post }: PostContentProps) {
               );
             },
             video: ({ children, ...props }) => {
+              // Filter out the node prop that ReactMarkdown adds
+              const { node, ...videoProps } = props as any;
+
               return (
                 <div className="block relative w-full my-8 rounded-2xl overflow-hidden bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10">
                   <video
-                    {...props}
+                    {...videoProps}
                     className="w-full h-auto"
                     controls
                     preload="metadata"
+                    suppressHydrationWarning
                   >
                     {children}
                   </video>
@@ -262,9 +283,14 @@ export default function PostContent({ post }: PostContentProps) {
               return <section {...props}>{children}</section>;
             },
             // Custom plotly-graph element
-            'plotly-graph': (props: any) => {
+            "plotly-graph": (props: any) => {
               const { src, title, height } = props;
-              return <PlotlyGraph src={src} title={title} height={height} />;
+              // Ensure the component is rendered as a block element
+              return (
+                <div className="my-0">
+                  <PlotlyGraph src={src} title={title} height={height} />
+                </div>
+              );
             },
           }}
         >

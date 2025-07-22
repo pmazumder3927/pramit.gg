@@ -110,7 +110,8 @@ export default function EnhancedMarkdownEditor({
         } else if (isHtml) {
           // Extract title from filename (remove timestamp and extension)
           const title = filename.replace(/^\d+_[a-z0-9]+_/, '').replace(/\.html$/, '').replace(/_/g, ' ');
-          markdown = `<plotly-graph src="${url}" title="${title}" height="500px"></plotly-graph>`;
+          // Ensure plotly-graph is on its own line to avoid hydration issues
+          markdown = `\n\n<plotly-graph src="${url}" title="${title}" height="500px"></plotly-graph>\n\n`;
         } else {
           markdown = `![${filename}](${url})`;
         }
