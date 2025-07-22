@@ -26,13 +26,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Check if file is an image or video
+    // Check if file is an image, video, or HTML
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type === "video/mp4";
+    const isHtml = file.type === "text/html" || file.name.endsWith(".html");
     
-    if (!isImage && !isVideo) {
+    if (!isImage && !isVideo && !isHtml) {
       return NextResponse.json(
-        { error: "File must be an image or MP4 video" },
+        { error: "File must be an image, MP4 video, or HTML file" },
         { status: 400 }
       );
     }
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
       size: file.size,
       type: file.type,
       isVideo,
+      isHtml,
     });
   } catch (error) {
     console.error("Upload error:", error);

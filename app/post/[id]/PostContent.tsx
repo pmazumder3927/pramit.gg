@@ -12,6 +12,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import ViewCountTracker from "./ViewCountTracker";
+import PlotlyGraph from "@/app/components/PlotlyGraph";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github-dark.css";
 import rehypeRaw from "rehype-raw";
@@ -126,6 +127,7 @@ export default function PostContent({ post }: PostContentProps) {
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex, rehypeHighlight, rehypeRaw]}
           components={{
+            ...{} as any,
             h1: ({ children }) => (
               <h1 className="text-3xl font-light mt-8 mb-4 text-white">
                 {children}
@@ -258,6 +260,11 @@ export default function PostContent({ post }: PostContentProps) {
                 );
               }
               return <section {...props}>{children}</section>;
+            },
+            // Custom plotly-graph element
+            'plotly-graph': (props: any) => {
+              const { src, title, height } = props;
+              return <PlotlyGraph src={src} title={title} height={height} />;
             },
           }}
         >

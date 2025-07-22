@@ -64,9 +64,10 @@ export default function EnhancedMarkdownEditor({
     async (file: File) => {
       const isImage = file.type.startsWith("image/");
       const isVideo = file.type === "video/mp4";
+      const isHtml = file.type === "text/html" || file.name.endsWith(".html");
       
-      if (!isImage && !isVideo) {
-        alert("Please select an image or MP4 video file");
+      if (!isImage && !isVideo && !isHtml) {
+        alert("Please select an image, MP4 video, or HTML file");
         return;
       }
 
@@ -100,12 +101,19 @@ export default function EnhancedMarkdownEditor({
           throw new Error(error.error || "Upload failed");
         }
 
-        const { url, filename, isVideo } = await response.json();
+        const { url, filename, isVideo, isHtml } = await response.json();
 
         // Insert markdown at cursor position
-        const markdown = isVideo 
-          ? `<video controls width="100%">\n  <source src="${url}" type="video/mp4">\n  Your browser does not support the video tag.\n</video>`
-          : `![${filename}](${url})`;
+        let markdown = "";
+        if (isVideo) {
+          markdown = `<video controls width="100%">\n  <source src="${url}" type="video/mp4">\n  Your browser does not support the video tag.\n</video>`;
+        } else if (isHtml) {
+          // Extract title from filename (remove timestamp and extension)
+          const title = filename.replace(/^\d+_[a-z0-9]+_/, '').replace(/\.html$/, '').replace(/_/g, ' ');
+          markdown = `<plotly-graph src="${url}" title="${title}" height="500px"></plotly-graph>`;
+        } else {
+          markdown = `![${filename}](${url})`;
+        }
         
         insertAtCursor(markdown);
 
@@ -141,7 +149,7 @@ export default function EnhancedMarkdownEditor({
 
       const files = Array.from(e.dataTransfer.files) as File[];
       const mediaFile = files.find((file) => 
-        file.type.startsWith("image/") || file.type === "video/mp4"
+        file.type.startsWith("image/") || file.type === "video/mp4" || file.type === "text/html" || file.name.endsWith(".html")
       );
 
       if (mediaFile) {
@@ -173,7 +181,7 @@ export default function EnhancedMarkdownEditor({
       <input
         ref={mediaInputRef}
         type="file"
-        accept="image/*,video/mp4"
+        accept="image/*,video/mp4,text/html,.html"
         onChange={handleFileSelect}
         className="hidden"
       />
@@ -236,7 +244,7 @@ export default function EnhancedMarkdownEditor({
             <div className="text-center">
               <div className="text-4xl mb-2">📸🎥</div>
               <p className="text-white font-medium">
-                Drop image or video here to upload
+                Drop image, video, or HTML graph here to upload
               </p>
             </div>
           </motion.div>
@@ -264,7 +272,7 @@ export default function EnhancedMarkdownEditor({
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            Upload Media
+            Upload Media/Graph
           </button>
           <span className="text-xs text-gray-500">or drag & drop</span>
         </div>
