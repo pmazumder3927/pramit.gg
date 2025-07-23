@@ -200,10 +200,61 @@ export default function PostContent({ post }: PostContentProps) {
               // Check if this is a footnote link (starts with # for same-page anchors)
               const isFootnoteLink = href?.startsWith('#');
               
+              const handleFootnoteClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+                if (isFootnoteLink && href) {
+                  e.preventDefault();
+                  const targetId = href.substring(1); // Remove the # symbol
+                  const targetElement = document.getElementById(targetId);
+                  
+                  if (targetElement) {
+                    // Clear any existing highlights first
+                    document.querySelectorAll('.footnote-highlight').forEach(el => {
+                      el.classList.remove('footnote-highlight');
+                      (el as HTMLElement).style.backgroundColor = '';
+                      (el as HTMLElement).style.padding = '';
+                      (el as HTMLElement).style.borderRadius = '';
+                      (el as HTMLElement).style.transition = '';
+                    });
+                    
+                    // Calculate scroll position with offset for better visibility
+                    const offset = 100;
+                    const elementPosition = targetElement.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - offset;
+                    
+                    // Scroll to the target element
+                    window.scrollTo({
+                      top: offsetPosition,
+                      behavior: 'smooth'
+                    });
+                    
+                    // Add highlight effect
+                    targetElement.classList.add('footnote-highlight');
+                    targetElement.style.transition = 'background-color 0.3s ease, padding 0.3s ease, border-radius 0.3s ease';
+                    targetElement.style.backgroundColor = 'rgba(255, 107, 61, 0.15)';
+                    targetElement.style.borderRadius = '0.5rem';
+                    targetElement.style.padding = '0.5rem';
+                    
+                    // Remove highlight after delay
+                    setTimeout(() => {
+                      if (targetElement.classList.contains('footnote-highlight')) {
+                        targetElement.style.backgroundColor = 'transparent';
+                        targetElement.style.padding = '0';
+                        targetElement.style.borderRadius = '0';
+                        setTimeout(() => {
+                          targetElement.classList.remove('footnote-highlight');
+                          targetElement.style.transition = '';
+                        }, 300);
+                      }
+                    }, 2500);
+                  }
+                }
+              };
+              
               return (
                 <a
                   href={href}
                   className="text-accent-orange hover:text-accent-purple transition-colors hover:underline"
+                  onClick={isFootnoteLink ? handleFootnoteClick : undefined}
                   {...(!isFootnoteLink && {
                     target: "_blank",
                     rel: "noopener noreferrer"
