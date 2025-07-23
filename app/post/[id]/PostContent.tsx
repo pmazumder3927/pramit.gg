@@ -196,16 +196,23 @@ export default function PostContent({ post }: PostContentProps) {
                 </div>
               );
             },
-            a: ({ href, children }) => (
-              <a
-                href={href}
-                className="text-accent-orange hover:text-accent-purple transition-colors hover:underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {children}
-              </a>
-            ),
+            a: ({ href, children }) => {
+              // Check if this is a footnote link (starts with # for same-page anchors)
+              const isFootnoteLink = href?.startsWith('#');
+              
+              return (
+                <a
+                  href={href}
+                  className="text-accent-orange hover:text-accent-purple transition-colors hover:underline"
+                  {...(!isFootnoteLink && {
+                    target: "_blank",
+                    rel: "noopener noreferrer"
+                  })}
+                >
+                  {children}
+                </a>
+              );
+            },
             code: (props: any) =>
               props.inline ? (
                 <code className="px-2 py-1 bg-white/10 rounded text-sm font-mono text-accent-orange">

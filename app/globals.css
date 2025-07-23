@@ -295,33 +295,18 @@
   }
 
   .footnotes ol {
-    list-style: none;
-    counter-reset: footnote-counter;
-    padding-left: 0;
+    list-style: decimal;
+    padding-left: 1.5rem;
   }
 
   .footnotes li {
-    counter-increment: footnote-counter;
     margin-bottom: 1rem;
-    padding-left: 2rem;
-    position: relative;
     line-height: 1.6;
+    color: #d1d5db;
   }
 
-  .footnotes li::before {
-    content: counter(footnote-counter);
-    position: absolute;
-    left: 0;
-    top: 0;
-    background: #ff6b3d;
-    color: white;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
+  .footnotes li::marker {
+    color: #ff6b3d;
     font-weight: 600;
   }
 
@@ -352,6 +337,24 @@
   /* Smooth scrolling for footnote navigation */
   html {
     scroll-behavior: smooth;
+  }
+
+  /* Add some padding to footnote targets for better scroll positioning */
+  .footnotes li:target {
+    background: rgba(255, 107, 61, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    transition: background-color 0.3s ease;
+  }
+
+  /* Style for footnote reference targets */
+  [id^="fnref"]:target {
+    background: rgba(255, 107, 61, 0.1);
+    border-radius: 0.25rem;
+    padding: 0.25rem;
+    margin: -0.25rem;
+    transition: background-color 0.3s ease;
   }
 
   /* Enhanced table styling for better visibility */
