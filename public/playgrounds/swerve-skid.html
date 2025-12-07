@@ -15,8 +15,8 @@
     :root {
       --bg: #000000;
       --bg-secondary: #0a0a0a;
-      --grid: rgba(255, 255, 255, 0.02);
-      --grid-major: rgba(255, 255, 255, 0.04);
+      --grid: rgba(255, 255, 255, 0.06);
+      --grid-major: rgba(255, 255, 255, 0.12);
       --chassis: rgba(255, 255, 255, 0.08);
       --chassis-fill: rgba(10, 10, 12, 0.95);
       --wheel: rgba(255, 255, 255, 0.06);
@@ -66,14 +66,20 @@
       z-index: 1;
     }
 
-    /* Grain texture */
+    /* Grain texture - hidden on mobile for performance */
     .grain {
       position: fixed;
       inset: 0;
-      opacity: 0.015;
+      opacity: 0;
       z-index: 100;
       pointer-events: none;
       background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
+    }
+
+    @media (min-width: 768px) {
+      .grain {
+        opacity: 0.015;
+      }
     }
 
     canvas {
@@ -121,15 +127,21 @@
       position: absolute;
       top: 20px;
       right: 20px;
-      background: var(--glass-bg);
+      background: rgba(0, 0, 0, 0.85);
       border: 1px solid var(--glass-border);
       border-radius: 16px;
       padding: 16px 20px;
       text-align: center;
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
       z-index: 10;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    @media (min-width: 768px) {
+      .skid-badge {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+      }
     }
 
     .skid-value {
@@ -163,18 +175,24 @@
       position: absolute;
       bottom: 20px;
       right: 20px;
-      background: var(--glass-bg);
+      background: rgba(0, 0, 0, 0.85);
       border: 1px solid var(--glass-border);
       border-radius: 16px;
       padding: 18px 20px;
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
       display: flex;
       flex-direction: column;
       gap: 14px;
       min-width: 200px;
       z-index: 10;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    @media (min-width: 768px) {
+      .controls {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+      }
     }
 
     .control-row {
@@ -313,13 +331,27 @@
         this.ctx = this.canvas.getContext('2d');
         this.scene = SCENES[sceneName] || SCENES.combined;
 
+        // Mobile detection and performance settings
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                        || window.innerWidth < 768;
+        this.maxDpr = this.isMobile ? 1.5 : 3;
+        this.enableShadows = !this.isMobile;
+
         this.robot = {
           x: 0, y: 0, angle: 0,
           ...this.scene.state
         };
 
         this.trail = [];
-        this.maxTrail = 150;
+        this.maxTrail = this.isMobile ? 250 : 300;
+
+        // Pre-cached gradients (created once in setup)
+        this.chassisGradient = null;
+        this.wheelGradients = {};
+
+        // Visibility state for pausing when off-screen
+        this.isVisible = true;
+        this.isPaused = false;
 
         this.modules = [
           { id: 'FL', x: -1, y: -1 },
@@ -343,13 +375,15 @@
 
       setup() {
         const resize = () => {
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
           const rect = this.canvas.getBoundingClientRect();
           this.canvas.width = rect.width * dpr;
           this.canvas.height = rect.height * dpr;
           this.ctx.scale(dpr, dpr);
           this.width = rect.width;
           this.height = rect.height;
+          // Recreate cached gradients on resize
+          this.createCachedGradients();
         };
         resize();
         window.addEventListener('resize', resize);
@@ -357,6 +391,46 @@
         if (this.scene.showSkid) {
           document.getElementById('skidBadge').style.display = 'block';
         }
+
+        // Pause when tab is hidden
+        document.addEventListener('visibilitychange', () => {
+          this.isPaused = document.hidden;
+          if (!this.isPaused) {
+            this.last = performance.now(); // Reset time to avoid jump
+          }
+        });
+
+        // Pause when canvas scrolls out of view (IntersectionObserver)
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver((entries) => {
+            this.isVisible = entries[0].isIntersecting;
+            if (this.isVisible) {
+              this.last = performance.now();
+            }
+          }, { threshold: 0.1 });
+          observer.observe(this.canvas);
+        }
+      }
+
+      createCachedGradients() {
+        const { ctx } = this;
+        const half = 35;
+
+        // Chassis gradient (static, doesn't change)
+        this.chassisGradient = ctx.createLinearGradient(-half, -half, half, half);
+        this.chassisGradient.addColorStop(0, 'rgba(20, 20, 25, 0.95)');
+        this.chassisGradient.addColorStop(1, 'rgba(10, 10, 12, 0.95)');
+
+        // Wheel gradients for each module
+        this.modules.forEach(m => {
+          const rx = m.x * 28;
+          const ry = m.y * 28;
+          const r = 10;
+          const grad = ctx.createRadialGradient(rx, ry, 0, rx, ry, r);
+          grad.addColorStop(0, 'rgba(40, 40, 50, 0.9)');
+          grad.addColorStop(1, 'rgba(25, 25, 32, 0.95)');
+          this.wheelGradients[m.id] = grad;
+        });
       }
 
       buildLegend() {
@@ -547,25 +621,66 @@
         // Grid (moves with camera)
         this.drawGrid(cx - camX, cy - camY);
 
-        // Trail with gradient fade (batched in segments for performance)
-        if (this.trail.length > 1) {
-          ctx.lineWidth = 2;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          const segments = 5;
-          const segLen = Math.ceil(this.trail.length / segments);
-          for (let s = 0; s < segments; s++) {
-            const start = s * segLen;
-            const end = Math.min(start + segLen + 1, this.trail.length);
-            if (start >= this.trail.length - 1) break;
-            const alpha = 0.08 + ((s + 0.5) / segments) * 0.35;
-            ctx.strokeStyle = `rgba(255, 107, 61, ${alpha})`;
-            ctx.beginPath();
-            ctx.moveTo(cx + this.trail[start].x - camX, cy + this.trail[start].y - camY);
-            for (let i = start + 1; i < end; i++) {
-              ctx.lineTo(cx + this.trail[i].x - camX, cy + this.trail[i].y - camY);
+        // Comet trail - tapered shape thick at robot, thin at tail
+        if (this.trail.length > 4) {
+          const len = this.trail.length;
+          const step = this.isMobile ? 3 : 2;
+          const maxWidth = 12;
+
+          // Build upper and lower edges of the comet
+          const upper = [];
+          const lower = [];
+
+          for (let i = 0; i < len; i += step) {
+            const t = i / len; // 0 = oldest, 1 = newest
+            const width = t * t * maxWidth; // Quadratic taper
+
+            const x = cx + this.trail[i].x - camX;
+            const y = cy + this.trail[i].y - camY;
+
+            // Get direction from previous point for perpendicular offset
+            let dx = 0, dy = 1;
+            if (i > 0) {
+              dx = this.trail[i].x - this.trail[i - 1].x;
+              dy = this.trail[i].y - this.trail[i - 1].y;
+              const mag = Math.hypot(dx, dy) || 1;
+              dx /= mag;
+              dy /= mag;
             }
-            ctx.stroke();
+
+            // Perpendicular vector
+            const px = -dy * width;
+            const py = dx * width;
+
+            upper.push({ x: x + px, y: y + py });
+            lower.push({ x: x - px, y: y - py });
+          }
+
+          if (upper.length > 1) {
+            // Draw filled comet shape with gradient
+            ctx.beginPath();
+            ctx.moveTo(upper[0].x, upper[0].y);
+            for (let i = 1; i < upper.length; i++) {
+              ctx.lineTo(upper[i].x, upper[i].y);
+            }
+            for (let i = lower.length - 1; i >= 0; i--) {
+              ctx.lineTo(lower[i].x, lower[i].y);
+            }
+            ctx.closePath();
+
+            // Gradient from tail to head
+            const tailPt = this.trail[0];
+            const headPt = this.trail[len - 1];
+            const grad = ctx.createLinearGradient(
+              cx + tailPt.x - camX, cy + tailPt.y - camY,
+              cx + headPt.x - camX, cy + headPt.y - camY
+            );
+            grad.addColorStop(0, 'rgba(255, 107, 61, 0)');
+            grad.addColorStop(0.3, 'rgba(255, 107, 61, 0.15)');
+            grad.addColorStop(1, 'rgba(255, 107, 61, 0.5)');
+
+            ctx.fillStyle = grad;
+            ctx.fill();
           }
         }
 
@@ -594,10 +709,11 @@
         const { ctx, width, height } = this;
         const size = 60;
 
-        // Minor grid lines (batched)
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+        // Batch all minor grid lines in a single path for performance
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.lineWidth = 1;
         ctx.beginPath();
+
         for (let x = cx % size; x < width; x += size) {
           ctx.moveTo(x, 0);
           ctx.lineTo(x, height);
@@ -608,8 +724,9 @@
         }
         ctx.stroke();
 
-        // Major axes
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        // Major axes - more prominent
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(cx, 0);
         ctx.lineTo(cx, height);
@@ -623,8 +740,16 @@
         const size = 70;
         const half = size / 2;
 
-        // Main chassis
-        ctx.fillStyle = 'rgba(15, 15, 18, 0.95)';
+        // Shadow - only on desktop
+        if (this.enableShadows) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          ctx.beginPath();
+          ctx.roundRect(-half + 4, -half + 4, size, size, 10);
+          ctx.fill();
+        }
+
+        // Main chassis with cached gradient
+        ctx.fillStyle = this.chassisGradient || 'rgba(15, 15, 18, 0.95)';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -663,7 +788,15 @@
 
         // Wheel
         const r = 10;
-        ctx.fillStyle = 'rgba(32, 32, 40, 0.95)';
+
+        // Glow for slipping wheel - only on desktop
+        if (m.isSlipping && this.enableShadows) {
+          ctx.shadowColor = this.colors.skid;
+          ctx.shadowBlur = 12;
+        }
+
+        // Use cached gradient
+        ctx.fillStyle = this.wheelGradients[m.id] || 'rgba(32, 32, 40, 0.95)';
         ctx.strokeStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = m.isSlipping ? 2 : 1;
         ctx.beginPath();
@@ -690,6 +823,12 @@
         ctx.save();
         ctx.globalAlpha = alpha;
 
+        // Subtle glow - only on desktop
+        if (this.enableShadows) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+        }
+
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
         ctx.lineWidth = width;
@@ -711,6 +850,12 @@
       }
 
       animate() {
+        // Skip rendering if not visible or paused
+        if (this.isPaused || !this.isVisible) {
+          requestAnimationFrame(() => this.animate());
+          return;
+        }
+
         const now = performance.now();
         const dt = Math.min((now - (this.last || now)) / 1000, 0.1);
         this.last = now;
