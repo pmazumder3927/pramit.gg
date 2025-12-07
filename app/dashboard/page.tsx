@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { supabase, Post } from "@/app/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import EnhancedMarkdownEditor from "@/app/components/EnhancedMarkdownEditor";
+import SpotifyConnection from "@/app/components/SpotifyConnection";
 
 const ACCENT_COLORS = ["#ff6b3d", "#9c5aff", "#1a1b22"];
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +198,14 @@ export default function Dashboard() {
           <h1 className="text-3xl md:text-4xl font-light mb-2">dashboard</h1>
           <p className="text-gray-400">welcome back, {user?.email}</p>
         </motion.header>
+
+        {/* Spotify Connection */}
+        <div className="mb-8">
+          <SpotifyConnection
+            initialSuccess={searchParams.get("spotify_success") === "true"}
+            initialError={searchParams.get("spotify_error") || undefined}
+          />
+        </div>
 
         {/* Quick Create Button */}
         <motion.button
