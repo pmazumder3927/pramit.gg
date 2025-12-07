@@ -6,12 +6,10 @@
   /* Page reveal animation - blur to sharp */
   @keyframes page-reveal {
     0% {
-      filter: blur(12px);
-      opacity: 0;
+      filter: blur(8px);
     }
     100% {
       filter: blur(0px);
-      opacity: 1;
     }
   }
 
@@ -20,7 +18,7 @@
   }
 
   html {
-    @apply antialiased;
+    @apply antialiased bg-void-black;
     scroll-behavior: smooth;
   }
   
