@@ -3,6 +3,22 @@
 @tailwind utilities;
 
 @layer base {
+  /* Page reveal animation - blur to sharp */
+  @keyframes page-reveal {
+    0% {
+      filter: blur(12px);
+      opacity: 0;
+    }
+    100% {
+      filter: blur(0px);
+      opacity: 1;
+    }
+  }
+
+  .page-reveal {
+    animation: page-reveal 0.6s ease-out forwards;
+  }
+
   html {
     @apply antialiased;
     scroll-behavior: smooth;

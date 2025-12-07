@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -23,11 +22,7 @@ interface PostContentProps {
 
 export default function PostContent({ post }: PostContentProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div>
       <Link
         href="/"
         className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 group"
@@ -144,18 +139,20 @@ export default function PostContent({ post }: PostContentProps) {
               </h3>
             ),
             p: ({ children }) => {
-              // Check if children contains a plotly-graph element
-              const hasPlotlyGraph =
-                Array.isArray(children) &&
-                children.some(
-                  (child) =>
-                    child?.type?.name === "plotly-graph" ||
-                    child?.props?.mdxType === "plotly-graph" ||
-                    (typeof child === "object" &&
-                      child?.props?.["data-component"] === "plotly-graph")
-                );
-              // If it contains block-level elements, return children without p wrapper
-              if (hasPlotlyGraph) {
+              // Check if children contains block-level elements that can't be inside <p>
+              const childArray = Array.isArray(children) ? children : [children];
+              const hasBlockElement = childArray.some((child: any) => {
+                if (!child || typeof child !== "object") return false;
+                const type = child.type;
+                const tagName = typeof type === "string" ? type : type?.name;
+                // Block elements that shouldn't be wrapped in <p>
+                const blockTags = ["div", "video", "figure", "table", "pre", "ul", "ol", "blockquote"];
+                return blockTags.includes(tagName) ||
+                  child?.props?.["data-component"] === "plotly-graph" ||
+                  child?.props?.className?.includes("block");
+              });
+
+              if (hasBlockElement) {
                 return <>{children}</>;
               }
 
@@ -297,6 +294,6 @@ export default function PostContent({ post }: PostContentProps) {
           {post.content}
         </ReactMarkdown>
       </div>
-    </motion.div>
+    </div>
   );
 }

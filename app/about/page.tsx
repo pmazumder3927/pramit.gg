@@ -20,7 +20,7 @@ export default function About() {
   };
 
   return (
-    <main className="min-h-screen px-4 py-8 md:px-8 md:py-16">
+    <main className="min-h-screen px-4 py-8 md:px-8 md:py-16 page-reveal">
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -188,7 +188,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="min-h-screen p-4 md:p-8">
+    <main className="min-h-screen p-4 md:p-8 page-reveal">
       <div className="max-w-6xl mx-auto">
         <motion.header
           initial={{ opacity: 0, y: -20 }}

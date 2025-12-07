@@ -458,7 +458,7 @@ function ChaoticCard({
         opacity: 1,
         scale: 1,
         rotate: style.rotation * 0.4,
-        x: style.offsetX * 0.15, // Keep offsets subtle to avoid overflow
+        x: style.offsetX * 0.15,
         y: style.offsetY * 0.2,
         skewX: style.skewX * 0.3,
         skewY: style.skewY * 0.3,
