@@ -53,7 +53,9 @@ export default function MusicPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
-  const [selectedTab, setSelectedTab] = useState<"recent" | "top" | "playlists">("recent");
+  const [selectedTab, setSelectedTab] = useState<
+    "recent" | "top" | "playlists"
+  >("recent");
 
   // Fetch data
   const { data: nowPlaying } = useSWR<NowPlayingTrack>(
@@ -83,7 +85,9 @@ export default function MusicPage() {
   // Preload colors for visible tracks
   useEffect(() => {
     if (recentlyPlayed?.tracks) {
-      preloadColors(recentlyPlayed.tracks.slice(0, 10).map((t) => t.albumImageUrl));
+      preloadColors(
+        recentlyPlayed.tracks.slice(0, 10).map((t) => t.albumImageUrl)
+      );
     }
     if (topTracks?.tracks) {
       preloadColors(topTracks.tracks.slice(0, 10).map((t) => t.albumImageUrl));
@@ -127,9 +131,21 @@ export default function MusicPage() {
   }, [mouseX, mouseY]);
 
   const tabs = [
-    { id: "recent" as const, label: "Recently Played", count: recentlyPlayed?.tracks.length || 0 },
-    { id: "top" as const, label: "Top Tracks", count: topTracks?.tracks.length || 0 },
-    { id: "playlists" as const, label: "Playlists", count: playlists?.playlists.length || 0 },
+    {
+      id: "recent" as const,
+      label: "Recently Played",
+      count: recentlyPlayed?.tracks.length || 0,
+    },
+    {
+      id: "top" as const,
+      label: "Top Tracks",
+      count: topTracks?.tracks.length || 0,
+    },
+    {
+      id: "playlists" as const,
+      label: "Playlists",
+      count: playlists?.playlists.length || 0,
+    },
   ];
 
   return (
@@ -145,7 +161,6 @@ export default function MusicPage() {
       <GradientOrbs primaryColor={nowPlayingColor} />
 
       <main className="relative z-10 min-h-screen">
-
         {/* Hero Section */}
         <motion.section
           initial={{ opacity: 0 }}
@@ -183,7 +198,7 @@ export default function MusicPage() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
               >
-                a window into my sonic world
+                a window into my (sonic) world
               </motion.p>
             </motion.div>
 
@@ -201,7 +216,9 @@ export default function MusicPage() {
             <ChaoticTabs
               tabs={tabs}
               selectedTab={selectedTab}
-              onSelect={(id) => setSelectedTab(id as "recent" | "top" | "playlists")}
+              onSelect={(id) =>
+                setSelectedTab(id as "recent" | "top" | "playlists")
+              }
               accentColor={nowPlayingColor}
             />
           </div>
@@ -229,7 +246,10 @@ export default function MusicPage() {
                   />
                 ))}
                 {(!recentlyPlayed || recentlyPlayed.tracks.length === 0) && (
-                  <EmptyState emoji="🎵" message="No recently played tracks found." />
+                  <EmptyState
+                    emoji="🎵"
+                    message="No recently played tracks found."
+                  />
                 )}
               </motion.div>
             )}
