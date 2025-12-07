@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 
 interface PlotlyGraphProps {
@@ -14,7 +15,13 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [error, setError] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Track if component is mounted for portal rendering
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Convert Supabase URL to our proxy URL
   const getProxyUrl = (originalUrl: string) => {
@@ -97,14 +104,12 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
         )}
       </AnimatePresence>
 
-      {showGraph && (
+      {showGraph && !isExpanded && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className={`bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden ${
-            isExpanded ? "fixed inset-4 z-50" : "relative"
-          }`}
+          className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden relative"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10">
@@ -113,9 +118,9 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
             </h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => setIsExpanded(true)}
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                title={isExpanded ? "Exit fullscreen" : "Enter fullscreen"}
+                title="Enter fullscreen"
               >
                 <svg
                   className="w-5 h-5 text-gray-400"
@@ -123,28 +128,19 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  {isExpanded ? (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                    />
-                  )}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                  />
                 </svg>
               </button>
             </div>
           </div>
 
           {/* Graph Container */}
-          <div className={`relative ${isExpanded ? "h-[calc(100%-64px)]" : ""}`} style={{ height: isExpanded ? undefined : height }}>
+          <div className="relative" style={{ height }}>
             {/* Loading overlay */}
             {!isIframeLoaded && !error && (
               <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
@@ -154,7 +150,7 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
                 </div>
               </div>
             )}
-            
+
             {error ? (
               <div className="flex items-center justify-center h-full p-8">
                 <div className="text-center">
@@ -189,15 +185,84 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
         </motion.div>
       )}
 
-      {/* Fullscreen backdrop */}
-      {isExpanded && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/80 z-40"
-          onClick={() => setIsExpanded(false)}
-        />
+      {/* Fullscreen mode - rendered via portal to escape containing blocks */}
+      {mounted && isExpanded && createPortal(
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 z-[9998]"
+            onClick={() => setIsExpanded(false)}
+          />
+          {/* Fullscreen graph */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-4 z-[9999] bg-gradient-to-br from-charcoal-black to-void-black border border-white/10 rounded-2xl overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
+              <h3 className="text-sm font-medium text-gray-300">
+                {title || "Plotly Visualization"}
+              </h3>
+              <button
+                onClick={() => setIsExpanded(false)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title="Exit fullscreen"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Graph Container */}
+            <div className="relative flex-1 min-h-0">
+              {error ? (
+                <div className="flex items-center justify-center h-full p-8">
+                  <div className="text-center">
+                    <svg
+                      className="w-12 h-12 text-red-500 mx-auto mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <p className="text-gray-400">Failed to load graph</p>
+                  </div>
+                </div>
+              ) : (
+                <iframe
+                  src={getProxyUrl(src)}
+                  className="w-full h-full border-0 bg-white"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  title={title || "Plotly Graph"}
+                />
+              )}
+            </div>
+          </motion.div>
+        </>,
+        document.body
       )}
     </div>
   );

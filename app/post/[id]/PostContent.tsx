@@ -138,22 +138,22 @@ export default function PostContent({ post }: PostContentProps) {
                 {children}
               </h3>
             ),
-            p: ({ children }) => {
-              // Check if children contains block-level elements that can't be inside <p>
-              const childArray = Array.isArray(children) ? children : [children];
-              const hasBlockElement = childArray.some((child: any) => {
-                if (!child || typeof child !== "object") return false;
-                const type = child.type;
-                const tagName = typeof type === "string" ? type : type?.name;
-                // Block elements that shouldn't be wrapped in <p>
-                const blockTags = ["div", "video", "figure", "table", "pre", "ul", "ol", "blockquote"];
-                return blockTags.includes(tagName) ||
-                  child?.props?.["data-component"] === "plotly-graph" ||
-                  child?.props?.className?.includes("block");
-              });
+            p: ({ children, node }: any) => {
+              // Block elements that shouldn't be wrapped in <p>
+              const blockTags = ["div", "video", "figure", "table", "pre", "ul", "ol", "blockquote", "plotly-graph"];
 
-              if (hasBlockElement) {
-                return <>{children}</>;
+              // Check the HAST node for block elements (more reliable than checking React elements)
+              if (node?.children) {
+                const hasBlockElement = node.children.some((child: any) => {
+                  if (child.type === 'element') {
+                    return blockTags.includes(child.tagName);
+                  }
+                  return false;
+                });
+
+                if (hasBlockElement) {
+                  return <>{children}</>;
+                }
               }
 
               return (

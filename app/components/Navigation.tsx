@@ -114,7 +114,7 @@ export default function Navigation() {
                 duration: 0.5,
                 ease: [0.25, 0.1, 0.25, 1],
               }}
-              className="relative flex flex-col items-center justify-center h-full space-y-12"
+              className="relative flex flex-col items-center justify-center h-screen space-y-12"
               onClick={(e) => e.stopPropagation()}
             >
               <motion.div

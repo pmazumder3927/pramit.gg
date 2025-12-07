@@ -1,6 +1,5 @@
 import { Post } from "@/app/lib/supabase";
 import Navigation from "@/app/components/Navigation";
-import NowPlaying from "@/app/components/NowPlaying";
 import AnimatedHomePage from "@/app/components/AnimatedHomePage";
 import AnimatedHero from "@/app/components/AnimatedHero";
 import { createClient } from "@/utils/supabase/server";
@@ -57,20 +56,15 @@ export default async function Home() {
         {/* Footer */}
         <footer className="mt-24 pb-24 md:pb-16">
           <div className="max-w-7xl mx-auto px-6 md:px-8">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="flex items-center gap-6">
-                <NowPlaying />
-              </div>
-              <div className="flex items-center gap-6 text-sm text-gray-500">
-                <Link
-                  href="/about"
-                  className="hover:text-white transition-colors duration-300 font-light"
-                >
-                  About
-                </Link>
-                <div className="w-1 h-1 bg-gray-700 rounded-full" />
-                <span className="font-light">© 2025 pramit mazumder</span>
-              </div>
+            <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
+              <Link
+                href="/about"
+                className="hover:text-white transition-colors duration-300 font-light"
+              >
+                About
+              </Link>
+              <div className="w-1 h-1 bg-gray-700 rounded-full" />
+              <span className="font-light">© 2025 pramit mazumder</span>
             </div>
           </div>
         </footer>

@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
 
@@ -32,7 +32,7 @@ function getClientCredentials() {
  * Fetch stored tokens from Supabase
  */
 async function getStoredTokens(): Promise<SpotifyTokens | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("spotify_credentials")
     .select("access_token, refresh_token, expires_at")
@@ -53,7 +53,7 @@ async function getStoredTokens(): Promise<SpotifyTokens | null> {
  * Save tokens to Supabase (upsert pattern for singleton)
  */
 async function saveTokens(tokens: SpotifyTokens): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // First try to get existing row
   const { data: existing } = await supabase
@@ -212,6 +212,6 @@ export async function isSpotifyConnected(): Promise<boolean> {
  * Disconnect Spotify (remove stored credentials)
  */
 export async function disconnectSpotify(): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   await supabase.from("spotify_credentials").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 }
