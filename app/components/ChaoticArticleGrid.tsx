@@ -8,7 +8,7 @@ import {
   useTransform,
   AnimatePresence,
 } from "motion/react";
-import { Post, analyzeContent } from "@/app/lib/supabase";
+import { Post, CardSize, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -187,15 +187,7 @@ function seededRandom(seed: number) {
   return Math.round((x - Math.floor(x)) * 100) / 100;
 }
 
-// Card size variants
-type CardSize =
-  | "massive"
-  | "hero"
-  | "large"
-  | "medium"
-  | "small"
-  | "tiny"
-  | "micro";
+// CardSize type imported from supabase.ts
 
 interface CardStyle {
   size: CardSize;
@@ -218,28 +210,36 @@ interface CardStyle {
   skewY: number;
 }
 
-function generateCardStyle(index: number, totalPosts: number): CardStyle {
+function generateCardStyle(
+  index: number,
+  totalPosts: number,
+  displaySizeOverride?: CardSize | null
+): CardStyle {
   const seed = index * 7919;
 
-  // More varied sizes
-  const sizeRoll = seededRandom(seed + 1);
+  // Use manual override if provided, otherwise use random sizing
   let size: CardSize;
-  if (index === 0) {
-    size = "massive";
-  } else if (sizeRoll > 0.92) {
-    size = "massive";
-  } else if (sizeRoll > 0.8) {
-    size = "hero";
-  } else if (sizeRoll > 0.6) {
-    size = "large";
-  } else if (sizeRoll > 0.4) {
-    size = "medium";
-  } else if (sizeRoll > 0.2) {
-    size = "small";
-  } else if (sizeRoll > 0.08) {
-    size = "tiny";
+  if (displaySizeOverride) {
+    size = displaySizeOverride;
   } else {
-    size = "micro";
+    const sizeRoll = seededRandom(seed + 1);
+    if (index === 0) {
+      size = "massive";
+    } else if (sizeRoll > 0.92) {
+      size = "massive";
+    } else if (sizeRoll > 0.8) {
+      size = "hero";
+    } else if (sizeRoll > 0.6) {
+      size = "large";
+    } else if (sizeRoll > 0.4) {
+      size = "medium";
+    } else if (sizeRoll > 0.2) {
+      size = "small";
+    } else if (sizeRoll > 0.08) {
+      size = "tiny";
+    } else {
+      size = "micro";
+    }
   }
 
   // MORE EXTREME rotations (-12 to 12 degrees)
@@ -691,7 +691,7 @@ function ChaoticCard({
                   ${style.size === "medium" ? "text-[11px] md:text-sm line-clamp-1 md:line-clamp-2" : ""}
                 `}
               >
-                {contentAnalysis.previewText}
+                {post.description || contentAnalysis.previewText}
               </p>
             )}
 
@@ -887,11 +887,11 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
     });
   }, [posts, debouncedQuery]);
 
-  // Generate consistent styles for all posts (based on original index)
+  // Generate consistent styles for all posts (based on original index, with manual overrides)
   const cardStylesMap = useMemo(() => {
     const map = new Map<string, CardStyle>();
     posts.forEach((post, index) => {
-      map.set(post.id, generateCardStyle(index, posts.length));
+      map.set(post.id, generateCardStyle(index, posts.length, post.display_size));
     });
     return map;
   }, [posts]);

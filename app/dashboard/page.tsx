@@ -25,6 +25,10 @@ function DashboardContent() {
     media_url: "",
     tags: "",
     is_draft: false,
+    is_pinned: false,
+    display_size: "" as "" | "massive" | "hero" | "large" | "medium" | "small" | "tiny" | "micro",
+    description: "",
+    meta_image: "",
   });
 
   const checkUser = useCallback(async () => {
@@ -87,7 +91,11 @@ function DashboardContent() {
             media_url: formData.media_url,
             tags,
             is_draft: formData.is_draft,
+            is_pinned: formData.is_pinned,
             slug,
+            display_size: formData.display_size || null,
+            description: formData.description || null,
+            meta_image: formData.meta_image || null,
           })
           .eq("id", editingPost.id);
 
@@ -96,11 +104,19 @@ function DashboardContent() {
         // Create new post
         const { error } = await supabase.from("posts").insert([
           {
-            ...formData,
+            title: formData.title,
+            content: formData.content,
+            type: formData.type,
+            media_url: formData.media_url,
             tags,
+            is_draft: formData.is_draft,
+            is_pinned: formData.is_pinned,
             accent_color: randomColor,
             view_count: 0,
             slug,
+            display_size: formData.display_size || null,
+            description: formData.description || null,
+            meta_image: formData.meta_image || null,
           },
         ]);
 
@@ -115,6 +131,10 @@ function DashboardContent() {
         media_url: "",
         tags: "",
         is_draft: false,
+        is_pinned: false,
+        display_size: "",
+        description: "",
+        meta_image: "",
       });
       setShowCreateForm(false);
       setEditingPost(null);
@@ -134,6 +154,10 @@ function DashboardContent() {
       media_url: post.media_url || "",
       tags: Array.isArray(post.tags) ? post.tags.join(", ") : "",
       is_draft: post.is_draft || false,
+      is_pinned: post.is_pinned || false,
+      display_size: post.display_size || "",
+      description: post.description || "",
+      meta_image: post.meta_image || "",
     });
     setShowCreateForm(true);
     setIsMarkdownMode(true);
@@ -149,6 +173,10 @@ function DashboardContent() {
       media_url: "",
       tags: "",
       is_draft: false,
+      is_pinned: false,
+      display_size: "",
+      description: "",
+      meta_image: "",
     });
   };
 
@@ -331,18 +359,82 @@ function DashboardContent() {
                 className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
               />
 
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_draft}
+              {/* Display Settings */}
+              <div className="border border-gray-800 rounded-lg p-4 space-y-4">
+                <h3 className="text-sm font-medium text-gray-400">Display Settings</h3>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Card Size (leave empty for random)</label>
+                  <select
+                    value={formData.display_size}
                     onChange={(e) =>
-                      setFormData({ ...formData, is_draft: e.target.checked })
+                      setFormData({ ...formData, display_size: e.target.value as any })
                     }
-                    className="w-4 h-4"
+                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                  >
+                    <option value="">Random (default)</option>
+                    <option value="massive">Massive (2x2 → 3x3)</option>
+                    <option value="hero">Hero (1x2 → 2x2)</option>
+                    <option value="large">Large (1x2 → 2x2)</option>
+                    <option value="medium">Medium (1x1 → 1x2)</option>
+                    <option value="small">Small (1x1)</option>
+                    <option value="tiny">Tiny (1x1)</option>
+                    <option value="micro">Micro (1x1)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Description (preview text & social embeds)</label>
+                  <textarea
+                    placeholder="Custom description for cards and social sharing..."
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    rows={2}
+                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
                   />
-                  <span className="text-gray-400">save as draft</span>
-                </label>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Meta Image URL (for social embeds)</label>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={formData.meta_image}
+                    onChange={(e) =>
+                      setFormData({ ...formData, meta_image: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_draft}
+                      onChange={(e) =>
+                        setFormData({ ...formData, is_draft: e.target.checked })
+                      }
+                      className="w-4 h-4"
+                    />
+                    <span className="text-gray-400">save as draft</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_pinned}
+                      onChange={(e) =>
+                        setFormData({ ...formData, is_pinned: e.target.checked })
+                      }
+                      className="w-4 h-4 accent-cyber-orange"
+                    />
+                    <span className="text-gray-400">📌 pin to top</span>
+                  </label>
+                </div>
 
                 <div className="flex gap-2">
                   {["note", "music", "climb"].map((type) => (
@@ -387,6 +479,11 @@ function DashboardContent() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-medium">{post.title}</h3>
+                    {post.is_pinned && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-cyber-orange/20 text-cyber-orange">
+                        📌 pinned
+                      </span>
+                    )}
                     {post.is_draft && (
                       <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-500">
                         draft

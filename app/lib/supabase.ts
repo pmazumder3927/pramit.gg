@@ -3,6 +3,15 @@ import { createClient } from "@/utils/supabase/client";
 // Export the client creation function
 export const supabase = createClient();
 
+export type CardSize =
+  | "massive"
+  | "hero"
+  | "large"
+  | "medium"
+  | "small"
+  | "tiny"
+  | "micro";
+
 export type Post = {
   id: string;
   created_at: string;
@@ -16,6 +25,10 @@ export type Post = {
   is_draft: boolean;
   view_count: number;
   slug: string;
+  display_size?: CardSize | null; // Manual override for card size on front page
+  description?: string | null; // Custom preview text for cards and social embeds (Open Graph, Twitter)
+  meta_image?: string | null; // Custom image URL for social embeds
+  is_pinned?: boolean; // Pin post to top of front page
 };
 
 export type User = {

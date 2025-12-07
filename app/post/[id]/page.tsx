@@ -71,8 +71,8 @@ export async function generateMetadata({
 
   return createMetadata({
     title: post.title,
-    description: generateExcerpt(post.content),
-    image: post.media_url,
+    description: post.description || generateExcerpt(post.content),
+    image: post.meta_image || post.media_url,
     openGraph: {
       type: "article",
       publishedTime: post.created_at,

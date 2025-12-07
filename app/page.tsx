@@ -13,6 +13,7 @@ async function fetchPosts() {
       .from("posts")
       .select("*")
       .eq("is_draft", false)
+      .order("is_pinned", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) {
