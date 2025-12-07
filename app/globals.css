@@ -305,9 +305,9 @@
 
   /* Enhanced footnote styling */
   .footnotes {
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin-top: 4rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .footnotes ol {
@@ -318,35 +318,37 @@
 
   .footnotes li {
     counter-increment: footnote-counter;
-    margin-bottom: 1rem;
-    padding-left: 2rem;
+    margin-bottom: 1.25rem;
+    padding-left: 2.25rem;
     position: relative;
-    line-height: 1.6;
+    line-height: 1.75;
+    font-size: 0.9375rem;
+    color: rgba(209, 213, 219, 0.85);
   }
 
   .footnotes li::before {
     content: counter(footnote-counter);
     position: absolute;
     left: 0;
-    top: 0;
-    background: #ff6b3d;
-    color: white;
+    top: 0.15em;
+    background: rgba(255, 107, 61, 0.15);
+    color: #ff6b3d;
     width: 1.5rem;
     height: 1.5rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.7rem;
+    font-weight: 500;
   }
 
   /* Footnote backlinks */
   .footnotes a[href^="#fnref"] {
-    color: #ff6b3d;
+    color: rgba(255, 107, 61, 0.7);
     text-decoration: none;
     margin-left: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     transition: color 0.2s;
   }
 
@@ -356,7 +358,7 @@
 
   /* Footnote forward links */
   a[href^="#fn"] {
-    color: #ff6b3d;
+    color: rgba(255, 107, 61, 0.8);
     text-decoration: none;
     transition: color 0.2s;
   }
@@ -396,18 +398,24 @@
 
   /* KaTeX math block spacing */
   .katex-display {
-    margin: 1.5rem 0 !important;
-    padding: 0.5rem 0;
+    margin: 2rem 0 !important;
+    padding: 1rem 0;
     overflow-x: auto;
     overflow-y: hidden;
   }
 
   .katex {
-    font-size: 1.1em !important;
+    font-size: 1.05em !important;
   }
 
   /* Inline math spacing */
   .katex:not(.katex-display .katex) {
-    padding: 0 0.15em;
+    padding: 0 0.1em;
+  }
+
+  /* Article prose enhancements */
+  .prose {
+    --tw-prose-body: rgba(209, 213, 219, 0.9);
+    --tw-prose-headings: rgba(255, 255, 255, 0.95);
   }
 }  
