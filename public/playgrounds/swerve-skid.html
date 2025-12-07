@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swerve Visualization</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #08080c;
+      --grid: rgba(255, 255, 255, 0.025);
+      --grid-major: rgba(255, 255, 255, 0.05);
+      --chassis: #2a2a3a;
+      --chassis-fill: rgba(28, 28, 39, 0.9);
+      --wheel: #3a3a4a;
+      --wheel-stroke: #4a4a5a;
+      --trail: rgba(54, 214, 195, 0.25);
+      --trans: #36d6c3;
+      --rot: #a78bfa;
+      --meas: #f59e0b;
+      --skid: #fb7185;
+      --text: #71717a;
+      --text-light: #a0a0b0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 11px;
+      pointer-events: none;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-light);
+      opacity: 0.9;
+    }
+
+    .legend-line {
+      width: 20px;
+      height: 3px;
+      border-radius: 1.5px;
+    }
+
+    .legend-item .katex { font-size: 12px; }
+
+    .skid-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(12, 12, 18, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px 16px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .skid-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .skid-value.good { color: var(--trans); }
+    .skid-value.bad { color: var(--skid); }
+
+    .skid-label {
+      font-size: 10px;
+      color: var(--text);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Sandbox controls */
+    .controls {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(12, 12, 18, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 14px 16px;
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 180px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      color: var(--text);
+      min-width: 50px;
+    }
+
+    .control-label .katex { font-size: 12px; }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .control-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-light);
+      min-width: 45px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <canvas id="canvas"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="skid-badge" id="skidBadge" style="display: none;">
+      <div class="skid-value good" id="skidValue">1.00</div>
+      <div class="skid-label">Skid Ratio</div>
+    </div>
+    <div class="controls" id="controls" style="display: none;"></div>
+  </div>
+
+  <script>
+    // ============================================
+    // Scene configurations
+    // ============================================
+    const SCENES = {
+      translation: {
+        state: { vx: 2.2, vy: 0, omega: 0, slip: 0 },
+        vectors: ['trans'],
+        showSkid: false
+      },
+      rotation: {
+        state: { vx: 0, vy: 0, omega: 1.8, slip: 0 },
+        vectors: ['rot'],
+        showSkid: false
+      },
+      combined: {
+        state: { vx: 1.8, vy: 0.4, omega: 1.0, slip: 0 },
+        vectors: ['trans', 'rot', 'meas'],
+        showSkid: false
+      },
+      decomposition: {
+        state: { vx: 2.0, vy: 0, omega: 0.9, slip: 0 },
+        vectors: ['trans', 'rot', 'meas'],
+        showSkid: true
+      },
+      skidding: {
+        state: { vx: 2.2, vy: 0, omega: 0, slip: 55 },
+        vectors: ['trans', 'meas'],
+        showSkid: true
+      },
+      sandbox: {
+        state: { vx: 1.5, vy: 0, omega: 0.5, slip: 0 },
+        vectors: ['trans', 'rot', 'meas'],
+        showSkid: true,
+        showControls: true
+      }
+    };
+
+    // ============================================
+    // Visualizer
+    // ============================================
+    class SwerveVis {
+      constructor(sceneName) {
+        this.canvas = document.getElementById('canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.scene = SCENES[sceneName] || SCENES.combined;
+
+        this.robot = {
+          x: 0, y: 0, angle: 0,
+          ...this.scene.state
+        };
+
+        this.trail = [];
+        this.maxTrail = 150;
+
+        this.modules = [
+          { id: 'FL', x: -1, y: -1 },
+          { id: 'FR', x: 1, y: -1 },
+          { id: 'BL', x: -1, y: 1 },
+          { id: 'BR', x: 1, y: 1 }
+        ];
+
+        this.colors = {
+          trans: '#36d6c3',
+          rot: '#a78bfa',
+          meas: '#f59e0b',
+          skid: '#fb7185'
+        };
+
+        this.setup();
+        this.buildLegend();
+        this.buildControls();
+        this.animate();
+      }
+
+      setup() {
+        const resize = () => {
+          const dpr = window.devicePixelRatio || 1;
+          const rect = this.canvas.getBoundingClientRect();
+          this.canvas.width = rect.width * dpr;
+          this.canvas.height = rect.height * dpr;
+          this.ctx.scale(dpr, dpr);
+          this.width = rect.width;
+          this.height = rect.height;
+        };
+        resize();
+        window.addEventListener('resize', resize);
+
+        if (this.scene.showSkid) {
+          document.getElementById('skidBadge').style.display = 'block';
+        }
+      }
+
+      buildLegend() {
+        const legend = document.getElementById('legend');
+        const items = [];
+        const labels = {
+          trans: ['trans', '\\vec{v}_{\\text{trans}}'],
+          rot: ['rot', '\\vec{v}_{\\text{rot}}'],
+          meas: ['meas', '\\vec{v}_{\\text{meas}}']
+        };
+
+        this.scene.vectors.forEach(v => {
+          if (labels[v]) {
+            items.push(`
+              <div class="legend-item">
+                <div class="legend-line" style="background: ${this.colors[v]}"></div>
+                <span id="legend-${v}"></span>
+              </div>
+            `);
+          }
+        });
+
+        legend.innerHTML = items.join('');
+
+        requestAnimationFrame(() => {
+          this.scene.vectors.forEach(v => {
+            const el = document.getElementById(`legend-${v}`);
+            if (el && labels[v]) {
+              katex.render(labels[v][1], el);
+            }
+          });
+        });
+      }
+
+      buildControls() {
+        if (!this.scene.showControls) return;
+
+        const controls = document.getElementById('controls');
+        controls.style.display = 'flex';
+
+        controls.innerHTML = `
+          <div class="control-row">
+            <span class="control-label" id="lbl-vx"></span>
+            <input type="range" id="sl-vx" min="-100" max="100" value="50">
+            <span class="control-value" id="val-vx">1.5</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label" id="lbl-vy"></span>
+            <input type="range" id="sl-vy" min="-100" max="100" value="0">
+            <span class="control-value" id="val-vy">0.0</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label" id="lbl-omega"></span>
+            <input type="range" id="sl-omega" min="-100" max="100" value="20">
+            <span class="control-value" id="val-omega">0.5</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">slip</span>
+            <input type="range" id="sl-slip" min="0" max="100" value="0">
+            <span class="control-value" id="val-slip">0%</span>
+          </div>
+        `;
+
+        requestAnimationFrame(() => {
+          katex.render('v_x', document.getElementById('lbl-vx'));
+          katex.render('v_y', document.getElementById('lbl-vy'));
+          katex.render('\\omega', document.getElementById('lbl-omega'));
+        });
+
+        const bind = (id, key, scale, suffix, isInt) => {
+          const sl = document.getElementById(`sl-${id}`);
+          const val = document.getElementById(`val-${id}`);
+          sl.addEventListener('input', e => {
+            const v = parseFloat(e.target.value) * scale;
+            this.robot[key] = v;
+            val.textContent = isInt ? `${Math.round(v)}${suffix}` : `${v.toFixed(1)}${suffix}`;
+          });
+        };
+
+        bind('vx', 'vx', 0.03, '', false);
+        bind('vy', 'vy', 0.03, '', false);
+        bind('omega', 'omega', 0.025, '', false);
+        bind('slip', 'slip', 1, '%', true);
+      }
+
+      getModuleStates() {
+        const { vx, vy, omega, slip } = this.robot;
+        const half = 28;
+
+        return this.modules.map(m => {
+          const rx = m.x * half;
+          const ry = m.y * half;
+
+          const rotVx = -omega * ry * 0.45;
+          const rotVy = omega * rx * 0.45;
+          const transVx = vx;
+          const transVy = vy;
+
+          let measVx = transVx + rotVx;
+          let measVy = transVy + rotVy;
+
+          // Wheel drag: FR locks up, encoder reads LOW while robot still moves
+          const isSlipping = m.id === 'FR' && slip > 10;
+          if (isSlipping) {
+            const f = 1 - slip / 100 * 0.8; // Encoder reads lower (wheel dragging)
+            measVx *= f;
+            measVy *= f;
+          }
+
+          const extractedMag = Math.sqrt((measVx - rotVx) ** 2 + (measVy - rotVy) ** 2);
+
+          return {
+            ...m, rx, ry,
+            transVx, transVy,
+            rotVx, rotVy,
+            measVx, measVy,
+            extractedMag,
+            isSlipping
+          };
+        });
+      }
+
+      calcSkidRatio(modules) {
+        const mags = modules.map(m => m.extractedMag);
+        const max = Math.max(...mags);
+        const min = Math.min(...mags);
+        return min < 0.05 ? 1.0 : max / min;
+      }
+
+      update(dt) {
+        const { vx, vy, omega, slip } = this.robot;
+        const speed = 35;
+
+        const cos = Math.cos(this.robot.angle);
+        const sin = Math.sin(this.robot.angle);
+
+        // When FR wheel slips, it provides less traction:
+        // - FR pushes less, so robot yaws TOWARD FR (clockwise = negative omega)
+        // - Overall forward motion reduced slightly
+        const slipFactor = slip / 100;
+        const actualVx = vx * (1 - slipFactor * 0.2);
+        const driftOmega = -slipFactor * 0.35 * Math.sign(vx); // Yaw toward weak wheel (FR = right = clockwise = negative)
+
+        this.robot.x += (actualVx * cos - vy * sin) * speed * dt;
+        this.robot.y += (actualVx * sin + vy * cos) * speed * dt;
+        this.robot.angle += (omega + driftOmega) * dt;
+
+        // Wrap
+        const m = 120;
+        if (this.robot.x > this.width / 2 + m) this.robot.x = -this.width / 2 - m;
+        if (this.robot.x < -this.width / 2 - m) this.robot.x = this.width / 2 + m;
+        if (this.robot.y > this.height / 2 + m) this.robot.y = -this.height / 2 - m;
+        if (this.robot.y < -this.height / 2 - m) this.robot.y = this.height / 2 + m;
+
+        this.trail.push({ x: this.robot.x, y: this.robot.y });
+        if (this.trail.length > this.maxTrail) this.trail.shift();
+      }
+
+      render() {
+        const { ctx, width, height } = this;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        // Clear
+        ctx.fillStyle = '#08080c';
+        ctx.fillRect(0, 0, width, height);
+
+        // Grid
+        this.drawGrid(cx, cy);
+
+        // Trail
+        if (this.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(cx + this.trail[0].x, cy + this.trail[0].y);
+          for (let i = 1; i < this.trail.length; i++) {
+            ctx.lineTo(cx + this.trail[i].x, cy + this.trail[i].y);
+          }
+          ctx.strokeStyle = 'rgba(54, 214, 195, 0.2)';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        }
+
+        // Robot
+        ctx.save();
+        ctx.translate(cx + this.robot.x, cy + this.robot.y);
+        ctx.rotate(this.robot.angle);
+
+        this.drawChassis();
+
+        const modules = this.getModuleStates();
+        modules.forEach(m => this.drawModule(m));
+
+        ctx.restore();
+
+        // Update skid badge
+        if (this.scene.showSkid) {
+          const ratio = this.calcSkidRatio(modules);
+          const el = document.getElementById('skidValue');
+          el.textContent = ratio.toFixed(2);
+          el.className = 'skid-value ' + (ratio > 1.2 ? 'bad' : 'good');
+        }
+      }
+
+      drawGrid(cx, cy) {
+        const { ctx, width, height } = this;
+        const size = 50;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+        ctx.lineWidth = 1;
+
+        for (let x = cx % size; x < width; x += size) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = cy % size; y < height; y += size) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, height);
+        ctx.moveTo(0, cy);
+        ctx.lineTo(width, cy);
+        ctx.stroke();
+      }
+
+      drawChassis() {
+        const { ctx } = this;
+        const size = 70;
+        const half = size / 2;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.roundRect(-half + 3, -half + 3, size, size, 6);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(28, 28, 39, 0.9)';
+        ctx.strokeStyle = '#2a2a3a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-half, -half, size, size, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#2a2a3a';
+        ctx.beginPath();
+        ctx.moveTo(0, -half + 10);
+        ctx.lineTo(-6, -half + 20);
+        ctx.lineTo(6, -half + 20);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      drawModule(m) {
+        const { ctx } = this;
+        const scale = 22;
+        const vectors = this.scene.vectors;
+
+        // Vectors
+        if (vectors.includes('trans') && Math.hypot(m.transVx, m.transVy) > 0.05) {
+          this.drawArrow(m.rx, m.ry, m.rx + m.transVx * scale, m.ry + m.transVy * scale, this.colors.trans, 2.5, 0.75);
+        }
+
+        if (vectors.includes('rot') && Math.hypot(m.rotVx, m.rotVy) > 0.05) {
+          this.drawArrow(m.rx, m.ry, m.rx + m.rotVx * scale, m.ry + m.rotVy * scale, this.colors.rot, 2.5, 0.75);
+        }
+
+        if (vectors.includes('meas') && Math.hypot(m.measVx, m.measVy) > 0.05) {
+          const c = m.isSlipping ? this.colors.skid : this.colors.meas;
+          this.drawArrow(m.rx, m.ry, m.rx + m.measVx * scale, m.ry + m.measVy * scale, c, 3, 1);
+        }
+
+        // Wheel
+        const r = 9;
+        ctx.fillStyle = '#3a3a4a';
+        ctx.strokeStyle = m.isSlipping ? this.colors.skid : '#4a4a5a';
+        ctx.lineWidth = m.isSlipping ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.arc(m.rx, m.ry, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = m.isSlipping ? this.colors.skid : '#71717a';
+        ctx.font = '500 9px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(m.id, m.rx, m.ry);
+      }
+
+      drawArrow(x1, y1, x2, y2, color, width, alpha) {
+        const { ctx } = this;
+        const dx = x2 - x1, dy = y2 - y1;
+        const len = Math.hypot(dx, dy);
+        if (len < 4) return;
+
+        const angle = Math.atan2(dy, dx);
+        const head = Math.min(10, len * 0.35);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2 - Math.cos(angle) * head * 0.4, y2 - Math.sin(angle) * head * 0.4);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(angle - 0.4), y2 - head * Math.sin(angle - 0.4));
+        ctx.lineTo(x2 - head * Math.cos(angle + 0.4), y2 - head * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      animate() {
+        const now = performance.now();
+        const dt = Math.min((now - (this.last || now)) / 1000, 0.1);
+        this.last = now;
+
+        this.update(dt);
+        this.render();
+        requestAnimationFrame(() => this.animate());
+      }
+    }
+
+    // Initialize with URL param
+    const scene = new URLSearchParams(window.location.search).get('scene') || 'combined';
+    document.addEventListener('DOMContentLoaded', () => new SwerveVis(scene));
+  </script>
+</body>
+</html>
