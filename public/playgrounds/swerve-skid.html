@@ -6,34 +6,39 @@
   <title>Swerve Visualization</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #08080c;
-      --grid: rgba(255, 255, 255, 0.025);
-      --grid-major: rgba(255, 255, 255, 0.05);
-      --chassis: #2a2a3a;
-      --chassis-fill: rgba(28, 28, 39, 0.9);
-      --wheel: #3a3a4a;
-      --wheel-stroke: #4a4a5a;
-      --trail: rgba(54, 214, 195, 0.25);
-      --trans: #36d6c3;
-      --rot: #a78bfa;
-      --meas: #f59e0b;
-      --skid: #fb7185;
-      --text: #71717a;
-      --text-light: #a0a0b0;
+      --bg: #000000;
+      --bg-secondary: #0a0a0a;
+      --grid: rgba(255, 255, 255, 0.02);
+      --grid-major: rgba(255, 255, 255, 0.04);
+      --chassis: rgba(255, 255, 255, 0.08);
+      --chassis-fill: rgba(10, 10, 12, 0.95);
+      --wheel: rgba(255, 255, 255, 0.06);
+      --wheel-stroke: rgba(255, 255, 255, 0.12);
+      --trail: rgba(255, 107, 61, 0.15);
+      --trans: #ff6b3d;
+      --rot: #7c77c6;
+      --meas: #4a9eff;
+      --skid: #ff375f;
+      --text: #52525b;
+      --text-light: #a1a1aa;
+      --glass-bg: rgba(0, 0, 0, 0.6);
+      --glass-border: rgba(255, 255, 255, 0.08);
     }
 
     html, body {
       height: 100%;
       overflow: hidden;
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .container {
@@ -42,128 +47,211 @@
       position: relative;
     }
 
+    /* Gradient overlays like homepage */
+    .container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 30%, rgba(124, 119, 198, 0.04), transparent 50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .container::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 80% 70%, rgba(255, 107, 61, 0.03), transparent 50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Grain texture */
+    .grain {
+      position: fixed;
+      inset: 0;
+      opacity: 0.015;
+      z-index: 100;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
+    }
+
     canvas {
       display: block;
       width: 100%;
       height: 100%;
+      position: relative;
+      z-index: 2;
     }
 
     .legend {
       position: absolute;
-      bottom: 16px;
-      left: 16px;
+      bottom: 20px;
+      left: 20px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      font-size: 11px;
+      gap: 8px;
+      font-size: 12px;
       pointer-events: none;
+      z-index: 10;
     }
 
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       color: var(--text-light);
-      opacity: 0.9;
+      font-weight: 300;
+      letter-spacing: 0.01em;
     }
 
     .legend-line {
-      width: 20px;
-      height: 3px;
-      border-radius: 1.5px;
+      width: 24px;
+      height: 2px;
+      border-radius: 1px;
+      box-shadow: 0 0 8px currentColor;
     }
 
-    .legend-item .katex { font-size: 12px; }
+    .legend-item .katex {
+      font-size: 13px;
+      opacity: 0.9;
+    }
 
     .skid-badge {
       position: absolute;
-      top: 16px;
-      right: 16px;
-      background: rgba(12, 12, 18, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      padding: 12px 16px;
+      top: 20px;
+      right: 20px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 16px 20px;
       text-align: center;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
 
     .skid-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 28px;
-      font-weight: 600;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 32px;
+      font-weight: 500;
       line-height: 1;
+      letter-spacing: -0.02em;
     }
 
-    .skid-value.good { color: var(--trans); }
-    .skid-value.bad { color: var(--skid); }
+    .skid-value.good {
+      color: var(--trans);
+      text-shadow: 0 0 20px rgba(255, 107, 61, 0.4);
+    }
+    .skid-value.bad {
+      color: var(--skid);
+      text-shadow: 0 0 20px rgba(255, 55, 95, 0.4);
+    }
 
     .skid-label {
       font-size: 10px;
       color: var(--text);
-      margin-top: 4px;
+      margin-top: 6px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.1em;
+      font-weight: 500;
     }
 
     /* Sandbox controls */
     .controls {
       position: absolute;
-      bottom: 16px;
-      right: 16px;
-      background: rgba(12, 12, 18, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      padding: 14px 16px;
-      backdrop-filter: blur(8px);
+      bottom: 20px;
+      right: 20px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      min-width: 180px;
+      gap: 14px;
+      min-width: 200px;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
 
     .control-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     .control-label {
-      font-size: 11px;
-      color: var(--text);
+      font-size: 12px;
+      color: var(--text-light);
       min-width: 50px;
+      font-weight: 300;
     }
 
-    .control-label .katex { font-size: 12px; }
+    .control-label .katex {
+      font-size: 13px;
+    }
 
     input[type="range"] {
       flex: 1;
       -webkit-appearance: none;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
+      height: 3px;
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 2px;
       outline: none;
+      transition: background 0.2s ease;
+    }
+
+    input[type="range"]:hover {
+      background: rgba(255, 255, 255, 0.12);
     }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      background: #fff;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(135deg, #fff 0%, #e0e0e0 100%);
       border-radius: 50%;
       cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(0.95);
     }
 
     .control-value {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
       font-size: 11px;
       color: var(--text-light);
-      min-width: 45px;
+      min-width: 48px;
       text-align: right;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .legend, .skid-badge, .controls {
+      animation: fadeIn 0.6s ease-out;
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="grain"></div>
     <canvas id="canvas"></canvas>
     <div class="legend" id="legend"></div>
     <div class="skid-badge" id="skidBadge" style="display: none;">
@@ -199,7 +287,12 @@
         showSkid: true
       },
       skidding: {
-        state: { vx: 2.2, vy: 0, omega: 0, slip: 55 },
+        state: { vx: 2.2, vy: 0, omega: 0, slip: 55 }, // positive = drag (wheel locked)
+        vectors: ['trans', 'meas'],
+        showSkid: true
+      },
+      slipping: {
+        state: { vx: 2.2, vy: 0, omega: 0, slip: -55 }, // negative = slip (wheel spinning)
         vectors: ['trans', 'meas'],
         showSkid: true
       },
@@ -236,10 +329,10 @@
         ];
 
         this.colors = {
-          trans: '#36d6c3',
-          rot: '#a78bfa',
-          meas: '#f59e0b',
-          skid: '#fb7185'
+          trans: '#ff6b3d',
+          rot: '#7c77c6',
+          meas: '#4a9eff',
+          skid: '#ff375f'
         };
 
         this.setup();
@@ -322,7 +415,7 @@
           </div>
           <div class="control-row">
             <span class="control-label">slip</span>
-            <input type="range" id="sl-slip" min="0" max="100" value="0">
+            <input type="range" id="sl-slip" min="-100" max="100" value="0">
             <span class="control-value" id="val-slip">0%</span>
           </div>
         `;
@@ -346,7 +439,21 @@
         bind('vx', 'vx', 0.03, '', false);
         bind('vy', 'vy', 0.03, '', false);
         bind('omega', 'omega', 0.025, '', false);
-        bind('slip', 'slip', 1, '%', true);
+
+        // Custom binding for slip with drag/slip labels
+        const slSlip = document.getElementById('sl-slip');
+        const valSlip = document.getElementById('val-slip');
+        slSlip.addEventListener('input', e => {
+          const v = parseFloat(e.target.value);
+          this.robot.slip = v;
+          if (v === 0) {
+            valSlip.textContent = '0%';
+          } else if (v > 0) {
+            valSlip.textContent = `+${v}% drag`;
+          } else {
+            valSlip.textContent = `${v}% slip`;
+          }
+        });
       }
 
       getModuleStates() {
@@ -365,12 +472,22 @@
           let measVx = transVx + rotVx;
           let measVy = transVy + rotVy;
 
-          // Wheel drag: FR locks up, encoder reads LOW while robot still moves
-          const isSlipping = m.id === 'FR' && slip > 10;
+          // Wheel anomaly: FR wheel has traction issues
+          // Positive slip (drag): wheel locked/dragging, encoder reads LOW
+          // Negative slip (slip): wheel spinning freely, encoder reads HIGH
+          const isSlipping = m.id === 'FR' && Math.abs(slip) > 10;
           if (isSlipping) {
-            const f = 1 - slip / 100 * 0.8; // Encoder reads lower (wheel dragging)
-            measVx *= f;
-            measVy *= f;
+            if (slip > 0) {
+              // Drag: encoder reads lower (wheel locked/dragging)
+              const f = 1 - slip / 100 * 0.8;
+              measVx *= f;
+              measVy *= f;
+            } else {
+              // Slip: encoder reads higher (wheel spinning faster than ground speed)
+              const f = 1 - slip / 100 * 0.8; // slip is negative, so this increases
+              measVx *= f;
+              measVy *= f;
+            }
           }
 
           const extractedMag = Math.sqrt((measVx - rotVx) ** 2 + (measVy - rotVy) ** 2);
@@ -400,12 +517,12 @@
         const cos = Math.cos(this.robot.angle);
         const sin = Math.sin(this.robot.angle);
 
-        // When FR wheel slips, it provides less traction:
-        // - FR pushes less, so robot yaws TOWARD FR (clockwise = negative omega)
-        // - Overall forward motion reduced slightly
-        const slipFactor = slip / 100;
+        // When FR wheel has traction issues:
+        // Positive (drag): FR pushes less, robot yaws toward FR (clockwise = negative omega)
+        // Negative (slip): FR spins freely, similar effect but encoder reads HIGH
+        const slipFactor = Math.abs(slip) / 100;
         const actualVx = vx * (1 - slipFactor * 0.2);
-        const driftOmega = -slipFactor * 0.35 * Math.sign(vx); // Yaw toward weak wheel (FR = right = clockwise = negative)
+        const driftOmega = -slipFactor * 0.35 * Math.sign(vx) * Math.sign(slip || 1); // Yaw direction depends on slip type
 
         this.robot.x += (actualVx * cos - vy * sin) * speed * dt;
         this.robot.y += (actualVx * sin + vy * cos) * speed * dt;
@@ -427,24 +544,25 @@
         const cx = width / 2;
         const cy = height / 2;
 
-        // Clear
-        ctx.fillStyle = '#08080c';
+        // Clear to pure black
+        ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
         // Grid
         this.drawGrid(cx, cy);
 
-        // Trail
+        // Trail with gradient fade
         if (this.trail.length > 1) {
-          ctx.beginPath();
-          ctx.moveTo(cx + this.trail[0].x, cy + this.trail[0].y);
           for (let i = 1; i < this.trail.length; i++) {
+            const alpha = (i / this.trail.length) * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(cx + this.trail[i - 1].x, cy + this.trail[i - 1].y);
             ctx.lineTo(cx + this.trail[i].x, cy + this.trail[i].y);
+            ctx.strokeStyle = `rgba(255, 107, 61, ${alpha})`;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.stroke();
           }
-          ctx.strokeStyle = 'rgba(54, 214, 195, 0.2)';
-          ctx.lineWidth = 2;
-          ctx.lineCap = 'round';
-          ctx.stroke();
         }
 
         // Robot
@@ -470,9 +588,10 @@
 
       drawGrid(cx, cy) {
         const { ctx, width, height } = this;
-        const size = 50;
+        const size = 60;
 
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+        // Minor grid lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
         ctx.lineWidth = 1;
 
         for (let x = cx % size; x < width; x += size) {
@@ -488,7 +607,9 @@
           ctx.stroke();
         }
 
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        // Major axes with subtle glow
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(cx, 0);
         ctx.lineTo(cx, height);
@@ -502,24 +623,30 @@
         const size = 70;
         const half = size / 2;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.beginPath();
-        ctx.roundRect(-half + 3, -half + 3, size, size, 6);
+        ctx.roundRect(-half + 4, -half + 4, size, size, 10);
         ctx.fill();
 
-        ctx.fillStyle = 'rgba(28, 28, 39, 0.9)';
-        ctx.strokeStyle = '#2a2a3a';
-        ctx.lineWidth = 2;
+        // Main chassis with gradient
+        const gradient = ctx.createLinearGradient(-half, -half, half, half);
+        gradient.addColorStop(0, 'rgba(20, 20, 25, 0.95)');
+        gradient.addColorStop(1, 'rgba(10, 10, 12, 0.95)');
+        ctx.fillStyle = gradient;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(-half, -half, size, size, 6);
+        ctx.roundRect(-half, -half, size, size, 10);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#2a2a3a';
+        // Direction indicator - subtle accent
+        ctx.fillStyle = 'rgba(255, 107, 61, 0.6)';
         ctx.beginPath();
-        ctx.moveTo(0, -half + 10);
-        ctx.lineTo(-6, -half + 20);
-        ctx.lineTo(6, -half + 20);
+        ctx.moveTo(0, -half + 12);
+        ctx.lineTo(-5, -half + 20);
+        ctx.lineTo(5, -half + 20);
         ctx.closePath();
         ctx.fill();
       }
@@ -543,18 +670,30 @@
           this.drawArrow(m.rx, m.ry, m.rx + m.measVx * scale, m.ry + m.measVy * scale, c, 3, 1);
         }
 
-        // Wheel
-        const r = 9;
-        ctx.fillStyle = '#3a3a4a';
-        ctx.strokeStyle = m.isSlipping ? this.colors.skid : '#4a4a5a';
-        ctx.lineWidth = m.isSlipping ? 2.5 : 1.5;
+        // Wheel with glow effect when active
+        const r = 10;
+
+        // Glow for slipping wheel
+        if (m.isSlipping) {
+          ctx.shadowColor = this.colors.skid;
+          ctx.shadowBlur = 12;
+        }
+
+        const wheelGradient = ctx.createRadialGradient(m.rx, m.ry, 0, m.rx, m.ry, r);
+        wheelGradient.addColorStop(0, 'rgba(40, 40, 50, 0.9)');
+        wheelGradient.addColorStop(1, 'rgba(25, 25, 32, 0.95)');
+        ctx.fillStyle = wheelGradient;
+        ctx.strokeStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = m.isSlipping ? 2 : 1;
         ctx.beginPath();
         ctx.arc(m.rx, m.ry, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = m.isSlipping ? this.colors.skid : '#71717a';
-        ctx.font = '500 9px Inter';
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '500 8px Inter';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(m.id, m.rx, m.ry);
@@ -571,6 +710,11 @@
 
         ctx.save();
         ctx.globalAlpha = alpha;
+
+        // Subtle glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
         ctx.lineWidth = width;
@@ -588,6 +732,7 @@
         ctx.closePath();
         ctx.fill();
 
+        ctx.shadowBlur = 0;
         ctx.restore();
       }
 
