@@ -3,27 +3,20 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import Image from "next/image";
-import useSWR from "swr";
-
-interface SpotifyTrack {
-  isPlaying: boolean;
-  title: string;
-  artist: string;
-  albumImageUrl: string | null;
-  songUrl: string | null;
-}
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import {
+  useNowPlaying,
+  getVariantStyles,
+  AlbumArt,
+  TrackInfo,
+  NeonBorders,
+  AccentStripe,
+  AmbientGlow,
+} from "./NowPlayingWidget";
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
-
-  const { data: track } = useSWR<SpotifyTrack>(
-    "/api/spotify/now-playing",
-    fetcher,
-    { refreshInterval: 30000, revalidateOnFocus: false }
-  );
+  const { track, albumColor, variant } = useNowPlaying();
+  const styles = getVariantStyles(variant, albumColor);
 
   // Lock body scroll when menu is open
   useEffect(() => {
@@ -41,52 +34,77 @@ export default function Navigation() {
     <>
       {/* Mobile Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
-        <div className="glass-dark backdrop-blur-3xl border-t border-white/10 shadow-2xl">
-          <div className="flex items-center justify-around py-4 px-6">
-            <Link
-              href="/"
-              className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
-            >
-              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                  />
-                </svg>
-              </div>
-            </Link>
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="text-gray-400 hover:text-white transition-all duration-300 hover:scale-110"
-            >
-              <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
-                <motion.svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  animate={{ rotate: isOpen ? 45 : 0 }}
-                  transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </motion.svg>
-              </div>
-            </button>
+        <motion.div
+          className={`relative overflow-hidden backdrop-blur-3xl border-t ${styles.container}`}
+          style={{ borderColor: styles.borderColor !== "transparent" ? styles.borderColor : "rgba(255,255,255,0.1)" }}
+          layout
+        >
+          {/* Variant decorations */}
+          {variant === "neon" && <NeonBorders accentColor={albumColor} />}
+          {variant === "accent" && <AccentStripe accentColor={albumColor} />}
+          {track?.isPlaying && <AmbientGlow accentColor={albumColor} position="left" />}
+
+          <div className="relative z-10 flex items-center justify-between py-3 px-4">
+            {/* Now Playing */}
+            {track ? (
+              <Link
+                href="/music"
+                className="flex items-center gap-3 flex-1 min-w-0 mr-2"
+              >
+                <AlbumArt track={track} accentColor={albumColor} />
+                <TrackInfo track={track} accentColor={albumColor} />
+              </Link>
+            ) : (
+              <div className="flex-1" />
+            )}
+
+            {/* Nav buttons */}
+            <div className="flex items-center gap-1">
+              <Link
+                href="/"
+                className="text-gray-400 hover:text-white transition-all duration-300"
+              >
+                <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    />
+                  </svg>
+                </div>
+              </Link>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-gray-400 hover:text-white transition-all duration-300"
+              >
+                <div className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300">
+                  <motion.svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    animate={{ rotate: isOpen ? 45 : 0 }}
+                    transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  </motion.svg>
+                </div>
+              </button>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Desktop Navigation */}

@@ -1,41 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
-import useSWR from "swr";
 import Image from "next/image";
 import Link from "next/link";
+import {
+  useNowPlaying,
+  getVariantStyles,
+  AlbumArt,
+  TrackInfo,
+  NeonBorders,
+  AccentStripe,
+  AmbientGlow,
+  ScatteredDots,
+  ProgressBar,
+} from "./NowPlayingWidget";
 
-interface SpotifyTrack {
-  isPlaying: boolean;
-  title: string;
-  artist: string;
-  album: string;
-  albumImageUrl: string | null;
-  songUrl: string | null;
-  progress?: number;
-  duration?: number;
-  playedAt?: string;
-}
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-// Seeded random for consistent visuals
-function seededRandom(seed: number) {
-  const x = Math.sin(seed) * 10000;
-  return Math.round((x - Math.floor(x)) * 100) / 100;
-}
-
-// Visual style variants inspired by ChaoticArticleGrid
-type VisualVariant = "neon" | "glassy" | "minimal" | "accent";
-
-function getVariantFromTrack(title: string): VisualVariant {
-  const seed = title.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const roll = seededRandom(seed);
-  if (roll > 0.75) return "neon";
-  if (roll > 0.5) return "glassy";
-  if (roll > 0.25) return "accent";
-  return "minimal";
+function formatTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
 export default function NowPlaying() {
@@ -44,14 +29,8 @@ export default function NowPlaying() {
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
 
-  const { data: track, error } = useSWR<SpotifyTrack>(
-    "/api/spotify/now-playing",
-    fetcher,
-    {
-      refreshInterval: 30000,
-      revalidateOnFocus: false,
-    }
-  );
+  const { track, albumColor, variant } = useNowPlaying();
+  const styles = getVariantStyles(variant, albumColor);
 
   // Parallax effect
   const springConfig = { stiffness: 150, damping: 20 };
@@ -87,62 +66,21 @@ export default function NowPlaying() {
     ? (track.progress / track.duration) * 100
     : 0;
 
-  const hasTrack = !error && track;
-  const variant = hasTrack ? getVariantFromTrack(track.title) : "minimal";
-
-  // Dynamic accent color based on variant
-  const accentColor = useMemo(() => {
-    if (!hasTrack) return "#ff6b3d";
-    const seed = track.title.length * 7919;
-    return seededRandom(seed) > 0.5 ? "#ff6b3d" : "#7c77c6";
-  }, [hasTrack, track?.title]);
-
-  const getVariantStyles = () => {
-    switch (variant) {
-      case "neon":
-        return {
-          container: "bg-void-black/95 border-2",
-          glow: `shadow-[0_0_30px_${accentColor}30,0_0_60px_${accentColor}15]`,
-          borderColor: accentColor,
-        };
-      case "glassy":
-        return {
-          container: "bg-white/[0.08] backdrop-blur-xl border border-white/20",
-          glow: "shadow-2xl shadow-black/40",
-          borderColor: "transparent",
-        };
-      case "accent":
-        return {
-          container: "bg-gradient-to-br from-charcoal-black/95 via-void-black to-charcoal-black/95 border border-white/10",
-          glow: "shadow-xl shadow-black/30",
-          borderColor: "transparent",
-        };
-      default:
-        return {
-          container: "bg-void-black/90 border border-white/[0.08]",
-          glow: "shadow-lg shadow-black/20",
-          borderColor: "transparent",
-        };
-    }
-  };
-
-  const styles = getVariantStyles();
-
   return (
     <motion.div
       ref={containerRef}
-      className="fixed bottom-24 md:bottom-5 left-5 z-50"
+      className="hidden md:block fixed bottom-5 left-5 z-50"
       style={{ x: springX, y: springY }}
       initial={{ opacity: 0, scale: 0.8, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1], delay: 0.5 }}
     >
       {/* Ambient glow behind widget */}
-      {hasTrack && track.isPlaying && (
+      {track?.isPlaying && (
         <motion.div
           className="absolute -inset-4 rounded-3xl pointer-events-none"
           style={{
-            background: `radial-gradient(circle at center, ${accentColor}20 0%, transparent 70%)`,
+            background: `radial-gradient(circle at center, ${albumColor}20 0%, transparent 70%)`,
           }}
           animate={{
             opacity: [0.3, 0.6, 0.3],
@@ -153,29 +91,7 @@ export default function NowPlaying() {
       )}
 
       {/* Scattered decorative elements */}
-      {hasTrack && (
-        <>
-          <motion.div
-            className="absolute -top-3 -right-2 w-2 h-2 rounded-full pointer-events-none"
-            style={{ backgroundColor: accentColor }}
-            animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.2, 1] }}
-            transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-          />
-          <motion.div
-            className="absolute -bottom-2 -left-3 w-1.5 h-1.5 rounded-full pointer-events-none"
-            style={{ backgroundColor: accentColor === "#ff6b3d" ? "#7c77c6" : "#ff6b3d" }}
-            animate={{ opacity: [0.15, 0.4, 0.15] }}
-            transition={{ duration: 2.5, repeat: Infinity, delay: 1 }}
-          />
-          <motion.div
-            className="absolute top-1/2 -right-4 w-8 h-px pointer-events-none"
-            style={{ backgroundColor: accentColor }}
-            initial={{ scaleX: 0, opacity: 0 }}
-            animate={{ scaleX: track.isPlaying ? 1 : 0, opacity: track.isPlaying ? 0.3 : 0 }}
-            transition={{ duration: 0.5 }}
-          />
-        </>
-      )}
+      {track && <ScatteredDots accentColor={albumColor} />}
 
       {/* Main widget */}
       <motion.div
@@ -194,120 +110,35 @@ export default function NowPlaying() {
           }}
         />
 
-        {/* Gradient accent stripe */}
-        {variant === "accent" && (
-          <div
-            className="absolute -right-8 -top-8 w-16 h-16 rotate-45 opacity-20"
-            style={{ backgroundColor: accentColor }}
-          />
-        )}
-
-        {/* Neon border glow lines */}
-        {variant === "neon" && (
-          <>
-            <div
-              className="absolute top-0 left-0 right-0 h-px opacity-50"
-              style={{ backgroundColor: accentColor }}
-            />
-            <div
-              className="absolute bottom-0 left-0 right-0 h-px opacity-50"
-              style={{ backgroundColor: accentColor }}
-            />
-          </>
-        )}
+        {/* Variant decorations */}
+        {variant === "accent" && <AccentStripe accentColor={albumColor} />}
+        {variant === "neon" && <NeonBorders accentColor={albumColor} />}
 
         {/* Content */}
         <div className="relative z-10 flex items-center gap-3 p-3 pr-4">
-          {/* Album art with effects */}
-          <div className="relative flex-shrink-0">
-            {hasTrack && track.albumImageUrl ? (
-              <motion.div
-                className="relative w-11 h-11 rounded-xl overflow-hidden"
-                animate={track.isPlaying ? {
-                  boxShadow: [
-                    `0 0 0 0 ${accentColor}00`,
-                    `0 0 12px 2px ${accentColor}40`,
-                    `0 0 0 0 ${accentColor}00`
-                  ]
-                } : {}}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <Image
-                  src={track.albumImageUrl}
-                  alt={track.album}
-                  fill
-                  className="object-cover"
-                  sizes="44px"
-                />
-                {/* Vinyl spin effect when playing */}
-                {track.isPlaying && (
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-tr from-black/40 via-transparent to-white/10"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  />
-                )}
-              </motion.div>
-            ) : (
+          {track ? (
+            <>
+              <AlbumArt track={track} accentColor={albumColor} />
+              <TrackInfo track={track} accentColor={albumColor} compact />
+            </>
+          ) : (
+            <>
               <div
                 className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${accentColor}15` }}
+                style={{ backgroundColor: `${albumColor}15` }}
               >
-                <svg className="w-5 h-5" style={{ color: accentColor }} fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" style={{ color: albumColor }} fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                 </svg>
               </div>
-            )}
-
-            {/* Playing indicator badge */}
-            {hasTrack && track.isPlaying && (
-              <motion.div
-                className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-void-black flex items-center justify-center overflow-hidden"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 500, damping: 25 }}
-              >
-                <div className="flex items-end gap-[2px] h-2">
-                  {[0, 0.15, 0.3].map((delay, i) => (
-                    <motion.div
-                      key={i}
-                      className="w-[2px] bg-void-black rounded-full"
-                      animate={{ height: ["3px", "6px", "3px"] }}
-                      transition={{ duration: 0.5, repeat: Infinity, delay }}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Track info */}
-          <div className="flex flex-col min-w-0 max-w-[160px]">
-            <span
-              className="text-[9px] uppercase tracking-widest font-medium"
-              style={{ color: `${accentColor}99` }}
-            >
-              {hasTrack ? (track.isPlaying ? "Now Playing" : "Last Played") : "Offline"}
-            </span>
-            {hasTrack ? (
-              <>
-                <motion.span
-                  className="text-sm font-medium text-white truncate leading-tight"
-                  key={track.title}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {track.title}
-                </motion.span>
-                <span className="text-xs text-gray-400 truncate leading-tight">
-                  {track.artist}
+              <div className="flex flex-col min-w-0 max-w-[160px]">
+                <span className="text-[9px] uppercase tracking-widest font-medium" style={{ color: `${albumColor}99` }}>
+                  Offline
                 </span>
-              </>
-            ) : (
-              <span className="text-sm text-gray-500">Nothing playing</span>
-            )}
-          </div>
+                <span className="text-sm text-gray-500">Nothing playing</span>
+              </div>
+            </>
+          )}
 
           {/* Expand chevron */}
           <motion.svg
@@ -323,24 +154,12 @@ export default function NowPlaying() {
         </div>
 
         {/* Progress bar */}
-        {hasTrack && track.progress && track.duration && (
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/5">
-            <motion.div
-              className="h-full rounded-full"
-              style={{
-                background: `linear-gradient(90deg, ${accentColor}, ${accentColor === "#ff6b3d" ? "#7c77c6" : "#ff6b3d"})`
-              }}
-              initial={{ width: "0%" }}
-              animate={{ width: `${progressPercentage}%` }}
-              transition={{ duration: 0.5 }}
-            />
-          </div>
-        )}
+        {track && <ProgressBar track={track} accentColor={albumColor} />}
       </motion.div>
 
       {/* Expanded panel */}
       <AnimatePresence>
-        {isExpanded && hasTrack && (
+        {isExpanded && track && (
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.95, rotateX: -10 }}
             animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
@@ -392,7 +211,7 @@ export default function NowPlaying() {
                 <div
                   className="absolute top-0 right-0 w-20 h-20 opacity-20"
                   style={{
-                    background: `linear-gradient(135deg, ${accentColor}40 0%, transparent 60%)`,
+                    background: `linear-gradient(135deg, ${albumColor}40 0%, transparent 60%)`,
                   }}
                 />
               </div>
@@ -414,7 +233,7 @@ export default function NowPlaying() {
                       <motion.div
                         className="absolute left-0 top-0 h-full rounded-full"
                         style={{
-                          background: `linear-gradient(90deg, ${accentColor}, ${accentColor === "#ff6b3d" ? "#7c77c6" : "#ff6b3d"})`
+                          background: `linear-gradient(90deg, ${albumColor}, ${albumColor === "#ff6b3d" ? "#7c77c6" : "#ff6b3d"})`
                         }}
                         initial={{ width: "0%" }}
                         animate={{ width: `${progressPercentage}%` }}
@@ -449,7 +268,7 @@ export default function NowPlaying() {
                   <Link
                     href="/music"
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
-                    style={{ color: accentColor }}
+                    style={{ color: albumColor }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     Explore
@@ -464,7 +283,7 @@ export default function NowPlaying() {
               <div
                 className="absolute bottom-0 left-0 right-0 h-px opacity-40"
                 style={{
-                  background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`
+                  background: `linear-gradient(90deg, transparent, ${albumColor}, transparent)`
                 }}
               />
             </div>
@@ -473,11 +292,4 @@ export default function NowPlaying() {
       </AnimatePresence>
     </motion.div>
   );
-}
-
-function formatTime(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }

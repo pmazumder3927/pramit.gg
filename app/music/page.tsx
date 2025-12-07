@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import useSWR from "swr";
-import { useAlbumColor, preloadColors } from "./lib/use-album-color";
+import { useAlbumColor, preloadColors } from "@/app/lib/use-album-color";
 import {
   FloatingShapes,
   ScatteredElements,
