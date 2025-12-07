@@ -1,11 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
+import Image from "next/image";
+import useSWR from "swr";
+
+interface SpotifyTrack {
+  isPlaying: boolean;
+  title: string;
+  artist: string;
+  albumImageUrl: string | null;
+  songUrl: string | null;
+}
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
+
+  const { data: track } = useSWR<SpotifyTrack>(
+    "/api/spotify/now-playing",
+    fetcher,
+    { refreshInterval: 30000, revalidateOnFocus: false }
+  );
+
+  // Lock body scroll when menu is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   return (
     <>
@@ -96,7 +126,7 @@ export default function Navigation() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-            className="fixed inset-0 z-40 bg-void-black/95 backdrop-blur-3xl"
+            className="fixed inset-0 z-40 bg-void-black/95 backdrop-blur-3xl overflow-hidden"
             onClick={() => setIsOpen(false)}
           >
             {/* Ambient gradient effects */}
@@ -114,7 +144,7 @@ export default function Navigation() {
                 duration: 0.5,
                 ease: [0.25, 0.1, 0.25, 1],
               }}
-              className="relative flex flex-col items-center justify-center h-screen space-y-12"
+              className="relative flex flex-col items-center justify-center h-full space-y-12"
               onClick={(e) => e.stopPropagation()}
             >
               <motion.div

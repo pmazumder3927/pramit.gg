@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
+import Navigation from "./components/Navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -64,6 +65,7 @@ export default function RootLayout({
     <html lang="en" className={inter.className}>
       <body className="grain min-h-screen">
         <div className="relative z-10">{children}</div>
+        <Navigation />
         <NowPlaying />
       </body>
     </html>

@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import useSWR from "swr";
-import Navigation from "@/app/components/Navigation";
 import { useAlbumColor, preloadColors } from "./lib/use-album-color";
 import {
   FloatingShapes,
@@ -146,7 +145,6 @@ export default function MusicPage() {
       <GradientOrbs primaryColor={nowPlayingColor} />
 
       <main className="relative z-10 min-h-screen">
-        <Navigation />
 
         {/* Hero Section */}
         <motion.section

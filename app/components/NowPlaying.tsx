@@ -131,7 +131,7 @@ export default function NowPlaying() {
   return (
     <motion.div
       ref={containerRef}
-      className="fixed bottom-5 left-5 z-50"
+      className="fixed bottom-24 md:bottom-5 left-5 z-50"
       style={{ x: springX, y: springY }}
       initial={{ opacity: 0, scale: 0.8, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}

@@ -1,5 +1,4 @@
 import { Post } from "@/app/lib/supabase";
-import Navigation from "@/app/components/Navigation";
 import AnimatedHomePage from "@/app/components/AnimatedHomePage";
 import AnimatedHero from "@/app/components/AnimatedHero";
 import { createClient } from "@/utils/supabase/server";
@@ -45,7 +44,6 @@ export default async function Home() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
 
       <main className="relative z-10 min-h-screen">
-        <Navigation />
 
         {/* Hero Section */}
         <AnimatedHero />
