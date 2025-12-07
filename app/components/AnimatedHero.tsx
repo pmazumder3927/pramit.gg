@@ -8,7 +8,7 @@ export default function AnimatedHero() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-      className="relative pt-20 pb-12 md:pt-32 md:pb-20"
+      className="relative pt-20 pb-6 md:pt-32 md:pb-10"
     >
       <div className="max-w-7xl mx-auto px-6 md:px-8">
         <div className="text-center">

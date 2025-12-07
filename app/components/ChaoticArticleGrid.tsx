@@ -40,19 +40,19 @@ function ChaoticSearch({
     >
       <motion.div
         className={`
-          relative w-full max-w-xs md:max-w-md transition-all duration-500 ease-out
-          ${isFocused ? "max-w-sm md:max-w-lg" : ""}
+          relative w-full max-w-xs md:max-w-sm transition-all duration-500 ease-out
+          ${isFocused ? "max-w-sm md:max-w-md" : ""}
         `}
       >
         {/* Main search container */}
         <motion.div
           className={`
-            relative flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2 md:py-2.5 rounded-full
+            relative flex items-center gap-2.5 md:gap-3 px-4 md:px-5 py-2.5 md:py-3 rounded-full
             transition-all duration-300
             ${
               isFocused
-                ? "bg-white/[0.15] shadow-lg shadow-black/10 ring-1 ring-white/20"
-                : "bg-white/[0.08] ring-1 ring-white/[0.08] hover:bg-white/[0.10] hover:ring-white/[0.12]"
+                ? "bg-white/[0.18] shadow-xl shadow-black/20 ring-1 ring-white/25"
+                : "bg-white/[0.12] ring-1 ring-white/[0.12] hover:bg-white/[0.15] hover:ring-white/[0.18]"
             }
           `}
           animate={{
@@ -62,8 +62,8 @@ function ChaoticSearch({
         >
           {/* Search icon */}
           <motion.svg
-            className={`w-4 h-4 flex-shrink-0 transition-colors duration-300 ${
-              isFocused ? "text-white/70" : "text-white/40"
+            className={`w-4 h-4 md:w-5 md:h-5 flex-shrink-0 transition-colors duration-300 ${
+              isFocused ? "text-white/80" : "text-white/50"
             }`}
             fill="none"
             stroke="currentColor"
@@ -89,7 +89,7 @@ function ChaoticSearch({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Search"
-            className="flex-1 bg-transparent text-white/90 text-sm placeholder-white/30 outline-none min-w-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="flex-1 bg-transparent text-white/90 text-sm md:text-base placeholder-white/40 outline-none min-w-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
 
           {/* Result count - minimal pill */}
@@ -958,7 +958,7 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
   }
 
   return (
-    <div ref={containerRef} className="relative py-8">
+    <div ref={containerRef} className="relative pt-2 md:pt-4 pb-8">
       {/* Search input */}
       <ChaoticSearch
         value={searchQuery}
