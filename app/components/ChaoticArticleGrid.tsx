@@ -89,7 +89,7 @@ function ChaoticSearch({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Search"
-            className="flex-1 bg-transparent text-white/90 text-sm placeholder-white/30 outline-none min-w-0"
+            className="flex-1 bg-transparent text-white/90 text-sm placeholder-white/30 outline-none min-w-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
 
           {/* Result count - minimal pill */}
@@ -144,7 +144,7 @@ function ChaoticSearch({
 
           {/* Subtle accent line on focus */}
           <motion.div
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px bg-gradient-to-r from-transparent via-accent-orange/50 to-transparent"
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"
             initial={{ width: 0, opacity: 0 }}
             animate={{
               width: isFocused ? "60%" : "0%",
