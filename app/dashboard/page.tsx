@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { motion } from "motion/react";
 import { supabase, Post } from "@/app/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +9,7 @@ import SpotifyConnection from "@/app/components/SpotifyConnection";
 
 const ACCENT_COLORS = ["#ff6b3d", "#9c5aff", "#1a1b22"];
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
@@ -475,5 +475,23 @@ export default function Dashboard() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-8 h-8 border-2 border-cyber-orange border-t-transparent rounded-full"
+          />
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
