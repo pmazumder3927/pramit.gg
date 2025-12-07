@@ -20,18 +20,18 @@ async function getCurrentUserId(accessToken: string): Promise<string | null> {
 
 async function fetchAllPlaylists(accessToken: string): Promise<any[]> {
   const playlists: any[] = [];
-  let url: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
+  let nextUrl: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
 
-  while (url) {
-    const response = await fetch(url, {
+  while (nextUrl) {
+    const res: Response = await fetch(nextUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    if (!response.ok) break;
+    if (!res.ok) break;
 
-    const data = await response.json();
+    const data = await res.json();
     playlists.push(...data.items);
-    url = data.next;
+    nextUrl = data.next;
   }
 
   return playlists;
