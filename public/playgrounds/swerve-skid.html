@@ -685,16 +685,26 @@
         }
 
         // Robot (always at center now)
+        const modules = this.getModuleStates();
+        const cos = Math.cos(this.robot.angle);
+        const sin = Math.sin(this.robot.angle);
+
+        // Draw chassis and wheels in rotated frame
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(this.robot.angle);
-
         this.drawChassis();
-
-        const modules = this.getModuleStates();
-        modules.forEach(m => this.drawModule(m));
-
+        modules.forEach(m => this.drawWheel(m));
         ctx.restore();
+
+        // Draw velocity vectors in GLOBAL frame (not rotated)
+        // but originating from the rotated wheel positions
+        modules.forEach(m => {
+          // Transform wheel position from robot-local to screen coords
+          const screenX = cx + m.rx * cos - m.ry * sin;
+          const screenY = cy + m.rx * sin + m.ry * cos;
+          this.drawModuleVectors(m, screenX, screenY);
+        });
 
         // Update skid badge
         if (this.scene.showSkid) {
@@ -767,26 +777,8 @@
         ctx.fill();
       }
 
-      drawModule(m) {
+      drawWheel(m) {
         const { ctx } = this;
-        const scale = 22;
-        const vectors = this.scene.vectors;
-
-        // Vectors
-        if (vectors.includes('trans') && Math.hypot(m.transVx, m.transVy) > 0.05) {
-          this.drawArrow(m.rx, m.ry, m.rx + m.transVx * scale, m.ry + m.transVy * scale, this.colors.trans, 2.5, 0.75);
-        }
-
-        if (vectors.includes('rot') && Math.hypot(m.rotVx, m.rotVy) > 0.05) {
-          this.drawArrow(m.rx, m.ry, m.rx + m.rotVx * scale, m.ry + m.rotVy * scale, this.colors.rot, 2.5, 0.75);
-        }
-
-        if (vectors.includes('meas') && Math.hypot(m.measVx, m.measVy) > 0.05) {
-          const c = m.isSlipping ? this.colors.skid : this.colors.meas;
-          this.drawArrow(m.rx, m.ry, m.rx + m.measVx * scale, m.ry + m.measVy * scale, c, 3, 1);
-        }
-
-        // Wheel
         const r = 10;
 
         // Glow for slipping wheel - only on desktop
@@ -804,11 +796,53 @@
         ctx.fill();
         ctx.stroke();
 
+        ctx.shadowBlur = 0;
+
         ctx.fillStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.5)';
         ctx.font = '500 8px Inter';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(m.id, m.rx, m.ry);
+      }
+
+      drawModuleVectors(m, screenX, screenY) {
+        const scale = 22;
+        const vectors = this.scene.vectors;
+        const cos = Math.cos(this.robot.angle);
+        const sin = Math.sin(this.robot.angle);
+
+        // Translation vectors are already in global frame
+        if (vectors.includes('trans') && Math.hypot(m.transVx, m.transVy) > 0.05) {
+          this.drawArrow(screenX, screenY, screenX + m.transVx * scale, screenY + m.transVy * scale, this.colors.trans, 2.5, 0.75);
+        }
+
+        // Rotation vectors need to be transformed from robot-local to global frame
+        if (vectors.includes('rot') && Math.hypot(m.rotVx, m.rotVy) > 0.05) {
+          const globalRotVx = m.rotVx * cos - m.rotVy * sin;
+          const globalRotVy = m.rotVx * sin + m.rotVy * cos;
+          this.drawArrow(screenX, screenY, screenX + globalRotVx * scale, screenY + globalRotVy * scale, this.colors.rot, 2.5, 0.75);
+        }
+
+        // Measured = trans (global) + rot (transformed to global)
+        if (vectors.includes('meas')) {
+          const globalRotVx = m.rotVx * cos - m.rotVy * sin;
+          const globalRotVy = m.rotVx * sin + m.rotVy * cos;
+          let globalMeasVx = m.transVx + globalRotVx;
+          let globalMeasVy = m.transVy + globalRotVy;
+
+          // Apply slip distortion for FR wheel
+          if (m.isSlipping) {
+            const slip = this.robot.slip;
+            const f = 1 - Math.abs(slip) / 100 * 0.8;
+            globalMeasVx *= f;
+            globalMeasVy *= f;
+          }
+
+          if (Math.hypot(globalMeasVx, globalMeasVy) > 0.05) {
+            const c = m.isSlipping ? this.colors.skid : this.colors.meas;
+            this.drawArrow(screenX, screenY, screenX + globalMeasVx * scale, screenY + globalMeasVy * scale, c, 3, 1);
+          }
+        }
       }
 
       drawArrow(x1, y1, x2, y2, color, width, alpha) {
