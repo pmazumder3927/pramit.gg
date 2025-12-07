@@ -527,13 +527,6 @@
         this.robot.y += actualVy * speed * dt;
         this.robot.angle += (omega + driftOmega) * dt;
 
-        // Wrap
-        const m = 120;
-        if (this.robot.x > this.width / 2 + m) this.robot.x = -this.width / 2 - m;
-        if (this.robot.x < -this.width / 2 - m) this.robot.x = this.width / 2 + m;
-        if (this.robot.y > this.height / 2 + m) this.robot.y = -this.height / 2 - m;
-        if (this.robot.y < -this.height / 2 - m) this.robot.y = this.height / 2 + m;
-
         this.trail.push({ x: this.robot.x, y: this.robot.y });
         if (this.trail.length > this.maxTrail) this.trail.shift();
       }
@@ -547,16 +540,20 @@
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
-        // Grid
-        this.drawGrid(cx, cy);
+        // Camera follows robot - offset everything by robot position
+        const camX = this.robot.x;
+        const camY = this.robot.y;
 
-        // Trail with gradient fade
+        // Grid (moves with camera)
+        this.drawGrid(cx - camX, cy - camY);
+
+        // Trail with gradient fade (in world space, offset by camera)
         if (this.trail.length > 1) {
           for (let i = 1; i < this.trail.length; i++) {
             const alpha = (i / this.trail.length) * 0.3;
             ctx.beginPath();
-            ctx.moveTo(cx + this.trail[i - 1].x, cy + this.trail[i - 1].y);
-            ctx.lineTo(cx + this.trail[i].x, cy + this.trail[i].y);
+            ctx.moveTo(cx + this.trail[i - 1].x - camX, cy + this.trail[i - 1].y - camY);
+            ctx.lineTo(cx + this.trail[i].x - camX, cy + this.trail[i].y - camY);
             ctx.strokeStyle = `rgba(255, 107, 61, ${alpha})`;
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
@@ -564,9 +561,9 @@
           }
         }
 
-        // Robot
+        // Robot (always at center now)
         ctx.save();
-        ctx.translate(cx + this.robot.x, cy + this.robot.y);
+        ctx.translate(cx, cy);
         ctx.rotate(this.robot.angle);
 
         this.drawChassis();
