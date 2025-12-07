@@ -117,24 +117,24 @@ export default function PostContent({ post }: PostContentProps) {
       )}
 
       {/* Content */}
-      <div className="prose prose-invert prose-lg max-w-none">
+      <div className="prose prose-invert prose-lg max-w-prose mx-auto">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex, rehypeHighlight, rehypeRaw]}
           components={{
             ...({} as any),
             h1: ({ children }) => (
-              <h1 className="text-3xl font-light mt-8 mb-4 text-white">
+              <h1 className="text-2xl md:text-3xl font-light mt-12 mb-6 text-white tracking-tight">
                 {children}
               </h1>
             ),
             h2: ({ children }) => (
-              <h2 className="text-2xl font-light mt-6 mb-3 text-white">
+              <h2 className="text-xl md:text-2xl font-light mt-10 mb-5 text-white tracking-tight">
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 className="text-xl font-light mt-4 mb-2 text-white">
+              <h3 className="text-lg md:text-xl font-light mt-8 mb-4 text-white">
                 {children}
               </h3>
             ),
@@ -157,7 +157,7 @@ export default function PostContent({ post }: PostContentProps) {
               }
 
               return (
-                <p className="text-gray-300 leading-relaxed mb-4">{children}</p>
+                <p className="text-gray-300 leading-[1.8] mb-6 tracking-[0.01em]">{children}</p>
               );
             },
             img: (props) => {
@@ -212,25 +212,25 @@ export default function PostContent({ post }: PostContentProps) {
                 <code className="font-mono">{props.children}</code>
               ),
             pre: ({ children }) => (
-              <pre className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 overflow-x-auto my-6 text-sm">
+              <pre className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 overflow-x-auto my-8 text-sm">
                 {children}
               </pre>
             ),
             blockquote: ({ children }) => (
-              <blockquote className="border-l-4 border-accent-orange pl-6 my-6 italic text-gray-400 bg-white/5 py-4 rounded-r-lg">
+              <blockquote className="border-l-4 border-accent-orange pl-6 my-8 italic text-gray-400 bg-white/5 py-4 rounded-r-lg">
                 {children}
               </blockquote>
             ),
             ul: ({ children }) => (
-              <ul className="space-y-3 my-6 text-gray-300">{children}</ul>
+              <ul className="space-y-4 my-8 text-gray-300">{children}</ul>
             ),
             ol: ({ children }) => (
-              <ol className="list-decimal list-inside space-y-3 my-6 text-gray-300 [&>li]:pl-2">
+              <ol className="list-decimal list-inside space-y-4 my-8 text-gray-300 [&>li]:pl-2">
                 {children}
               </ol>
             ),
             li: ({ children }) => (
-              <li className="text-gray-300 leading-relaxed pl-2 relative before:content-['•'] before:text-accent-orange before:absolute before:-left-4 before:top-0 before:text-lg before:font-bold ml-6">
+              <li className="text-gray-300 leading-[1.8] pl-2 relative before:content-['•'] before:text-accent-orange before:absolute before:-left-4 before:top-0 before:text-lg before:font-bold ml-6">
                 {children}
               </li>
             ),

@@ -393,4 +393,21 @@
   .prose table tr:hover {
     background: rgba(255, 255, 255, 0.05) !important;
   }
+
+  /* KaTeX math block spacing */
+  .katex-display {
+    margin: 1.5rem 0 !important;
+    padding: 0.5rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .katex {
+    font-size: 1.1em !important;
+  }
+
+  /* Inline math spacing */
+  .katex:not(.katex-display .katex) {
+    padding: 0 0.15em;
+  }
 }  
