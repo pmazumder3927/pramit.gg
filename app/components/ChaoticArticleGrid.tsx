@@ -346,10 +346,12 @@ function ChaoticCard({
   const springX = useSpring(x, { stiffness: 100, damping: 15 });
   const springY = useSpring(y, { stiffness: 100, damping: 15 });
 
+  // Mobile: 2 cols, Tablet: 4 cols, Desktop: 5-6 cols
+  // Only massive spans full width on mobile to avoid tower stacking
   const sizeClasses: Record<CardSize, string> = {
     massive:
       "col-span-2 row-span-2 md:col-span-3 md:row-span-3 lg:col-span-2 xl:col-span-3",
-    hero: "col-span-2 row-span-2 md:col-span-2 lg:col-span-2",
+    hero: "col-span-1 row-span-2 md:col-span-2 md:row-span-2 lg:col-span-2",
     large: "col-span-1 row-span-2 md:col-span-2 md:row-span-2",
     medium: "col-span-1 row-span-1 md:col-span-1 md:row-span-2",
     small: "col-span-1 row-span-1",
@@ -419,23 +421,23 @@ function ChaoticCard({
 
   const primaryImage = contentAnalysis.images[0];
 
-  // Height classes - smaller on mobile
+  // Height classes - varied on mobile for visual interest
   const getHeightClass = () => {
     switch (style.size) {
       case "massive":
-        return "min-h-[180px] md:min-h-[450px]";
+        return "min-h-[220px] md:min-h-[450px]";
       case "hero":
-        return "min-h-[160px] md:min-h-[380px]";
+        return "min-h-[140px] md:min-h-[380px]";
       case "large":
-        return "min-h-[140px] md:min-h-[320px]";
+        return "min-h-[180px] md:min-h-[320px]";
       case "medium":
-        return "min-h-[110px] md:min-h-[260px]";
+        return "min-h-[120px] md:min-h-[260px]";
       case "small":
-        return "min-h-[90px] md:min-h-[180px]";
+        return "min-h-[100px] md:min-h-[180px]";
       case "tiny":
-        return "min-h-[75px] md:min-h-[140px]";
+        return "min-h-[85px] md:min-h-[140px]";
       case "micro":
-        return "min-h-[65px] md:min-h-[100px]";
+        return "min-h-[70px] md:min-h-[100px]";
     }
   };
 
@@ -457,11 +459,11 @@ function ChaoticCard({
       animate={{
         opacity: 1,
         scale: 1,
-        rotate: style.rotation * 0.4,
-        x: style.offsetX * 0.15,
-        y: style.offsetY * 0.2,
-        skewX: style.skewX * 0.3,
-        skewY: style.skewY * 0.3,
+        rotate: style.rotation * 0.5,
+        x: style.offsetX * 0.2,
+        y: style.offsetY * 0.25,
+        skewX: style.skewX * 0.4,
+        skewY: style.skewY * 0.4,
       }}
       exit={{
         opacity: 0,
@@ -675,18 +677,18 @@ function ChaoticCard({
               {post.title}
             </h3>
 
-            {/* Preview text for larger cards - hidden on mobile */}
+            {/* Preview text for larger cards */}
             {(style.size === "massive" ||
               style.size === "hero" ||
               style.size === "large" ||
               style.size === "medium") && (
               <p
                 className={`
-                  ${secondaryColor} leading-relaxed flex-grow hidden md:block
-                  ${style.size === "massive" ? "text-lg line-clamp-4" : ""}
-                  ${style.size === "hero" ? "text-base line-clamp-3" : ""}
-                  ${style.size === "large" ? "text-sm line-clamp-3" : ""}
-                  ${style.size === "medium" ? "text-sm line-clamp-2" : ""}
+                  ${secondaryColor} leading-relaxed flex-grow
+                  ${style.size === "massive" ? "text-xs md:text-lg line-clamp-2 md:line-clamp-4" : ""}
+                  ${style.size === "hero" ? "text-xs md:text-base line-clamp-2 md:line-clamp-3" : ""}
+                  ${style.size === "large" ? "text-xs md:text-sm line-clamp-2 md:line-clamp-3" : ""}
+                  ${style.size === "medium" ? "text-[11px] md:text-sm line-clamp-1 md:line-clamp-2" : ""}
                 `}
               >
                 {contentAnalysis.previewText}
@@ -1011,7 +1013,7 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="relative grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 auto-rows-[minmax(60px,auto)] md:auto-rows-[minmax(80px,auto)]"
+        className="relative grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 auto-rows-[minmax(80px,auto)] md:auto-rows-[minmax(80px,auto)]"
         style={{ perspective: "1000px" }}
       >
         <AnimatePresence mode="popLayout">

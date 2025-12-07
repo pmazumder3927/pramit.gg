@@ -109,6 +109,7 @@ export function AlbumArt({ track, accentColor, size = "md" }: AlbumArtProps) {
             fill
             className="object-cover"
             sizes="44px"
+            priority
           />
           {/* Vinyl spin effect when playing */}
           {track.isPlaying && (
