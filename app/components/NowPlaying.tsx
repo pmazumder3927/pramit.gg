@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
+import { useNowPlayingContext } from "./NowPlayingContext";
 import {
-  useNowPlaying,
   getVariantStyles,
   AlbumArt,
   TrackInfo,
   NeonBorders,
   AccentStripe,
-  AmbientGlow,
   ScatteredDots,
   ProgressBar,
 } from "./NowPlayingWidget";
@@ -26,28 +25,10 @@ function formatTime(ms: number): string {
 export default function NowPlaying() {
   const [isExpanded, setIsExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0.5);
-  const mouseY = useMotionValue(0.5);
 
-  const { track, albumColor, variant } = useNowPlaying();
+  // Use shared context instead of separate SWR call
+  const { track, albumColor, variant } = useNowPlayingContext();
   const styles = getVariantStyles(variant, albumColor);
-
-  // Parallax effect
-  const springConfig = { stiffness: 150, damping: 20 };
-  const x = useTransform(mouseX, [0, 1], [-8, 8]);
-  const y = useTransform(mouseY, [0, 1], [-8, 8]);
-  const springX = useSpring(x, springConfig);
-  const springY = useSpring(y, springConfig);
-
-  // Mouse tracking
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      mouseX.set(e.clientX / window.innerWidth);
-      mouseY.set(e.clientY / window.innerHeight);
-    };
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [mouseX, mouseY]);
 
   // Close on outside click
   useEffect(() => {
@@ -70,10 +51,9 @@ export default function NowPlaying() {
     <motion.div
       ref={containerRef}
       className="hidden md:block fixed bottom-5 left-5 z-50"
-      style={{ x: springX, y: springY }}
-      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1], delay: 0.5 }}
+      transition={{ duration: 0.3, ease: "easeOut", delay: 0.2 }}
     >
       {/* Ambient glow behind widget */}
       {track?.isPlaying && (

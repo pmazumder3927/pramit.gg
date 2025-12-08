@@ -4,6 +4,7 @@ import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
 import Navigation from "./components/Navigation";
+import { NowPlayingProvider } from "./components/NowPlayingContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -64,9 +65,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.className}>
       <body className="grain min-h-screen">
-        <div className="relative z-10">{children}</div>
-        <Navigation />
-        <NowPlaying />
+        <NowPlayingProvider>
+          <div className="relative z-10">{children}</div>
+          <Navigation />
+          <NowPlaying />
+        </NowPlayingProvider>
       </body>
     </html>
   );

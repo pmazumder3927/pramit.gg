@@ -3,15 +3,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import {
-  useNowPlaying,
-  AlbumArt,
-  TrackInfo,
-} from "./NowPlayingWidget";
+import { useNowPlayingContext } from "./NowPlayingContext";
+import { AlbumArt, TrackInfo } from "./NowPlayingWidget";
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
-  const { track, albumColor } = useNowPlaying();
+  // Use shared context instead of separate SWR call
+  const { track, albumColor } = useNowPlayingContext();
 
   // Lock body scroll when menu is open
   useEffect(() => {

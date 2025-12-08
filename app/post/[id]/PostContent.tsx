@@ -1,20 +1,32 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import { Post } from "@/app/lib/supabase";
-import ReactPlayer from "react-player";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import ViewCountTracker from "./ViewCountTracker";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
+import rehypeRaw from "rehype-raw";
+
+// Lazy load heavy CSS - only loads when component mounts
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github-dark.css";
-import rehypeRaw from "rehype-raw";
+
+// Lazy load ReactPlayer - only loads when actually needed
+const ReactPlayer = dynamic(() => import("react-player"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-40 bg-charcoal-black/50 rounded-2xl animate-pulse flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-white/20 border-t-accent-orange rounded-full animate-spin" />
+    </div>
+  ),
+});
 
 interface PostContentProps {
   post: Post;

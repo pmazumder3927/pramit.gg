@@ -4,6 +4,11 @@ import { getAccessToken } from "@/app/lib/spotify";
 const SPOTIFY_TOP_TRACKS_URL =
   "https://api.spotify.com/v1/me/top/tracks?limit=10&time_range=short_term";
 
+// Top tracks change slowly, cache for 5 minutes
+const CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+};
+
 export async function GET() {
   try {
     const access_token = await getAccessToken();
@@ -12,6 +17,7 @@ export async function GET() {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
+      next: { revalidate: 300 },
     });
 
     if (response.ok) {
@@ -29,10 +35,10 @@ export async function GET() {
         explicit: track.explicit,
       }));
 
-      return NextResponse.json({ tracks });
+      return NextResponse.json({ tracks }, { headers: CACHE_HEADERS });
     }
 
-    return NextResponse.json({ tracks: [] });
+    return NextResponse.json({ tracks: [] }, { headers: CACHE_HEADERS });
   } catch (error) {
     console.error("Spotify Top Tracks API error:", error);
     return NextResponse.json({ tracks: [] }, { status: 500 });
