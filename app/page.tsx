@@ -1,13 +1,13 @@
 import { Post } from "@/app/lib/supabase";
 import AnimatedHomePage from "@/app/components/AnimatedHomePage";
 import AnimatedHero from "@/app/components/AnimatedHero";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/utils/supabase/server";
 import Link from "next/link";
 
 async function fetchPosts() {
   try {
-    const supabase = await createClient();
-    console.log("Fetching posts server-side...");
+    // Use public client (no cookies) to enable static generation/ISR
+    const supabase = createPublicClient();
 
     const { data, error } = await supabase
       .from("posts")
@@ -21,7 +21,6 @@ async function fetchPosts() {
       throw error;
     }
 
-    console.log("Posts fetched successfully server-side:", data?.length || 0);
     return data || [];
   } catch (error) {
     console.error("Error fetching posts server-side:", error);

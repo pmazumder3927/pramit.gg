@@ -1,6 +1,12 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+/**
+ * Creates a Supabase client with cookie-based auth.
+ * Use this for authenticated operations (dashboard, user-specific data).
+ * WARNING: This uses cookies() which makes the route dynamic.
+ */
 export async function createClient() {
   const cookieStore = await cookies();
 
@@ -30,6 +36,24 @@ export async function createClient() {
             // user sessions.
           }
         },
+      },
+    }
+  );
+}
+
+/**
+ * Creates a Supabase client WITHOUT cookies for public data fetching.
+ * Use this for fetching public data (posts, etc.) to enable static generation/ISR.
+ * This client respects RLS but doesn't have user context.
+ */
+export function createPublicClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
     }
   );

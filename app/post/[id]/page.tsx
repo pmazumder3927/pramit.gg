@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/utils/supabase/server";
 import { createMetadata } from "@/app/lib/metadata";
 import { Metadata } from "next";
 
@@ -14,8 +14,8 @@ export const revalidate = 300;
 
 async function fetchPost(identifier: string): Promise<Post | null> {
   try {
-    const supabase = await createClient();
-    console.log("Fetching post server-side for:", identifier);
+    // Use public client (no cookies) to enable static generation/ISR
+    const supabase = createPublicClient();
 
     const { data, error } = await supabase
       .from("posts")
@@ -30,7 +30,6 @@ async function fetchPost(identifier: string): Promise<Post | null> {
     }
 
     if (data) {
-      console.log("Post fetched successfully server-side:", data.title);
       return data;
     }
 
