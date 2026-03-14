@@ -1068,12 +1068,32 @@ export function PlaylistSequencer({
   const [notice, setNotice] = useState<string | null>(null);
   const [showCoach, setShowCoach] = useState(false);
   const [editingBlockName, setEditingBlockName] = useState(false);
+  const preferredBlockIndexRef = useRef(0);
+  const preferredBoundaryIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!data || isDirty) return;
     const nextDraft = deepCloneDraft(data);
     setDraft(nextDraft);
-    setSelectedBlockId(nextDraft.blocks[0]?.id || null);
+    setSelectedBlockId((current) =>
+      current && nextDraft.blocks.some((block) => block.id === current)
+        ? current
+        : nextDraft.blocks[
+            Math.min(preferredBlockIndexRef.current, Math.max(0, nextDraft.blocks.length - 1))
+          ]?.id || null
+    );
+    setActiveBoundaryId((current) =>
+      current && data.transitions.some((transition) => transition.id === current)
+        ? current
+        : preferredBoundaryIndexRef.current != null
+          ? data.transitions[
+              Math.min(
+                preferredBoundaryIndexRef.current,
+                Math.max(0, data.transitions.length - 1)
+              )
+            ]?.id || null
+          : null
+    );
   }, [data, isDirty]);
 
   const accentColor = useAlbumColor(data?.playlist.imageUrl || null);
@@ -1089,6 +1109,20 @@ export function PlaylistSequencer({
   const activeChapter = selectedBlock
     ? view?.chapters.find((chapter) => chapter.blockIds.includes(selectedBlock.id)) || null
     : null;
+
+  useEffect(() => {
+    preferredBlockIndexRef.current = Math.max(0, selectedBlockIndex);
+  }, [selectedBlockIndex]);
+
+  useEffect(() => {
+    preferredBoundaryIndexRef.current =
+      activeBoundaryId && view
+        ? Math.max(
+            0,
+            view.transitions.findIndex((transition) => transition.id === activeBoundaryId)
+          )
+        : null;
+  }, [activeBoundaryId, view]);
 
   useEffect(() => {
     if (selectedBlock || !view?.blocks.length) return;
@@ -1134,8 +1168,31 @@ export function PlaylistSequencer({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
-      setIsDirty(false);
       await mutate(json, false);
+      setDraft(deepCloneDraft(json as SequencerSnapshot));
+      setSelectedBlockId((current) =>
+        current && (json as SequencerSnapshot).blocks.some((block) => block.id === current)
+          ? current
+          : (json as SequencerSnapshot).blocks[
+              Math.min(
+                preferredBlockIndexRef.current,
+                Math.max(0, (json as SequencerSnapshot).blocks.length - 1)
+              )
+            ]?.id || null
+      );
+      setActiveBoundaryId((current) =>
+        current && (json as SequencerSnapshot).transitions.some((transition) => transition.id === current)
+          ? current
+          : preferredBoundaryIndexRef.current != null
+            ? (json as SequencerSnapshot).transitions[
+                Math.min(
+                  preferredBoundaryIndexRef.current,
+                  Math.max(0, (json as SequencerSnapshot).transitions.length - 1)
+                )
+              ]?.id || null
+            : null
+      );
+      setIsDirty(false);
       if (showSavedNotice) setNotice("Saved.");
       return json as SequencerSnapshot;
     } catch (e) {
@@ -1156,8 +1213,24 @@ export function PlaylistSequencer({
     }
     try {
       const next = await fetcher(`/api/spotify/sequencer/${playlistId}?regenerate=1`);
-      setIsDirty(false);
       await mutate(next, false);
+      setDraft(deepCloneDraft(next));
+      setSelectedBlockId(
+        next.blocks[
+          Math.min(preferredBlockIndexRef.current, Math.max(0, next.blocks.length - 1))
+        ]?.id || null
+      );
+      setActiveBoundaryId(
+        preferredBoundaryIndexRef.current != null
+          ? next.transitions[
+              Math.min(
+                preferredBoundaryIndexRef.current,
+                Math.max(0, next.transitions.length - 1)
+              )
+            ]?.id || null
+          : null
+      );
+      setIsDirty(false);
       setNotice("Rebuilt from current goal.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Rebuild failed.");
@@ -1167,17 +1240,42 @@ export function PlaylistSequencer({
   };
 
   const handleApply = async () => {
-    if (!draft) return;
-    if (isDirty) {
-      const saved = await persistDraft(false);
-      if (!saved) return;
-    }
+    if (!draft || !view) return;
     setIsApplying(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/spotify/sequencer/${playlistId}/apply`, { method: "POST" });
+      const res = await fetch(`/api/spotify/sequencer/${playlistId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serializeDraft(view, draft)),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Apply failed");
+      if (json.snapshot) {
+        const nextSnapshot = json.snapshot as SequencerSnapshot;
+        await mutate(nextSnapshot, false);
+        setDraft(deepCloneDraft(nextSnapshot));
+        setSelectedBlockId((current) =>
+          current && nextSnapshot.blocks.some((block) => block.id === current)
+            ? current
+            : nextSnapshot.blocks[
+                Math.min(preferredBlockIndexRef.current, Math.max(0, nextSnapshot.blocks.length - 1))
+              ]?.id || null
+        );
+        setActiveBoundaryId((current) =>
+          current && nextSnapshot.transitions.some((transition) => transition.id === current)
+            ? current
+            : preferredBoundaryIndexRef.current != null
+              ? nextSnapshot.transitions[
+                  Math.min(
+                    preferredBoundaryIndexRef.current,
+                    Math.max(0, nextSnapshot.transitions.length - 1)
+                  )
+                ]?.id || null
+              : null
+        );
+      }
+      setIsDirty(false);
       setNotice("Applied to Spotify.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Apply failed.");

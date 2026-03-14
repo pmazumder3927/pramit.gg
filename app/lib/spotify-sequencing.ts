@@ -77,6 +77,13 @@ type SpotifyPlaylistTrackItem = {
   track: SpotifyTrackPayload | null;
 };
 
+type PlaylistOccurrenceItem = Omit<SpotifyPlaylistTrackItem, "track"> & {
+  track: SpotifyTrackPayload;
+  position: number;
+  occurrenceId: string;
+  sourceTrackId: string;
+};
+
 type SpotifyArtistPayload = {
   id: string;
   name: string;
@@ -288,12 +295,57 @@ function unique<T>(values: T[]) {
   return Array.from(new Set(values));
 }
 
+function buildPlaylistOccurrences(
+  playlistTracks: Array<SpotifyPlaylistTrackItem & { position: number }>
+): PlaylistOccurrenceItem[] {
+  const duplicateCounts = new Map<string, number>();
+  for (const item of playlistTracks) {
+    const trackId = item.track?.id;
+    if (!trackId) continue;
+    duplicateCounts.set(trackId, (duplicateCounts.get(trackId) || 0) + 1);
+  }
+
+  const occurrences = playlistTracks
+    .filter((item): item is SpotifyPlaylistTrackItem & { position: number; track: SpotifyTrackPayload } => Boolean(item.track?.id))
+    .map((item) => {
+      const sourceTrackId = item.track.id;
+      const occurrenceId =
+        (duplicateCounts.get(sourceTrackId) || 0) <= 1
+          ? sourceTrackId
+          : item.added_at
+            ? `${sourceTrackId}::${item.added_at}`
+            : `${sourceTrackId}::missing`;
+
+      return {
+        ...item,
+        occurrenceId,
+        sourceTrackId,
+      } satisfies PlaylistOccurrenceItem;
+    });
+
+  if (new Set(occurrences.map((item) => item.occurrenceId)).size !== occurrences.length) {
+    throw new Error(
+      "This playlist has duplicate copies of the same track without distinct added times, so sequencing cannot preserve them yet."
+    );
+  }
+
+  return occurrences;
+}
+
 function chunk<T>(values: T[], size: number) {
   const items: T[][] = [];
   for (let index = 0; index < values.length; index += size) {
     items.push(values.slice(index, index + size));
   }
   return items;
+}
+
+function throwSupabaseError(
+  context: string,
+  error: { message?: string | null } | null | undefined
+) {
+  if (!error) return;
+  throw new Error(`${context}: ${error.message || "Supabase request failed"}`);
 }
 
 function average(values: number[]) {
@@ -1289,7 +1341,7 @@ async function fetchReviewTracks(trackIds: string[]) {
 
 async function loadStoredSequence(playlistId: string) {
   const supabase = createAdminClient();
-  const [{ data: sequenceRow }, { data: blockRows }, { data: trackRows }] =
+  const [sequenceResult, blocksResult, tracksResult] =
     await Promise.all([
       supabase
         .from("spotify_playlist_sequences")
@@ -1308,9 +1360,13 @@ async function loadStoredSequence(playlistId: string) {
         .order("position"),
     ]);
 
+  throwSupabaseError("load stored sequence", sequenceResult.error);
+  throwSupabaseError("load stored sequence blocks", blocksResult.error);
+  throwSupabaseError("load stored sequence tracks", tracksResult.error);
+
   return {
-    sequenceRow,
-    blockRows: (blockRows || []).map((row: any) => ({
+    sequenceRow: sequenceResult.data,
+    blockRows: ((blocksResult.data as any[]) || []).map((row: any) => ({
       id: row.id as string,
       name: row.name as string,
       purpose: (row.purpose as string) || "",
@@ -1319,7 +1375,7 @@ async function loadStoredSequence(playlistId: string) {
       notes: (row.notes as string | null) || null,
       locked: Boolean(row.locked),
     })),
-    trackRows: (trackRows || []).map((row: any) => ({
+    trackRows: ((tracksResult.data as any[]) || []).map((row: any) => ({
       trackId: row.track_id as string,
       blockId: row.block_id as string,
       position: Number(row.position || 0),
@@ -1351,13 +1407,14 @@ async function persistSequence(
     .select("version")
     .eq("playlist_id", playlistId)
     .maybeSingle();
+  throwSupabaseError("load sequence version", existing.error);
 
   const nextVersion =
     sequence.incrementVersion === false
       ? Number(existing.data?.version || 1)
       : Number(existing.data?.version || 0) + 1;
 
-  await supabase.from("spotify_playlist_sequences").upsert(
+  const sequenceUpsert = await supabase.from("spotify_playlist_sequences").upsert(
     {
       playlist_id: playlistId,
       goal_type: sequence.goalType,
@@ -1372,27 +1429,30 @@ async function persistSequence(
     },
     { onConflict: "playlist_id" }
   );
+  throwSupabaseError("persist sequence", sequenceUpsert.error);
 
-  const { data: existingBlocks } = await supabase
+  const existingBlocksResult = await supabase
     .from("spotify_playlist_sequence_blocks")
     .select("id")
     .eq("playlist_id", playlistId);
+  throwSupabaseError("load existing blocks", existingBlocksResult.error);
   const existingBlockIds = new Set(
-    (existingBlocks || []).map((row) => row.id as string)
+    ((existingBlocksResult.data as any[]) || []).map((row) => row.id as string)
   );
   const nextBlockIds = new Set(sequence.blocks.map((block) => block.id));
   const staleBlockIds = Array.from(existingBlockIds).filter((id) => !nextBlockIds.has(id));
 
   if (staleBlockIds.length > 0) {
-    await supabase
+    const deleteBlocksResult = await supabase
       .from("spotify_playlist_sequence_blocks")
       .delete()
       .eq("playlist_id", playlistId)
       .in("id", staleBlockIds);
+    throwSupabaseError("delete stale blocks", deleteBlocksResult.error);
   }
 
   if (sequence.blocks.length > 0) {
-    await supabase.from("spotify_playlist_sequence_blocks").upsert(
+    const upsertBlocksResult = await supabase.from("spotify_playlist_sequence_blocks").upsert(
       sequence.blocks.map((block) => ({
         id: block.id,
         playlist_id: playlistId,
@@ -1406,24 +1466,27 @@ async function persistSequence(
       })),
       { onConflict: "id" }
     );
+    throwSupabaseError("persist sequence blocks", upsertBlocksResult.error);
   }
 
-  const { data: existingTracks } = await supabase
+  const existingTracksResult = await supabase
     .from("spotify_playlist_sequence_tracks")
     .select("track_id")
     .eq("playlist_id", playlistId);
+  throwSupabaseError("load existing tracks", existingTracksResult.error);
   const existingTrackIds = new Set(
-    (existingTracks || []).map((row) => row.track_id as string)
+    ((existingTracksResult.data as any[]) || []).map((row) => row.track_id as string)
   );
   const nextTrackIds = new Set(sequence.tracks.map((track) => track.trackId));
   const staleTrackIds = Array.from(existingTrackIds).filter((id) => !nextTrackIds.has(id));
 
   if (staleTrackIds.length > 0) {
-    await supabase
+    const deleteTracksResult = await supabase
       .from("spotify_playlist_sequence_tracks")
       .delete()
       .eq("playlist_id", playlistId)
       .in("track_id", staleTrackIds);
+    throwSupabaseError("delete stale tracks", deleteTracksResult.error);
   }
 
   if (sequence.tracks.length > 0) {
@@ -1440,9 +1503,10 @@ async function persistSequence(
     }));
 
     for (const trackChunk of chunk(trackUpsertRows, 100)) {
-      await supabase
+      const upsertTracksResult = await supabase
         .from("spotify_playlist_sequence_tracks")
         .upsert(trackChunk, { onConflict: "playlist_id,track_id" });
+      throwSupabaseError("persist sequence tracks", upsertTracksResult.error);
     }
   }
 }
@@ -1543,9 +1607,9 @@ function composeSnapshot(params: {
 }
 
 async function buildTrackMapForPlaylist(
-  playlistTracks: Array<SpotifyPlaylistTrackItem & { position: number }>
+  playlistTracks: PlaylistOccurrenceItem[]
 ) {
-  const trackIds = playlistTracks.map((item) => item.track!.id);
+  const trackIds = playlistTracks.map((item) => item.sourceTrackId);
   const reviewRows = await fetchReviewTracks(trackIds);
   const artistIds = unique(
     playlistTracks.flatMap((item) =>
@@ -1557,8 +1621,8 @@ async function buildTrackMapForPlaylist(
 
   const tracks = playlistTracks
     .map((item) => {
-      const spotifyTrack = item.track!;
-      const row = reviewMap.get(spotifyTrack.id);
+      const spotifyTrack = item.track;
+      const row = reviewMap.get(item.sourceTrackId);
       if (!row) return null;
       const primaryArtistIds = spotifyTrack.artists
         .map((artist) => artist.id)
@@ -1569,7 +1633,7 @@ async function buildTrackMapForPlaylist(
       const featureProfile = deriveTrackFeatures(row, genres);
 
       return {
-        trackId: row.track_id,
+        trackId: item.occurrenceId,
         spotifyUri: row.spotify_uri,
         title: row.title,
         artistDisplay: row.artist_display,
@@ -1603,11 +1667,11 @@ function generateInitialState(params: {
   goalType: SequencerGoal;
   secondaryGoal: SequencerModifier | null;
   trackMap: Map<string, SequencerTrack>;
-  playlistTracks: Array<SpotifyPlaylistTrackItem & { position: number }>;
+  playlistTracks: PlaylistOccurrenceItem[];
 }) {
   const tracks = params.playlistTracks
     .sort((a, b) => a.position - b.position)
-    .map((item) => params.trackMap.get(item.track!.id))
+    .map((item) => params.trackMap.get(item.occurrenceId))
     .filter((t): t is SequencerTrack => t != null);
 
   const dominantLanguage = dominantLanguageForTracks(tracks);
@@ -1657,11 +1721,12 @@ export async function getPlaylistSequence(
 ) {
   const playlist = await fetchPlaylistMeta(playlistId);
   const playlistTracks = await fetchPlaylistTracks(playlistId);
+  const playlistOccurrences = buildPlaylistOccurrences(playlistTracks);
   await upsertPlaylistIntoReviewTables(playlist, playlistTracks);
-  const trackMap = await buildTrackMapForPlaylist(playlistTracks);
+  const trackMap = await buildTrackMapForPlaylist(playlistOccurrences);
   const stored = await loadStoredSequence(playlistId);
 
-  const currentTrackIds = playlistTracks.map((item) => item.track!.id);
+  const currentTrackIds = playlistOccurrences.map((item) => item.occurrenceId);
   const storedTrackIds = stored.trackRows.map((row) => row.trackId);
   const hasSameTracks =
     currentTrackIds.length === storedTrackIds.length &&
@@ -1676,7 +1741,7 @@ export async function getPlaylistSequence(
       goalType,
       secondaryGoal,
       trackMap,
-      playlistTracks,
+      playlistTracks: playlistOccurrences,
     });
 
     await persistSequence(playlistId, {
@@ -1723,8 +1788,9 @@ export async function savePlaylistSequence(
 ) {
   const playlist = await fetchPlaylistMeta(playlistId);
   const playlistTracks = await fetchPlaylistTracks(playlistId);
+  const playlistOccurrences = buildPlaylistOccurrences(playlistTracks);
   await upsertPlaylistIntoReviewTables(playlist, playlistTracks);
-  const trackMap = await buildTrackMapForPlaylist(playlistTracks);
+  const trackMap = await buildTrackMapForPlaylist(playlistOccurrences);
 
   const blocks: SequencePersistenceBlock[] = [...input.blocks]
     .sort((a, b) => a.position - b.position)
@@ -1739,7 +1805,7 @@ export async function savePlaylistSequence(
     }));
 
   const validBlockIds = new Set(blocks.map((block) => block.id));
-  const currentTrackIds = new Set(playlistTracks.map((item) => item.track!.id));
+  const currentTrackIds = new Set(playlistOccurrences.map((item) => item.occurrenceId));
 
   const tracks: SequencePersistenceTrack[] = [...input.tracks]
     .filter((track) => currentTrackIds.has(track.trackId) && validBlockIds.has(track.blockId))
@@ -1804,7 +1870,7 @@ export async function savePlaylistSequence(
     ),
     metrics: snapshot.metrics,
     sourceSnapshot: {
-      track_ids: playlistTracks.map((item) => item.track!.id),
+      track_ids: playlistOccurrences.map((item) => item.occurrenceId),
       spotify_snapshot_id: playlist.snapshotId,
     },
     incrementVersion: true,
@@ -1813,14 +1879,15 @@ export async function savePlaylistSequence(
   return snapshot;
 }
 
-export async function applyPlaylistSequenceToSpotify(playlistId: string) {
-  const snapshot = await getPlaylistSequence(playlistId);
+async function applyTrackOrderToSpotify(
+  playlistId: string,
+  desiredTrackIds: string[]
+) {
   const currentPlaylist = await fetchPlaylistMeta(playlistId);
   const currentPlaylistTracks = await fetchPlaylistTracks(playlistId);
-  const desiredTrackIds = snapshot.blocks.flatMap((block) =>
-    block.tracks.map((track) => track.trackId)
+  const workingTrackIds = buildPlaylistOccurrences(currentPlaylistTracks).map(
+    (item) => item.occurrenceId
   );
-  const workingTrackIds = currentPlaylistTracks.map((item) => item.track!.id);
 
   if (
     desiredTrackIds.length !== workingTrackIds.length ||
@@ -1867,5 +1934,29 @@ export async function applyPlaylistSequenceToSpotify(playlistId: string) {
   return {
     snapshotId: snapshotId || null,
     appliedAt: nowIso(),
+  };
+}
+
+export async function applyPlaylistSequenceToSpotify(playlistId: string) {
+  const snapshot = await getPlaylistSequence(playlistId);
+  return applyTrackOrderToSpotify(
+    playlistId,
+    snapshot.blocks.flatMap((block) => block.tracks.map((track) => track.trackId))
+  );
+}
+
+export async function applyDraftSequenceToSpotify(
+  playlistId: string,
+  input: SequencerSaveInput
+) {
+  const snapshot = await savePlaylistSequence(playlistId, input);
+  const result = await applyTrackOrderToSpotify(
+    playlistId,
+    snapshot.blocks.flatMap((block) => block.tracks.map((track) => track.trackId))
+  );
+
+  return {
+    ...result,
+    snapshot,
   };
 }
