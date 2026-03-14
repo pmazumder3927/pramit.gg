@@ -475,7 +475,7 @@ async function syncLibrary(forceSync = false) {
         .upsert(membershipRows, { onConflict: "track_id,bucket_id" });
     }
 
-    for (const [trackId, playedAt] of recentPlayMap.entries()) {
+    for (const [trackId, playedAt] of Array.from(recentPlayMap.entries())) {
       await supabase
         .from("spotify_review_track_buckets")
         .update({
