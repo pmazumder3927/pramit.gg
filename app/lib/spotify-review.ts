@@ -541,7 +541,7 @@ function rankTrack(
   const memberships = (row.spotify_review_track_buckets || []).filter(
     (membership: any) => membership.active
   );
-  const activeBuckets = memberships
+  let activeBuckets = memberships
     .map((membership: any) => membership.spotify_review_buckets)
     .filter(Boolean)
     .map((bucket: any) => ({
@@ -554,6 +554,15 @@ function rankTrack(
       followerCount: bucket.follower_count || 0,
       isActive: bucket.is_active,
     })) as ReviewBucket[];
+
+  // Fall back to source_snapshot when join table has no active memberships
+  if (
+    activeBuckets.length === 0 &&
+    row.source_snapshot?.bucket_ids?.length > 0
+  ) {
+    const snapshotIds = new Set(row.source_snapshot.bucket_ids as string[]);
+    activeBuckets = buckets.filter((b) => snapshotIds.has(b.bucketId));
+  }
 
   const bucketCount = activeBuckets.length;
   const daysSinceListen = differenceInDays(row.last_played_at);
@@ -691,6 +700,7 @@ export async function getReviewQueue(options?: {
           added_to_liked_at,
           removed_from_liked_at,
           last_played_at,
+          source_snapshot,
           spotify_review_state (
             review_count,
             confirm_streak,

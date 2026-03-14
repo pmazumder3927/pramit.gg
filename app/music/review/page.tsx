@@ -8,9 +8,5 @@ export const metadata = createMetadata({
 });
 
 export default function MusicReviewPage() {
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black px-4 pb-24 pt-20 text-white md:pt-28">
-      <ReviewDeck />
-    </main>
-  );
+  return <ReviewDeck />;
 }
