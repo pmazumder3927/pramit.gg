@@ -703,6 +703,25 @@ function chapterSummary(tracks: SequencerTrack[], quality: number) {
   return `${energyLabel} · ${noveltyLabel} · ${polishLabel} · ${landing}`;
 }
 
+function buildChapterTargetDurations(totalDuration: number, count: number) {
+  const ratioPatterns: Record<number, number[]> = {
+    2: [0.44, 0.56],
+    3: [0.27, 0.4, 0.33],
+    4: [0.2, 0.26, 0.32, 0.22],
+    5: [0.16, 0.2, 0.26, 0.22, 0.16],
+    6: [0.13, 0.16, 0.19, 0.21, 0.17, 0.14],
+    7: [0.11, 0.13, 0.16, 0.18, 0.15, 0.14, 0.13],
+    8: [0.09, 0.11, 0.13, 0.15, 0.16, 0.13, 0.12, 0.11],
+  };
+
+  const ratios =
+    ratioPatterns[count] ||
+    Array.from({ length: count }, (_, index) => 1 + Math.sin(index * 1.4) * 0.14);
+  const ratioSum = ratios.reduce((sum, value) => sum + value, 0);
+
+  return ratios.map((ratio) => (ratio / ratioSum) * totalDuration);
+}
+
 export function buildMiniPlaylistChapters(
   blocks: SequencerBlock[],
   options: OptimizerOptions
@@ -720,7 +739,7 @@ export function buildMiniPlaylistChapters(
     2,
     Math.min(8, Math.max(2, blocks.length))
   );
-  const targetDuration = totalDuration / targetChapterCount;
+  const targetDurations = buildChapterTargetDurations(totalDuration, targetChapterCount);
   const prefixDurations = [0];
   for (const duration of blockDurations) {
     prefixDurations.push(prefixDurations[prefixDurations.length - 1] + duration);
@@ -739,16 +758,21 @@ export function buildMiniPlaylistChapters(
       for (let start = used - 1; start < end; start += 1) {
         if (dp[used - 1][start] === -Infinity) continue;
         const duration = prefixDurations[end] - prefixDurations[start];
+        const targetDuration = targetDurations[used - 1] || totalDuration / targetChapterCount;
         const durationFit =
           100 *
           clamp(
-            1 - Math.abs(duration - targetDuration) / Math.max(targetDuration, 10 * 60_000),
+            1 - Math.abs(duration - targetDuration) / Math.max(targetDuration * 1.1, 12 * 60_000),
             0,
             1
           );
         const segmentTracks = blocks.slice(start, end).flatMap((block) => block.tracks);
         const quality = chapterQuality(segmentTracks, options);
-        const total = dp[used - 1][start] + quality * 0.66 + durationFit * 0.34;
+        const varietyBias =
+          used > 1
+            ? Math.min(12, Math.abs(duration - (targetDurations[used - 2] || targetDuration)) / (8 * 60_000))
+            : 0;
+        const total = dp[used - 1][start] + quality * 0.68 + durationFit * 0.26 + varietyBias;
         if (total > dp[used][end]) {
           dp[used][end] = total;
           prev[used][end] = start;
@@ -782,7 +806,7 @@ export function buildMiniPlaylistChapters(
       summary: chapterSummary(tracks, quality),
       trackCount: tracks.length,
       durationMs: duration,
-      targetDurationMs: Math.round(targetDuration),
+      targetDurationMs: Math.round(targetDurations[index] || totalDuration / targetChapterCount),
       quality,
       startBlockId: chapterBlocks[0]?.id || null,
       endBlockId: chapterBlocks[chapterBlocks.length - 1]?.id || null,
