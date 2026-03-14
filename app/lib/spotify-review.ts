@@ -6,6 +6,7 @@ import type {
   ReviewActionInput,
   ReviewBucket,
   ReviewQueueSnapshot,
+  ReviewStatusSnapshot,
   ReviewTrack,
 } from "@/app/music/lib/review-types";
 
@@ -241,6 +242,29 @@ async function updateSyncState(
     {
       scope,
       ...values,
+    },
+    { onConflict: "scope" }
+  );
+}
+
+export async function getPinnedBucketIds(): Promise<string[]> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("spotify_review_sync_state")
+    .select("metadata")
+    .eq("scope", "pinned_buckets")
+    .single();
+  if (!data?.metadata) return [];
+  const meta = data.metadata as Record<string, unknown>;
+  return Array.isArray(meta.ids) ? (meta.ids as string[]) : [];
+}
+
+export async function savePinnedBucketIds(ids: string[]): Promise<void> {
+  const supabase = createAdminClient();
+  await supabase.from("spotify_review_sync_state").upsert(
+    {
+      scope: "pinned_buckets",
+      metadata: { ids },
     },
     { onConflict: "scope" }
   );
@@ -808,6 +832,107 @@ export async function getReviewQueue(options?: {
       allBuckets: [],
     };
   }
+}
+
+export async function getReviewStatus(): Promise<ReviewStatusSnapshot> {
+  const supabase = createAdminClient();
+
+  const [{ data: bucketRows }, { data: trackRows }] = await Promise.all([
+    supabase
+      .from("spotify_review_buckets")
+      .select(
+        "bucket_id, name, description, image_url, playlist_url, track_count, follower_count, is_active"
+      )
+      .eq("is_active", true)
+      .order("name"),
+    supabase.from("spotify_review_tracks").select(
+      `
+        track_id,
+        spotify_uri,
+        title,
+        artist_names,
+        artist_display,
+        album_name,
+        album_image_url,
+        preview_url,
+        song_url,
+        duration_ms,
+        popularity,
+        explicit,
+        is_liked,
+        added_to_liked_at,
+        removed_from_liked_at,
+        last_played_at,
+        source_snapshot,
+        spotify_review_state (
+          review_count,
+          confirm_streak,
+          defer_count,
+          unsure_count,
+          surfaced_count,
+          ease_factor,
+          interval_days,
+          next_review_at,
+          last_reviewed_at
+        ),
+        spotify_review_track_buckets (
+          active,
+          last_played_since_assignment_at,
+          spotify_review_buckets (
+            bucket_id,
+            name,
+            description,
+            image_url,
+            playlist_url,
+            track_count,
+            follower_count,
+            is_active
+          )
+        )
+      `
+    ),
+  ]);
+
+  const allBuckets: ReviewBucket[] = (bucketRows || []).map((bucket: any) => ({
+    bucketId: bucket.bucket_id,
+    name: bucket.name,
+    description: bucket.description,
+    imageUrl: bucket.image_url,
+    playlistUrl: bucket.playlist_url,
+    trackCount: bucket.track_count || 0,
+    followerCount: bucket.follower_count || 0,
+    isActive: bucket.is_active,
+  }));
+
+  const ranked = (trackRows || [])
+    .map((row: any) => rankTrack(row, allBuckets))
+    .filter((track) => track.activeBuckets.length > 0 || track.isLiked)
+    .sort((a, b) => b.dueScore - a.dueScore);
+
+  const dueNowTracks = ranked.filter((t) => t.dueScore >= 45);
+  const dueSoonTracks = ranked.filter(
+    (t) => t.dueScore >= 25 && t.dueScore < 45
+  );
+  const reviewed = ranked.filter((t) => t.reviewCount > 0);
+  const neverReviewed = ranked.filter((t) => t.reviewCount === 0);
+  const unbucketed = ranked.filter(
+    (t) => t.isLiked && t.activeBuckets.length === 0
+  );
+
+  return {
+    stats: {
+      total: ranked.length,
+      dueNow: dueNowTracks.length,
+      dueSoon: dueSoonTracks.length,
+      reviewed: reviewed.length,
+      neverReviewed: neverReviewed.length,
+      unbucketedCount: unbucketed.length,
+    },
+    dueNow: dueNowTracks.slice(0, 50),
+    upcoming: dueSoonTracks.slice(0, 50),
+    unbucketed: unbucketed.slice(0, 100),
+    allBuckets,
+  };
 }
 
 function getNextSchedule(params: {

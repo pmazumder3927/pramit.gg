@@ -27,7 +27,6 @@ type FetchError = Error & { status?: number };
 type PlayerMode = "connecting" | "sdk" | "preview" | "none";
 
 const SWIPE_THRESHOLD = 120;
-const PINNED_KEY = "review-pinned-buckets";
 const VOLUME_KEY = "review-player-volume";
 const INLINE_BUCKET_SLOTS = 5;
 
@@ -51,19 +50,12 @@ function formatMs(ms: number): string {
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
-function getPinnedIds(): string[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(PINNED_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function savePinnedIds(ids: string[]) {
-  localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
-}
+const pinnedFetcher = async (url: string) => {
+  const res = await fetch(url);
+  const json = await res.json();
+  if (!res.ok) return [];
+  return (json.ids || []) as string[];
+};
 
 function getInitialVolume(): number {
   if (typeof window === "undefined") return 1;
@@ -410,7 +402,13 @@ export function ReviewDeck() {
   const [sessionReviewed, setSessionReviewed] = useState(0);
   const [showManage, setShowManage] = useState(false);
   const [showBucketPicker, setShowBucketPicker] = useState(false);
-  const [pinnedIds, setPinnedIds] = useState<string[] | null>(null);
+
+  // ---- Pinned buckets (server-persisted) ----
+  const { data: pinnedIds, mutate: mutatePinned } = useSWR<string[]>(
+    "/api/spotify/review/pinned",
+    pinnedFetcher,
+    { revalidateOnFocus: false, fallbackData: [] }
+  );
 
   // ---- Player state ----
   const [playerMode, setPlayerMode] = useState<PlayerMode>("connecting");
@@ -488,11 +486,6 @@ export function ReviewDeck() {
   const hiddenVisibleBucketCount = Math.max(visibleBuckets.length - inlineBucketCount, 0);
 
   // ---- Effects ----
-
-  // Load pinned buckets
-  useEffect(() => {
-    setPinnedIds(getPinnedIds());
-  }, []);
 
   // Reset bucket selection on track change
   useEffect(() => {
@@ -844,9 +837,13 @@ export function ReviewDeck() {
     return () => window.removeEventListener("keydown", handler);
   }, [handleAction, showManage, currentTrack?.isLiked, bucketsChanged, togglePlay]);
 
-  const handleSavePins = (ids: string[]) => {
-    setPinnedIds(ids);
-    savePinnedIds(ids);
+  const handleSavePins = async (ids: string[]) => {
+    await mutatePinned(ids, false);
+    fetch("/api/spotify/review/pinned", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }).catch(() => {});
   };
 
   // ---- Render ----
@@ -944,7 +941,9 @@ export function ReviewDeck() {
               Spotify
             </span>
           )}
-          <span>{data.stats.dueNow} due</span>
+          <Link href="/music/review/status" className="transition hover:text-gray-400">
+            {data.stats.dueNow} due
+          </Link>
           {sessionReviewed > 0 && <span>{sessionReviewed} done</span>}
         </div>
       </div>

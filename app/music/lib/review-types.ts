@@ -76,3 +76,18 @@ export interface ReviewActionInput {
   liked: boolean;
   intent: "confirm" | "update_buckets" | "unlike" | "defer" | "unsure";
 }
+
+export interface ReviewStatusSnapshot {
+  stats: {
+    total: number;
+    dueNow: number;
+    dueSoon: number;
+    reviewed: number;
+    neverReviewed: number;
+    unbucketedCount: number;
+  };
+  dueNow: ReviewTrack[];
+  upcoming: ReviewTrack[];
+  unbucketed: ReviewTrack[];
+  allBuckets: ReviewBucket[];
+}
