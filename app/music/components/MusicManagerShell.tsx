@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/music/manage", label: "Overview", match: "/music/manage" },
   { href: "/music/manage/review", label: "Review", match: "/music/manage/review" },
   { href: "/music/manage/status", label: "Status", match: "/music/manage/status" },
+  { href: "/music/manage/graveyard", label: "Graveyard", match: "/music/manage/graveyard" },
 ];
 
 function isActive(pathname: string, href: string, match: string) {

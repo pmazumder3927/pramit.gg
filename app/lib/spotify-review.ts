@@ -1184,4 +1184,315 @@ export async function applyReviewAction(input: ReviewActionInput) {
       removed_bucket_ids: removeBucketIds,
     },
   });
+
+  // Graveyard: detect if track just became homeless
+  const remainingActive = input.bucketIds.length;
+  const isHomeless = !input.liked && remainingActive === 0;
+
+  if (isHomeless && trackRow.spotify_uri) {
+    const year = new Date().getFullYear();
+    await addToGraveyard(trackRow.spotify_uri, year);
+  }
+
+  // If track was re-homed (got buckets or re-liked), remove from any graveyard
+  if (!isHomeless && trackRow.spotify_uri) {
+    await removeFromGraveyard(trackRow.spotify_uri);
+  }
+}
+
+// ── Graveyard ──────────────────────────────────────────────────────
+
+async function getGraveyardPlaylistIds(): Promise<Record<string, string>> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("spotify_review_sync_state")
+    .select("metadata")
+    .eq("scope", "graveyard_playlists")
+    .single();
+  if (!data?.metadata) return {};
+  return (data.metadata as Record<string, string>) || {};
+}
+
+async function saveGraveyardPlaylistIds(
+  mapping: Record<string, string>
+): Promise<void> {
+  const supabase = createAdminClient();
+  await supabase.from("spotify_review_sync_state").upsert(
+    {
+      scope: "graveyard_playlists",
+      metadata: mapping,
+    },
+    { onConflict: "scope" }
+  );
+}
+
+async function ensureGraveyardPlaylist(year: number): Promise<string> {
+  const mapping = await getGraveyardPlaylistIds();
+  const key = String(year);
+
+  if (mapping[key]) {
+    return mapping[key];
+  }
+
+  // Create the playlist on Spotify
+  const user = await fetchCurrentUser();
+  const playlist = await spotifyFetch<{ id: string }>(
+    `/users/${user.id}/playlists`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: `${year} graveyard`,
+        description: `Songs that lost their home in ${year}. An archive of evolving taste.`,
+        public: false,
+      }),
+    }
+  );
+
+  mapping[key] = playlist.id;
+  await saveGraveyardPlaylistIds(mapping);
+
+  return playlist.id;
+}
+
+async function addToGraveyard(
+  spotifyUri: string,
+  year: number
+): Promise<void> {
+  try {
+    const playlistId = await ensureGraveyardPlaylist(year);
+    await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+      method: "POST",
+      body: JSON.stringify({ uris: [spotifyUri] }),
+    });
+  } catch (error) {
+    console.error("Failed to add track to graveyard:", error);
+  }
+}
+
+async function removeFromGraveyard(spotifyUri: string): Promise<void> {
+  try {
+    const mapping = await getGraveyardPlaylistIds();
+    const playlistIds = Object.values(mapping);
+
+    await Promise.all(
+      playlistIds.map((playlistId) =>
+        spotifyFetch(`/playlists/${playlistId}/tracks`, {
+          method: "DELETE",
+          body: JSON.stringify({ tracks: [{ uri: spotifyUri }] }),
+        }).catch(() => {
+          // Track may not be in this year's graveyard, ignore
+        })
+      )
+    );
+  } catch (error) {
+    console.error("Failed to remove track from graveyard:", error);
+  }
+}
+
+export async function getGraveyardSnapshot(): Promise<{
+  years: Array<{
+    year: number;
+    playlistId: string | null;
+    playlistUrl: string | null;
+    tracks: Array<{
+      trackId: string;
+      title: string;
+      artistDisplay: string;
+      albumName: string | null;
+      albumImageUrl: string | null;
+      songUrl: string | null;
+      removedAt: string | null;
+    }>;
+  }>;
+  totalTracks: number;
+}> {
+  const supabase = createAdminClient();
+  const mapping = await getGraveyardPlaylistIds();
+
+  // Find all homeless tracks: not liked AND no active bucket memberships
+  const { data: homelessTracks } = await supabase
+    .from("spotify_review_tracks")
+    .select(
+      `
+      track_id,
+      title,
+      artist_display,
+      album_name,
+      album_image_url,
+      song_url,
+      removed_from_liked_at,
+      spotify_review_track_buckets!inner (
+        bucket_id,
+        active,
+        removed_at
+      )
+    `
+    )
+    .eq("is_liked", false);
+
+  // Also find tracks that are not liked and have NO bucket records at all
+  // but were once in the system (have review events showing removal)
+  const { data: noBucketTracks } = await supabase
+    .from("spotify_review_tracks")
+    .select(
+      `
+      track_id,
+      title,
+      artist_display,
+      album_name,
+      album_image_url,
+      song_url,
+      removed_from_liked_at
+    `
+    )
+    .eq("is_liked", false)
+    .not("removed_from_liked_at", "is", null);
+
+  type GraveyardTrack = {
+    trackId: string;
+    title: string;
+    artistDisplay: string;
+    albumName: string | null;
+    albumImageUrl: string | null;
+    songUrl: string | null;
+    removedAt: string | null;
+    year: number;
+  };
+
+  const trackMap = new Map<string, GraveyardTrack>();
+
+  // Process tracks that have bucket records
+  for (const row of homelessTracks || []) {
+    const buckets = (row as any).spotify_review_track_buckets || [];
+    const hasActiveBucket = buckets.some((b: any) => b.active);
+    if (hasActiveBucket) continue;
+
+    // Find the latest removal date
+    const removedDates = buckets
+      .map((b: any) => b.removed_at)
+      .filter(Boolean) as string[];
+    if (row.removed_from_liked_at) {
+      removedDates.push(row.removed_from_liked_at);
+    }
+
+    const latestRemoval =
+      removedDates.length > 0
+        ? removedDates.sort().reverse()[0]
+        : row.removed_from_liked_at;
+
+    const year = latestRemoval
+      ? new Date(latestRemoval).getFullYear()
+      : new Date().getFullYear();
+
+    trackMap.set(row.track_id, {
+      trackId: row.track_id,
+      title: row.title || "Unknown",
+      artistDisplay: row.artist_display || "Unknown",
+      albumName: row.album_name,
+      albumImageUrl: row.album_image_url,
+      songUrl: row.song_url,
+      removedAt: latestRemoval,
+      year,
+    });
+  }
+
+  // Process tracks with no bucket records but were unliked
+  for (const row of noBucketTracks || []) {
+    if (trackMap.has(row.track_id)) continue;
+
+    const year = row.removed_from_liked_at
+      ? new Date(row.removed_from_liked_at).getFullYear()
+      : new Date().getFullYear();
+
+    trackMap.set(row.track_id, {
+      trackId: row.track_id,
+      title: row.title || "Unknown",
+      artistDisplay: row.artist_display || "Unknown",
+      albumName: row.album_name,
+      albumImageUrl: row.album_image_url,
+      songUrl: row.song_url,
+      removedAt: row.removed_from_liked_at,
+      year,
+    });
+  }
+
+  // Group by year
+  const byYear = new Map<number, GraveyardTrack[]>();
+  const allTracks = Array.from(trackMap.values());
+  for (const track of allTracks) {
+    const list = byYear.get(track.year) || [];
+    list.push(track);
+    byYear.set(track.year, list);
+  }
+
+  const years = Array.from(byYear.entries())
+    .sort(([a], [b]) => b - a)
+    .map(([year, tracks]) => ({
+      year,
+      playlistId: mapping[String(year)] || null,
+      playlistUrl: mapping[String(year)]
+        ? `https://open.spotify.com/playlist/${mapping[String(year)]}`
+        : null,
+      tracks: tracks
+        .sort((a, b) => {
+          if (!a.removedAt && !b.removedAt) return 0;
+          if (!a.removedAt) return 1;
+          if (!b.removedAt) return -1;
+          return new Date(b.removedAt).getTime() - new Date(a.removedAt).getTime();
+        })
+        .map(({ year: _y, ...rest }) => rest),
+    }));
+
+  return {
+    years,
+    totalTracks: trackMap.size,
+  };
+}
+
+export async function syncGraveyardPlaylists(): Promise<{
+  synced: number;
+  created: number;
+}> {
+  const snapshot = await getGraveyardSnapshot();
+  let created = 0;
+  let synced = 0;
+
+  for (const yearGroup of snapshot.years) {
+    if (yearGroup.tracks.length === 0) continue;
+
+    const playlistId = await ensureGraveyardPlaylist(yearGroup.year);
+    if (!yearGroup.playlistId) created++;
+
+    // Fetch current playlist tracks
+    const currentTracks = await fetchPlaylistTracks(playlistId);
+    const currentUris = new Set(
+      currentTracks
+        .map((item) => item.track?.uri)
+        .filter(Boolean) as string[]
+    );
+
+    // Find tracks that need to be added (query their URIs)
+    const supabase = createAdminClient();
+    const trackIds = yearGroup.tracks.map((t) => t.trackId);
+    const { data: trackRows } = await supabase
+      .from("spotify_review_tracks")
+      .select("track_id, spotify_uri")
+      .in("track_id", trackIds);
+
+    const urisToAdd = (trackRows || [])
+      .filter((r) => r.spotify_uri && !currentUris.has(r.spotify_uri))
+      .map((r) => r.spotify_uri!);
+
+    // Add in batches of 100
+    for (let i = 0; i < urisToAdd.length; i += 100) {
+      const batch = urisToAdd.slice(i, i + 100);
+      await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+        method: "POST",
+        body: JSON.stringify({ uris: batch }),
+      });
+      synced += batch.length;
+    }
+  }
+
+  return { synced, created };
 }
