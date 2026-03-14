@@ -147,6 +147,104 @@ const GOAL_BLOCK_NAMES: Record<SequencerGoal, string[]> = {
   ],
 };
 
+function nameBlockFromContent(
+  tracks: SequencerTrack[],
+  blockIndex: number,
+  totalBlocks: number,
+  goal: SequencerGoal
+): string {
+  if (tracks.length === 0) return `section ${blockIndex + 1}`;
+
+  const avgEnergy = average(tracks.map((t) => t.featureProfile.energy));
+  const avgFamiliarity = average(tracks.map((t) => t.featureProfile.familiarity));
+  const avgNovelty = average(tracks.map((t) => t.featureProfile.novelty));
+  const avgIntensity = average(tracks.map((t) => t.featureProfile.intensity));
+  const avgComfort = average(tracks.map((t) => t.featureProfile.comfort));
+
+  // Dominant genre family
+  const genreCounts = new Map<string, number>();
+  for (const t of tracks) {
+    const g = t.featureProfile.genreFamily;
+    genreCounts.set(g, (genreCounts.get(g) || 0) + 1);
+  }
+  const dominantGenre = Array.from(genreCounts.entries())
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || "general";
+
+  // Dominant texture
+  const textureCounts = new Map<string, number>();
+  for (const t of tracks) {
+    const tx = t.featureProfile.texture;
+    textureCounts.set(tx, (textureCounts.get(tx) || 0) + 1);
+  }
+  const dominantTexture = Array.from(textureCounts.entries())
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || "hybrid";
+
+  // Build a descriptive name from the block's character
+  const energyWord =
+    avgEnergy >= 0.65
+      ? "high energy"
+      : avgEnergy >= 0.45
+        ? "mid energy"
+        : avgEnergy <= 0.25
+          ? "quiet"
+          : "mellow";
+
+  const moodWord =
+    avgComfort >= 0.65
+      ? "cozy"
+      : avgIntensity >= 0.6
+        ? "intense"
+        : avgFamiliarity >= 0.7
+          ? "familiar"
+          : avgNovelty >= 0.6
+            ? "exploratory"
+            : "balanced";
+
+  // Use arc-position names for the first and last blocks
+  const names = GOAL_BLOCK_NAMES[goal];
+  if (blockIndex === 0 && names.length > 0) return names[0];
+  if (blockIndex === totalBlocks - 1 && names.length > 1) return names[names.length - 1];
+
+  // For middle blocks: if the goal has a name at roughly this arc position, use it
+  // if it fits the block's character; otherwise derive from content
+  const arcRatio = blockIndex / Math.max(1, totalBlocks - 1);
+  const arcNameIndex = Math.round(arcRatio * (names.length - 1));
+  if (arcNameIndex > 0 && arcNameIndex < names.length - 1 && totalBlocks <= names.length) {
+    return names[arcNameIndex];
+  }
+
+  // Genre-flavored names for variety
+  const genreHint =
+    dominantGenre === "general" || dominantGenre === "pop"
+      ? ""
+      : dominantGenre === "electronic"
+        ? "electronic "
+        : dominantGenre === "acoustic"
+          ? "acoustic "
+          : dominantGenre === "hip-hop"
+            ? "hip-hop "
+            : dominantGenre === "ambient"
+              ? "ambient "
+              : dominantGenre === "rock"
+                ? "rock "
+                : dominantGenre === "soul"
+                  ? "soul "
+                  : "";
+
+  // Combine into a mini-playlist name
+  if (avgEnergy >= 0.6 && avgFamiliarity >= 0.6) return `${genreHint}favorites run`.trim();
+  if (avgEnergy >= 0.6 && avgNovelty >= 0.5) return `${genreHint}energy push`.trim();
+  if (avgEnergy >= 0.6) return `${genreHint}${energyWord} stretch`.trim();
+  if (avgComfort >= 0.65 && avgFamiliarity >= 0.65) return `${genreHint}comfort zone`.trim();
+  if (avgNovelty >= 0.55) return `${genreHint}new finds`.trim();
+  if (avgIntensity >= 0.55) return `${genreHint}deep cut`.trim();
+  if (avgEnergy <= 0.3) return `${genreHint}${energyWord} drift`.trim();
+  if (dominantTexture === "acoustic") return "acoustic pocket";
+  if (dominantTexture === "electronic") return "electronic run";
+
+  return `${genreHint}${moodWord} stretch`.trim();
+}
+
 const GOAL_PURPOSES: Record<SequencerGoal, string> = {
   emotion: "shape the emotional climb with gentle steps",
   language: "hold immersion without exhausting the ear",
@@ -632,15 +730,19 @@ function chooseOrderedTracks(
 }
 
 function blockCountFor(totalTracks: number) {
-  if (totalTracks <= 8) return 2;
-  if (totalTracks <= 16) return 3;
-  if (totalTracks <= 26) return 4;
-  return 5;
+  if (totalTracks <= 6) return 2;
+  if (totalTracks <= 14) return 3;
+  if (totalTracks <= 22) return 4;
+  if (totalTracks <= 35) return 5;
+  if (totalTracks <= 55) return 6;
+  if (totalTracks <= 80) return 7;
+  return Math.min(10, Math.ceil(totalTracks / 12));
 }
 
 function pickBoundaryIndexes(tracks: SequencerTrack[], goal: SequencerGoal) {
-  const targetBlocks = Math.max(1, Math.min(blockCountFor(tracks.length), tracks.length));
+  const targetBlocks = Math.max(2, Math.min(blockCountFor(tracks.length), tracks.length));
   const minBlockSize = tracks.length >= 10 ? 3 : 2;
+  const maxBlockSize = Math.max(minBlockSize + 1, Math.ceil(tracks.length / targetBlocks * 1.6));
 
   const candidateBoundaries = tracks.slice(0, -1).map((track, index) => ({
     index,
@@ -653,7 +755,20 @@ function pickBoundaryIndexes(tracks: SequencerTrack[], goal: SequencerGoal) {
 
   const selected: number[] = [];
 
-  for (const candidate of candidateBoundaries.sort((a, b) => a.compatibility - b.compatibility)) {
+  // Score each candidate boundary: low compatibility = good split point,
+  // but also reward splits that keep blocks within a reasonable size range.
+  const idealBlockSize = Math.round(tracks.length / targetBlocks);
+
+  for (const candidate of candidateBoundaries
+    .map((c) => {
+      // Bonus for splitting near the ideal size intervals
+      const nearestIdeal = Math.round((c.index + 1) / idealBlockSize) * idealBlockSize - 1;
+      const distanceFromIdeal = Math.abs(c.index - nearestIdeal);
+      const sizeBonus = Math.max(0, 20 - distanceFromIdeal * 3);
+      // Lower combined score = better split point
+      return { ...c, score: c.compatibility - sizeBonus };
+    })
+    .sort((a, b) => a.score - b.score)) {
     if (selected.length >= targetBlocks - 1) break;
 
     const proposed = [...selected, candidate.index].sort((a, b) => a - b);
@@ -662,15 +777,45 @@ function pickBoundaryIndexes(tracks: SequencerTrack[], goal: SequencerGoal) {
 
     for (const boundary of proposed) {
       const size = boundary + 1 - cursor;
-      if (size < minBlockSize) {
+      if (size < minBlockSize || size > maxBlockSize) {
         valid = false;
         break;
       }
       cursor = boundary + 1;
     }
 
-    if (!valid || tracks.length - cursor < minBlockSize) continue;
+    // Check the final block too
+    if (valid && (tracks.length - cursor < minBlockSize || tracks.length - cursor > maxBlockSize)) {
+      valid = false;
+    }
+
+    if (!valid) continue;
     selected.push(candidate.index);
+  }
+
+  // If we didn't find enough boundaries with the strict max constraint,
+  // relax the max and try again with just min enforcement
+  if (selected.length < targetBlocks - 1) {
+    selected.length = 0;
+    for (const candidate of candidateBoundaries.sort((a, b) => a.compatibility - b.compatibility)) {
+      if (selected.length >= targetBlocks - 1) break;
+
+      const proposed = [...selected, candidate.index].sort((a, b) => a - b);
+      let cursor = 0;
+      let valid = true;
+
+      for (const boundary of proposed) {
+        const size = boundary + 1 - cursor;
+        if (size < minBlockSize) {
+          valid = false;
+          break;
+        }
+        cursor = boundary + 1;
+      }
+
+      if (!valid || tracks.length - cursor < minBlockSize) continue;
+      selected.push(candidate.index);
+    }
   }
 
   if (selected.length === 0 && tracks.length > 6) {
@@ -686,21 +831,27 @@ function buildInitialBlocks(
 ): { blocks: SequencePersistenceBlock[]; tracks: SequencePersistenceTrack[] } {
   const boundaryIndexes = pickBoundaryIndexes(orderedTracks, goal);
   const boundaries = new Set(boundaryIndexes);
-  const names = GOAL_BLOCK_NAMES[goal];
   const blocks: SequencePersistenceBlock[] = [];
   const sequenceTracks: SequencePersistenceTrack[] = [];
 
+  // First pass: collect slices
+  const slices: SequencerTrack[][] = [];
   let cursor = 0;
-  let blockIndex = 0;
-
   for (let index = 0; index < orderedTracks.length; index += 1) {
     const isBoundary = boundaries.has(index) || index === orderedTracks.length - 1;
     if (!isBoundary) continue;
+    slices.push(orderedTracks.slice(cursor, index + 1));
+    cursor = index + 1;
+  }
 
+  // Second pass: name blocks from their content
+  const totalBlocks = slices.length;
+  let globalPos = 0;
+
+  for (let blockIndex = 0; blockIndex < slices.length; blockIndex++) {
+    const slice = slices[blockIndex];
     const blockId = crypto.randomUUID();
-    const slice = orderedTracks.slice(cursor, index + 1);
-    const blockName =
-      names[Math.min(blockIndex, names.length - 1)] || `section ${blockIndex + 1}`;
+    const blockName = nameBlockFromContent(slice, blockIndex, totalBlocks, goal);
 
     blocks.push({
       id: blockId,
@@ -712,20 +863,17 @@ function buildInitialBlocks(
       locked: false,
     });
 
-    slice.forEach((track, innerIndex) => {
+    slice.forEach((track) => {
       sequenceTracks.push({
         trackId: track.trackId,
         blockId,
-        position: cursor + innerIndex,
+        position: globalPos++,
         roleTags: [],
         locked: false,
         hiddenFromAutosort: false,
         derivedProfile: track.featureProfile,
       });
     });
-
-    cursor = index + 1;
-    blockIndex += 1;
   }
 
   return { blocks, tracks: sequenceTracks };
