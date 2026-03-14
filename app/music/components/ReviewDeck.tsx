@@ -28,6 +28,8 @@ type PlayerMode = "connecting" | "sdk" | "preview" | "none";
 
 const SWIPE_THRESHOLD = 120;
 const PINNED_KEY = "review-pinned-buckets";
+const VOLUME_KEY = "review-player-volume";
+const INLINE_BUCKET_SLOTS = 5;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +65,13 @@ function savePinnedIds(ids: string[]) {
   localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
 }
 
+function getInitialVolume(): number {
+  if (typeof window === "undefined") return 1;
+  const raw = localStorage.getItem(VOLUME_KEY);
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 1;
+}
+
 async function fetchSpotifyToken(): Promise<string> {
   const res = await fetch("/api/spotify/token");
   const data = await res.json();
@@ -94,8 +103,8 @@ function BucketPill({
       whileTap={{ scale: 0.93 }}
       className="relative flex-shrink-0 overflow-hidden rounded-xl border text-left transition-all duration-200"
       style={{
-        width: 112,
-        height: 80,
+        width: 88,
+        height: 78,
         borderColor: selected
           ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`
           : "rgba(255,255,255,0.06)",
@@ -113,7 +122,7 @@ function BucketPill({
             className={`object-cover transition-opacity duration-200 ${
               selected ? "opacity-45" : "opacity-20"
             }`}
-            sizes="112px"
+            sizes="88px"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
         </>
@@ -147,6 +156,25 @@ function BucketPill({
         </p>
       </div>
     </motion.button>
+  );
+}
+
+function BucketOverflowButton({
+  hiddenCount,
+  onClick,
+}: {
+  hiddenCount: number;
+  accentColor: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-[78px] flex-shrink-0 items-center px-1 text-[11px] text-gray-600 transition hover:text-gray-400"
+    >
+      +{hiddenCount > 0 ? hiddenCount : ""}
+    </button>
   );
 }
 
@@ -259,6 +287,110 @@ function BucketManageOverlay({
   );
 }
 
+function BucketPickerOverlay({
+  allBuckets,
+  pinnedIds,
+  selectedIds,
+  onToggle,
+  onClose,
+}: {
+  allBuckets: ReviewBucket[];
+  pinnedIds: string[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  onClose: () => void;
+}) {
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 40, opacity: 0 }}
+        className="w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-white/10 bg-charcoal-black p-6"
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">All buckets</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Add or remove this track anywhere. Use Manage to change pins.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-gray-200"
+          >
+            Done
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {allBuckets.map((bucket) => {
+            const selected = selectedSet.has(bucket.bucketId);
+            const pinned = pinnedSet.has(bucket.bucketId);
+
+            return (
+              <button
+                key={bucket.bucketId}
+                type="button"
+                onClick={() => onToggle(bucket.bucketId)}
+                className={`relative overflow-hidden rounded-xl border text-left transition-all ${
+                  selected
+                    ? "border-white/25 ring-1 ring-white/15"
+                    : "border-white/5 opacity-70 hover:opacity-100"
+                }`}
+              >
+                <div className="relative h-20">
+                  {bucket.imageUrl ? (
+                    <>
+                      <Image src={bucket.imageUrl} alt="" fill className="object-cover opacity-35" sizes="33vw" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-black" />
+                  )}
+
+                  {pinned && (
+                    <div className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.22em] text-white/60">
+                      Pinned
+                    </div>
+                  )}
+
+                  {selected && (
+                    <div className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-white">
+                      <svg className="h-2.5 w-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+
+                  <div className="absolute bottom-0 left-0 right-0 p-2">
+                    <p className="line-clamp-2 text-[11px] leading-tight font-medium text-white">
+                      {bucket.name}
+                    </p>
+                    <p className="text-[10px] text-gray-500">{bucket.trackCount} tracks</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ReviewDeck
 // ---------------------------------------------------------------------------
@@ -277,6 +409,7 @@ export function ReviewDeck() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sessionReviewed, setSessionReviewed] = useState(0);
   const [showManage, setShowManage] = useState(false);
+  const [showBucketPicker, setShowBucketPicker] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[] | null>(null);
 
   // ---- Player state ----
@@ -286,9 +419,11 @@ export function ReviewDeck() {
   const [duration, setDuration] = useState(0);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [activated, setActivated] = useState(false);
+  const [volume, setVolume] = useState(getInitialVolume);
   const playerRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const playedTrackRef = useRef<string | null>(null);
+  const lastAudibleVolumeRef = useRef(volume > 0 ? volume : 1);
 
   // ---- Swipe ----
   const dragX = useMotionValue(0);
@@ -311,18 +446,46 @@ export function ReviewDeck() {
     if (!data) return [];
     const all = data.allBuckets;
     if (!pinnedIds || pinnedIds.length === 0) return all;
-    const pinSet = new Set(pinnedIds);
-    const activeIds = new Set(currentTrack?.activeBuckets.map((b) => b.bucketId) || []);
-    return all
-      .filter((b) => pinSet.has(b.bucketId) || activeIds.has(b.bucketId))
-      .sort((a, b) => {
-        const aActive = activeIds.has(a.bucketId) ? 1 : 0;
-        const bActive = activeIds.has(b.bucketId) ? 1 : 0;
-        return bActive - aActive;
-      });
-  }, [data, pinnedIds, currentTrack?.activeBuckets]);
+
+    const byId = new Map(all.map((bucket) => [bucket.bucketId, bucket] as const));
+    const selectedIds = new Set(selectedBucketIds);
+    const pinnedSet = new Set(pinnedIds);
+    const pinnedBuckets = pinnedIds
+      .map((bucketId) => byId.get(bucketId))
+      .filter((bucket): bucket is ReviewBucket => Boolean(bucket));
+    const activeUnpinnedBuckets = all.filter(
+      (bucket) => selectedIds.has(bucket.bucketId) && !pinnedSet.has(bucket.bucketId)
+    );
+
+    return [...pinnedBuckets, ...activeUnpinnedBuckets];
+  }, [data, pinnedIds, selectedBucketIds]);
+
+  const pickerBuckets = useMemo(() => {
+    if (!data) return [];
+    const all = data.allBuckets;
+    if (!pinnedIds || pinnedIds.length === 0) return all;
+
+    const byId = new Map(all.map((bucket) => [bucket.bucketId, bucket] as const));
+    const pinnedSet = new Set(pinnedIds);
+    const selectedIds = new Set(selectedBucketIds);
+    const pinnedBuckets = pinnedIds
+      .map((bucketId) => byId.get(bucketId))
+      .filter((bucket): bucket is ReviewBucket => Boolean(bucket));
+    const selectedUnpinnedBuckets = all.filter(
+      (bucket) => selectedIds.has(bucket.bucketId) && !pinnedSet.has(bucket.bucketId)
+    );
+    const remainingBuckets = all.filter(
+      (bucket) => !pinnedSet.has(bucket.bucketId) && !selectedIds.has(bucket.bucketId)
+    );
+
+    return [...pinnedBuckets, ...selectedUnpinnedBuckets, ...remainingBuckets];
+  }, [data, pinnedIds, selectedBucketIds]);
 
   const progress = duration > 0 ? (position / duration) * 100 : 0;
+  const showBucketOverflow = pickerBuckets.length > visibleBuckets.length || visibleBuckets.length > INLINE_BUCKET_SLOTS;
+  const inlineBucketCount = showBucketOverflow ? INLINE_BUCKET_SLOTS - 1 : INLINE_BUCKET_SLOTS;
+  const inlineBuckets = visibleBuckets.slice(0, inlineBucketCount);
+  const hiddenVisibleBucketCount = Math.max(visibleBuckets.length - inlineBucketCount, 0);
 
   // ---- Effects ----
 
@@ -335,6 +498,22 @@ export function ReviewDeck() {
   useEffect(() => {
     setSelectedBucketIds(currentTrack?.activeBuckets.map((b) => b.bucketId) || []);
   }, [currentTrack?.trackId]);
+
+  useEffect(() => {
+    if (volume > 0) {
+      lastAudibleVolumeRef.current = volume;
+    }
+
+    localStorage.setItem(VOLUME_KEY, String(volume));
+
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+
+    if (playerRef.current) {
+      playerRef.current.setVolume(volume).catch(() => {});
+    }
+  }, [volume]);
 
   // Activate SDK audio on user gesture (required by browser autoplay policy)
   const activatePlayer = useCallback(() => {
@@ -364,7 +543,7 @@ export function ReviewDeck() {
         getOAuthToken: (cb: (t: string) => void) => {
           fetchSpotifyToken().then(cb).catch(() => {});
         },
-        volume: 1.0,
+        volume,
       });
 
       player.addListener("ready", ({ device_id }: { device_id: string }) => {
@@ -372,7 +551,7 @@ export function ReviewDeck() {
         setDeviceId(device_id);
         setPlayerMode("sdk");
         clearTimeout(fallbackTimer);
-        player.setVolume(1.0);
+        player.setVolume(volume).catch(() => {});
       });
 
       player.addListener("not_ready", () => {
@@ -434,6 +613,8 @@ export function ReviewDeck() {
     const audio = audioRef.current;
     if (!audio) return;
 
+    audio.volume = volume;
+
     const onTimeUpdate = () => setPosition(audio.currentTime * 1000);
     const onLoadedMetadata = () => setDuration(audio.duration * 1000);
     const onPlay = () => setIsPlaying(true);
@@ -456,7 +637,7 @@ export function ReviewDeck() {
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("ended", onEnded);
     };
-  }, []);
+  }, [volume]);
 
   // Auto-play on track change or device becoming available
   useEffect(() => {
@@ -539,7 +720,7 @@ export function ReviewDeck() {
   const togglePlay = useCallback(() => {
     activatePlayer();
     if (playerMode === "sdk" && playerRef.current) {
-      playerRef.current.setVolume(1.0);
+      playerRef.current.setVolume(volume).catch(() => {});
       playerRef.current.togglePlay();
     } else if (audioRef.current) {
       if (audioRef.current.paused) {
@@ -548,7 +729,15 @@ export function ReviewDeck() {
         audioRef.current.pause();
       }
     }
-  }, [playerMode, activatePlayer]);
+  }, [playerMode, activatePlayer, volume]);
+
+  const handleVolumeSet = useCallback((nextVolume: number) => {
+    setVolume(Math.max(0, Math.min(1, nextVolume)));
+  }, []);
+
+  const handleMuteToggle = useCallback(() => {
+    setVolume((current) => (current === 0 ? lastAudibleVolumeRef.current : 0));
+  }, []);
 
   const handleSeek = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -864,51 +1053,82 @@ export function ReviewDeck() {
       </div>
 
       {/* Player bar */}
-      <div className="relative z-10 mx-auto w-full max-w-lg flex-none px-6 pt-3 pb-1">
-        {/* Progress bar */}
-        <div
-          className="relative h-1 cursor-pointer rounded-full bg-white/10"
-          onClick={handleSeek}
-        >
-          <motion.div
-            className="absolute left-0 top-0 h-full rounded-full"
-            style={{
-              width: `${progress}%`,
-              backgroundColor: accentColor,
-            }}
-          />
-          {/* Dot */}
-          <div
-            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-white shadow-sm transition-opacity"
-            style={{ left: `calc(${progress}% - 6px)`, opacity: duration > 0 ? 1 : 0 }}
-          />
-        </div>
-
-        {/* Controls row */}
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-[10px] font-mono text-gray-600 w-10">
-            {duration > 0 ? formatMs(position) : "--:--"}
-          </span>
-
+      <div className="relative z-10 mx-auto w-full max-w-lg flex-none px-5 pt-3 pb-1">
+        <div className="flex items-center gap-2.5">
+          {/* Play / Pause */}
           <button
             type="button"
             onClick={togglePlay}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/15"
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:text-white"
           >
             {isPlaying ? (
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
               </svg>
             ) : (
-              <svg className="h-4 w-4 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="ml-0.5 h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             )}
           </button>
 
-          <span className="text-[10px] font-mono text-gray-600 w-10 text-right">
+          <span className="flex-shrink-0 text-[10px] font-mono text-gray-600">
+            {duration > 0 ? formatMs(position) : "--:--"}
+          </span>
+
+          {/* Seek bar */}
+          <div
+            className="group relative h-[3px] flex-1 cursor-pointer rounded-full bg-white/[0.08]"
+            onClick={handleSeek}
+          >
+            <div
+              className="absolute left-0 top-0 h-full rounded-full"
+              style={{
+                width: `${progress}%`,
+                backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.5)`,
+              }}
+            />
+          </div>
+
+          <span className="flex-shrink-0 text-[10px] font-mono text-gray-600">
             {duration > 0 ? formatMs(duration) : "--:--"}
           </span>
+
+          {/* Volume */}
+          <button
+            type="button"
+            onClick={handleMuteToggle}
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:text-gray-400"
+            aria-label={volume === 0 ? "Unmute" : "Mute"}
+          >
+            {volume === 0 ? (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM17 9l4 6m0-6l-4 6" />
+              </svg>
+            ) : volume < 0.5 ? (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 010 7" />
+              </svg>
+            ) : (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 010 7m2.5-9.5a8 8 0 010 12" />
+              </svg>
+            )}
+          </button>
+
+          <div
+            className="relative h-[3px] w-12 flex-shrink-0 cursor-pointer rounded-full bg-white/[0.08]"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              handleVolumeSet(fraction);
+            }}
+          >
+            <div
+              className="absolute left-0 top-0 h-full rounded-full bg-white/25"
+              style={{ width: `${volume * 100}%` }}
+            />
+          </div>
         </div>
       </div>
 
@@ -936,11 +1156,8 @@ export function ReviewDeck() {
         </div>
 
         {visibleBuckets.length > 0 ? (
-          <div
-            className="flex gap-2 overflow-x-auto pb-1"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {visibleBuckets.map((b) => (
+          <div className="flex gap-2 overflow-hidden pb-1">
+            {inlineBuckets.map((b) => (
               <BucketPill
                 key={b.bucketId}
                 bucket={b}
@@ -949,6 +1166,14 @@ export function ReviewDeck() {
                 accentColor={accentColor}
               />
             ))}
+
+            {showBucketOverflow && (
+              <BucketOverflowButton
+                hiddenCount={hiddenVisibleBucketCount}
+                accentColor={accentColor}
+                onClick={() => setShowBucketPicker(true)}
+              />
+            )}
           </div>
         ) : (
           <button
@@ -1081,6 +1306,16 @@ export function ReviewDeck() {
 
       {/* Manage overlay */}
       <AnimatePresence>
+        {showBucketPicker && data && (
+          <BucketPickerOverlay
+            allBuckets={pickerBuckets}
+            pinnedIds={pinnedIds || []}
+            selectedIds={selectedBucketIds}
+            onToggle={handleToggleBucket}
+            onClose={() => setShowBucketPicker(false)}
+          />
+        )}
+
         {showManage && data && (
           <BucketManageOverlay
             allBuckets={data.allBuckets}
