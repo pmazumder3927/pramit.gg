@@ -5,6 +5,7 @@ const SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize";
 
 // Scopes needed for the features we use
 const SCOPES = [
+  "streaming",
   "user-read-currently-playing",
   "user-read-recently-played",
   "user-read-playback-state",
