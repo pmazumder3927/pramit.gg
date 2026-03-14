@@ -7,9 +7,15 @@ const SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize";
 const SCOPES = [
   "user-read-currently-playing",
   "user-read-recently-played",
+  "user-read-playback-state",
+  "user-modify-playback-state",
   "user-top-read",
+  "user-library-read",
+  "user-library-modify",
   "playlist-read-private",
   "playlist-read-collaborative",
+  "playlist-modify-private",
+  "playlist-modify-public",
 ].join(" ");
 
 export async function GET(request: Request) {
