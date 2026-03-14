@@ -14,6 +14,11 @@ import {
   getRiskLabel,
   summarizeBlock,
 } from "@/app/music/lib/sequencer-heuristics";
+import {
+  buildMiniPlaylistChapters,
+  buildOptimizedBlockPlan,
+  buildOptimizedTrackOrder,
+} from "@/app/music/lib/sequencer-optimizer";
 import type {
   SequencerArcProfile,
   SequencerBlock,
@@ -640,93 +645,26 @@ function reorderLocally(tracks: SequencerTrack[], goal: SequencerGoal, iteration
 function chooseOrderedTracks(
   tracks: SequencerTrack[],
   goal: SequencerGoal,
-  dominantLanguage: string | null
+  dominantLanguage: string | null,
+  secondaryGoal: SequencerGoal | null,
+  arcProfile?: SequencerArcProfile | null
 ) {
   if (tracks.length <= 2) return tracks;
 
-  const remaining = [...tracks];
-  const opener = remaining
-    .map((track) => ({
-      track,
-      score:
-        track.featureProfile.comfort * 0.42 +
-        track.featureProfile.anchor * 0.28 +
-        (1 - track.featureProfile.demand) * 0.2 +
-        (goal === "language" && dominantLanguage && track.featureProfile.language === dominantLanguage ? 0.1 : 0),
-    }))
-    .sort((a, b) => b.score - a.score)[0]?.track;
+  const languagePrioritized =
+    goal === "language" && dominantLanguage
+      ? [...tracks].sort((left, right) => {
+          const leftMatch = left.featureProfile.language === dominantLanguage ? 1 : 0;
+          const rightMatch = right.featureProfile.language === dominantLanguage ? 1 : 0;
+          return rightMatch - leftMatch;
+        })
+      : tracks;
 
-  const closer = remaining
-    .filter((track) => track.trackId !== opener?.trackId)
-    .map((track) => ({
-      track,
-      score:
-        (goal === "discovery"
-          ? track.featureProfile.anchor * 0.28 + track.featureProfile.intensity * 0.32
-          : track.featureProfile.comfort * 0.32 + (1 - track.featureProfile.demand) * 0.26) +
-        track.featureProfile.familiarity * 0.24 +
-        track.featureProfile.bridgePotential * 0.12,
-    }))
-    .sort((a, b) => b.score - a.score)[0]?.track;
-
-  const ordered: SequencerTrack[] = [];
-
-  if (opener) {
-    ordered.push(opener);
-  } else {
-    ordered.push(remaining[0]);
-  }
-
-  const excludedIds = new Set(
-    [opener?.trackId, closer?.trackId].filter(Boolean) as string[]
-  );
-  const pool = remaining.filter((track) => !excludedIds.has(track.trackId));
-
-  while (pool.length > 0) {
-    const ratio = ordered.length / Math.max(1, tracks.length - 1);
-    const target = getGoalTargets(goal, ratio);
-    const needAnchor =
-      ordered.slice(-3).filter((track) => track.featureProfile.anchor >= 0.72).length === 0;
-    const previous = ordered[ordered.length - 1];
-
-    const nextTrack = pool
-      .map((track) => {
-        const arcScore =
-          1 -
-          average([
-            Math.abs(track.featureProfile.energy - target.energy),
-            Math.abs(track.featureProfile.familiarity - target.familiarity),
-            Math.abs(track.featureProfile.novelty - target.novelty),
-            Math.abs(track.featureProfile.intensity - target.intensity),
-          ]);
-
-        const continuity =
-          computeCompatibility(previous.featureProfile, track.featureProfile, goal) / 100;
-        const anchorBonus = needAnchor ? track.featureProfile.anchor * 0.14 : 0;
-        const languageBonus =
-          goal === "language" && dominantLanguage && track.featureProfile.language === dominantLanguage
-            ? 0.12
-            : 0;
-
-        return {
-          track,
-          score: continuity * 0.58 + arcScore * 0.24 + anchorBonus + languageBonus,
-        };
-      })
-      .sort((a, b) => b.score - a.score)[0]?.track;
-
-    if (!nextTrack) break;
-
-    ordered.push(nextTrack);
-    const removeIndex = pool.findIndex((track) => track.trackId === nextTrack.trackId);
-    pool.splice(removeIndex, 1);
-  }
-
-  if (closer && !ordered.some((track) => track.trackId === closer.trackId)) {
-    ordered.push(closer);
-  }
-
-  return reorderLocally(ordered, goal, 3);
+  return buildOptimizedTrackOrder(languagePrioritized, {
+    goalType: goal,
+    secondaryGoal,
+    arcProfile: arcProfile || null,
+  });
 }
 
 function blockCountFor(totalTracks: number) {
@@ -827,24 +765,28 @@ function pickBoundaryIndexes(tracks: SequencerTrack[], goal: SequencerGoal) {
 
 function buildInitialBlocks(
   orderedTracks: SequencerTrack[],
-  goal: SequencerGoal
+  goal: SequencerGoal,
+  secondaryGoal: SequencerGoal | null,
+  arcProfile?: SequencerArcProfile | null
 ): { blocks: SequencePersistenceBlock[]; tracks: SequencePersistenceTrack[] } {
-  const boundaryIndexes = pickBoundaryIndexes(orderedTracks, goal);
-  const boundaries = new Set(boundaryIndexes);
   const blocks: SequencePersistenceBlock[] = [];
   const sequenceTracks: SequencePersistenceTrack[] = [];
 
-  // First pass: collect slices
   const slices: SequencerTrack[][] = [];
-  let cursor = 0;
-  for (let index = 0; index < orderedTracks.length; index += 1) {
-    const isBoundary = boundaries.has(index) || index === orderedTracks.length - 1;
-    if (!isBoundary) continue;
-    slices.push(orderedTracks.slice(cursor, index + 1));
-    cursor = index + 1;
+  const plan = buildOptimizedBlockPlan(orderedTracks, {
+    goalType: goal,
+    secondaryGoal,
+    arcProfile: arcProfile || null,
+  });
+
+  if (plan.length === 0) {
+    slices.push(orderedTracks);
+  } else {
+    for (const range of plan) {
+      slices.push(orderedTracks.slice(range.start, range.end));
+    }
   }
 
-  // Second pass: name blocks from their content
   const totalBlocks = slices.length;
   let globalPos = 0;
 
@@ -1480,6 +1422,7 @@ function composeSnapshot(params: {
   playlist: SequencerPlaylistMeta;
   goalType: SequencerGoal;
   secondaryGoal: SequencerGoal | null;
+  arcProfile?: SequencerArcProfile | null;
   blocks: SequencePersistenceBlock[];
   tracks: SequencePersistenceTrack[];
   trackMap: Map<string, SequencerTrack>;
@@ -1508,12 +1451,20 @@ function composeSnapshot(params: {
   }));
 
   const hydratedBlocks = hydrateBlocks(orderedTracks, params.blocks, params.goalType);
-  const arcProfile = buildArcProfile(params.goalType, hydratedBlocks);
+  const arcProfile =
+    params.arcProfile && params.arcProfile.energy.length > 0
+      ? params.arcProfile
+      : buildArcProfile(params.goalType, hydratedBlocks);
   const transitions = buildTransitions(
     hydratedBlocks,
     params.goalType,
     params.boundaryPreferences
   );
+  const chapters = buildMiniPlaylistChapters(hydratedBlocks, {
+    goalType: params.goalType,
+    secondaryGoal: params.secondaryGoal,
+    arcProfile,
+  });
   const metrics = buildQualityMetrics(hydratedBlocks, params.goalType, transitions);
   const suggestions = buildSuggestions(
     hydratedBlocks,
@@ -1531,6 +1482,7 @@ function composeSnapshot(params: {
     boundaryPreferences: params.boundaryPreferences,
     blocks: hydratedBlocks,
     transitions,
+    chapters,
     metrics,
     suggestions,
     generatedAt: nowIso(),
@@ -1608,12 +1560,19 @@ function generateInitialState(params: {
     .filter((t): t is SequencerTrack => t != null);
 
   const dominantLanguage = dominantLanguageForTracks(tracks);
-  const ordered = chooseOrderedTracks(tracks, params.goalType, dominantLanguage);
-  const seeded = buildInitialBlocks(ordered, params.goalType);
+  const ordered = chooseOrderedTracks(
+    tracks,
+    params.goalType,
+    dominantLanguage,
+    params.secondaryGoal,
+    null
+  );
+  const seeded = buildInitialBlocks(ordered, params.goalType, params.secondaryGoal, null);
   const snapshot = composeSnapshot({
     playlist: params.playlist,
     goalType: params.goalType,
     secondaryGoal: params.secondaryGoal,
+    arcProfile: null,
     blocks: seeded.blocks,
     tracks: seeded.tracks,
     trackMap: params.trackMap,
@@ -1698,6 +1657,7 @@ export async function getPlaylistSequence(
     blocks: stored.blockRows,
     tracks: stored.trackRows,
     trackMap,
+    arcProfile: (stored.sequenceRow?.arc_profile as SequencerArcProfile | null) || null,
     boundaryPreferences:
       (stored.sequenceRow?.boundary_preferences as Record<string, SequencerBoundaryPreference>) ||
       {},
@@ -1764,6 +1724,7 @@ export async function savePlaylistSequence(
     playlist,
     goalType: input.goalType,
     secondaryGoal: input.secondaryGoal,
+    arcProfile: input.arcProfile || null,
     blocks,
     tracks,
     trackMap,

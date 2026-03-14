@@ -142,6 +142,20 @@ export interface SequencerArcProfile {
   novelty: number[];
 }
 
+export interface SequencerMiniPlaylist {
+  id: string;
+  title: string;
+  summary: string;
+  trackCount: number;
+  durationMs: number;
+  targetDurationMs: number;
+  quality: number;
+  startBlockId: string | null;
+  endBlockId: string | null;
+  blockIds: string[];
+  trackIds: string[];
+}
+
 export interface SequencerSnapshot {
   authenticated: boolean;
   playlist: SequencerPlaylistMeta;
@@ -151,6 +165,7 @@ export interface SequencerSnapshot {
   boundaryPreferences: Record<string, SequencerBoundaryPreference>;
   blocks: SequencerBlock[];
   transitions: SequencerBoundary[];
+  chapters: SequencerMiniPlaylist[];
   metrics: SequencerQualityMetrics;
   suggestions: SequencerSuggestion[];
   generatedAt: string;

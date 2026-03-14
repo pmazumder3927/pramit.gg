@@ -16,12 +16,17 @@ import {
   getRiskLabel,
 } from "@/app/music/lib/sequencer-heuristics";
 import {
+  buildMiniPlaylistChapters,
+  reorderTracksWithinBlockOptimized,
+} from "@/app/music/lib/sequencer-optimizer";
+import {
   SEQUENCER_GOAL_LABELS,
   SEQUENCER_GOALS,
   type SequencerBlock,
   type SequencerBoundary,
   type SequencerBoundaryPreference,
   type SequencerGoal,
+  type SequencerMiniPlaylist,
   type SequencerSaveInput,
   type SequencerSnapshot,
   type SequencerTrack,
@@ -251,8 +256,13 @@ function buildDraftPresentation(draft: DraftState) {
     draft.boundaryPreferences
   );
   const arcProfile = buildArcProfile(draft.goalType, blocks);
+  const chapters = buildMiniPlaylistChapters(blocks, {
+    goalType: draft.goalType,
+    secondaryGoal: draft.secondaryGoal,
+    arcProfile,
+  });
   const metrics = buildQualityMetrics(blocks, draft.goalType, transitions);
-  return { blocks, transitions, arcProfile, metrics };
+  return { blocks, transitions, chapters, arcProfile, metrics };
 }
 
 function serializeDraft(
@@ -290,67 +300,14 @@ function serializeDraft(
 function reorderTracksWithinBlock(
   tracks: SequencerTrack[],
   goalType: SequencerGoal,
+  secondaryGoal: SequencerGoal | null,
   mode: "smooth" | "surprise"
 ) {
-  const lockedIndexes = tracks
-    .map((t, i) => (t.locked ? i : -1))
-    .filter((i) => i >= 0);
-  const boundaryIndexes = [-1, ...lockedIndexes, tracks.length];
-  const output = [...tracks];
-
-  const reorderSegment = (segment: SequencerTrack[]) => {
-    if (segment.length <= 2) return segment;
-    const pool = [...segment];
-    const ordered: SequencerTrack[] = [];
-    const start = pool
-      .map((t) => ({
-        track: t,
-        score:
-          mode === "surprise"
-            ? t.featureProfile.anchor * 0.25 + t.featureProfile.novelty * 0.35
-            : t.featureProfile.comfort * 0.42 + t.featureProfile.anchor * 0.24,
-      }))
-      .sort((a, b) => b.score - a.score)[0]?.track;
-
-    if (start) {
-      ordered.push(start);
-      pool.splice(
-        pool.findIndex((t) => t.trackId === start.trackId),
-        1
-      );
-    }
-
-    while (pool.length > 0) {
-      const prev = ordered[ordered.length - 1];
-      const next = pool
-        .map((t) => ({
-          track: t,
-          score:
-            computeCompatibility(prev.featureProfile, t.featureProfile, goalType) +
-            (mode === "surprise"
-              ? t.featureProfile.novelty * 22
-              : t.featureProfile.anchor * 14 + t.featureProfile.comfort * 10),
-        }))
-        .sort((a, b) => b.score - a.score)[0]?.track;
-      if (!next) break;
-      ordered.push(next);
-      pool.splice(
-        pool.findIndex((t) => t.trackId === next.trackId),
-        1
-      );
-    }
-    return ordered;
-  };
-
-  for (let i = 0; i < boundaryIndexes.length - 1; i++) {
-    const start = boundaryIndexes[i] + 1;
-    const end = boundaryIndexes[i + 1];
-    const segment = output.slice(start, end);
-    const reordered = reorderSegment(segment);
-    output.splice(start, segment.length, ...reordered);
-  }
-
-  return output;
+  return reorderTracksWithinBlockOptimized(tracks, {
+    goalType,
+    secondaryGoal,
+    mode,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +324,13 @@ const ROLE_COLORS: Record<string, string> = {
   lift: "bg-orange-400",
   reset: "bg-teal-400",
 };
+
+function formatDuration(durationMs: number) {
+  const totalMinutes = Math.max(1, Math.round(durationMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
 
 function CompatDot({ value }: { value: number | null }) {
   if (value == null) return null;
@@ -654,7 +618,15 @@ function TrackRow({
                         ...d,
                         blocks: d.blocks.map((b) =>
                           b.id === blockId
-                            ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                            ? {
+                                ...b,
+                                tracks: reorderTracksWithinBlock(
+                                  b.tracks,
+                                  d.goalType,
+                                  d.secondaryGoal,
+                                  "smooth"
+                                ),
+                              }
                             : b
                         ),
                       }));
@@ -801,6 +773,64 @@ function FlowStrip({
   );
 }
 
+function ChapterRail({
+  chapters,
+  onSelectBlock,
+  accentColor,
+}: {
+  chapters: SequencerMiniPlaylist[];
+  onSelectBlock: (id: string) => void;
+  accentColor: string;
+}) {
+  if (chapters.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/25">Mini-Playlists</p>
+          <p className="mt-1 text-xs text-white/35">
+            Contiguous ride-length chapters pulled from the full sequence.
+          </p>
+        </div>
+        <span className="text-[11px] text-white/25">
+          target {formatDuration(chapters[0].targetDurationMs)}
+        </span>
+      </div>
+
+      <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+        {chapters.map((chapter) => (
+          <button
+            key={chapter.id}
+            type="button"
+            onClick={() => chapter.startBlockId && onSelectBlock(chapter.startBlockId)}
+            className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-left transition hover:border-white/[0.14] hover:bg-white/[0.05]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-white">{chapter.title}</p>
+                <p className="mt-1 text-[11px] text-white/30">
+                  {formatDuration(chapter.durationMs)} · {chapter.trackCount} tracks
+                </p>
+              </div>
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium text-black"
+                style={{ backgroundColor: accentColor }}
+              >
+                {chapter.quality}
+              </span>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-white/45">{chapter.summary}</p>
+            <p className="mt-3 text-[11px] text-white/25">
+              {chapter.blockIds.length} sections · starts at flow marker
+            </p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TransitionSheet({
   boundary,
   blocks,
@@ -913,7 +943,15 @@ function TransitionSheet({
                 ...d,
                 blocks: d.blocks.map((b) =>
                   b.id === boundary.fromBlockId
-                    ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                    ? {
+                        ...b,
+                        tracks: reorderTracksWithinBlock(
+                          b.tracks,
+                          d.goalType,
+                          d.secondaryGoal,
+                          "smooth"
+                        ),
+                      }
                     : b
                 ),
               }));
@@ -930,7 +968,15 @@ function TransitionSheet({
                 ...d,
                 blocks: d.blocks.map((b) =>
                   b.id === boundary.toBlockId
-                    ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                    ? {
+                        ...b,
+                        tracks: reorderTracksWithinBlock(
+                          b.tracks,
+                          d.goalType,
+                          d.secondaryGoal,
+                          "smooth"
+                        ),
+                      }
                     : b
                 ),
               }));
@@ -1229,7 +1275,13 @@ export function PlaylistSequencer({
                 key={goal}
                 type="button"
                 whileTap={{ scale: 0.95 }}
-                onClick={() => updateDraft((d) => ({ ...d, goalType: goal }))}
+                onClick={() =>
+                  updateDraft((d) => ({
+                    ...d,
+                    goalType: goal,
+                    secondaryGoal: d.secondaryGoal === goal ? null : d.secondaryGoal,
+                  }))
+                }
                 className={`rounded-full px-3 py-1.5 text-xs transition-all ${
                   draft.goalType === goal
                     ? "font-medium text-black"
@@ -1246,6 +1298,35 @@ export function PlaylistSequencer({
               >
                 {SEQUENCER_GOAL_LABELS[goal]}
               </motion.button>
+            ))}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-white/20">Modifier</span>
+            <button
+              type="button"
+              onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: null }))}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${
+                draft.secondaryGoal == null
+                  ? "border border-white/15 bg-white/[0.08] text-white"
+                  : "border border-white/8 bg-transparent text-white/40 hover:text-white/70"
+              }`}
+            >
+              None
+            </button>
+            {SEQUENCER_GOALS.filter((goal) => goal !== draft.goalType).map((goal) => (
+              <button
+                key={`modifier-${goal}`}
+                type="button"
+                onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: goal }))}
+                className={`rounded-full px-3 py-1.5 text-xs transition ${
+                  draft.secondaryGoal === goal
+                    ? "border border-white/15 bg-white/[0.08] text-white"
+                    : "border border-white/8 bg-transparent text-white/40 hover:text-white/70"
+                }`}
+              >
+                {SEQUENCER_GOAL_LABELS[goal]}
+              </button>
             ))}
           </div>
 
@@ -1331,6 +1412,22 @@ export function PlaylistSequencer({
         />
       </motion.div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="mt-3"
+      >
+        <ChapterRail
+          chapters={view.chapters}
+          onSelectBlock={(id) => {
+            setSelectedBlockId(id);
+            setActiveBoundaryId(null);
+          }}
+          accentColor={accentColor}
+        />
+      </motion.div>
+
       {/* ── Transition sheet (shows when a seam dot is clicked) ── */}
       <AnimatePresence>
         {activeBoundary && (
@@ -1392,7 +1489,12 @@ export function PlaylistSequencer({
                         ...d,
                         blocks: d.blocks.map((b) => ({
                           ...b,
-                          tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth"),
+                          tracks: reorderTracksWithinBlock(
+                            b.tracks,
+                            d.goalType,
+                            d.secondaryGoal,
+                            "smooth"
+                          ),
                         })),
                       }))
                     }
@@ -1407,7 +1509,12 @@ export function PlaylistSequencer({
                         ...d,
                         blocks: d.blocks.map((b) => ({
                           ...b,
-                          tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "surprise"),
+                          tracks: reorderTracksWithinBlock(
+                            b.tracks,
+                            d.goalType,
+                            d.secondaryGoal,
+                            "surprise"
+                          ),
                         })),
                       }))
                     }
@@ -1476,7 +1583,15 @@ export function PlaylistSequencer({
                       ...d,
                       blocks: d.blocks.map((b) =>
                         b.id === selectedBlock.id
-                          ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                          ? {
+                              ...b,
+                              tracks: reorderTracksWithinBlock(
+                                b.tracks,
+                                d.goalType,
+                                d.secondaryGoal,
+                                "smooth"
+                              ),
+                            }
                           : b
                       ),
                     }))
