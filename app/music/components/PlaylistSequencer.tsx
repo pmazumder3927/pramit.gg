@@ -26,7 +26,6 @@ import {
   type SequencerBoundary,
   type SequencerBoundaryPreference,
   type SequencerGoal,
-  type SequencerMiniPlaylist,
   type SequencerSaveInput,
   type SequencerSnapshot,
   type SequencerTrack,
@@ -773,64 +772,6 @@ function FlowStrip({
   );
 }
 
-function ChapterRail({
-  chapters,
-  onSelectBlock,
-  accentColor,
-}: {
-  chapters: SequencerMiniPlaylist[];
-  onSelectBlock: (id: string) => void;
-  accentColor: string;
-}) {
-  if (chapters.length === 0) return null;
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-white/25">Mini-Playlists</p>
-          <p className="mt-1 text-xs text-white/35">
-            Contiguous ride-length chapters pulled from the full sequence.
-          </p>
-        </div>
-        <span className="text-[11px] text-white/25">
-          target {formatDuration(chapters[0].targetDurationMs)}
-        </span>
-      </div>
-
-      <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
-        {chapters.map((chapter) => (
-          <button
-            key={chapter.id}
-            type="button"
-            onClick={() => chapter.startBlockId && onSelectBlock(chapter.startBlockId)}
-            className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-left transition hover:border-white/[0.14] hover:bg-white/[0.05]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-white">{chapter.title}</p>
-                <p className="mt-1 text-[11px] text-white/30">
-                  {formatDuration(chapter.durationMs)} · {chapter.trackCount} tracks
-                </p>
-              </div>
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-medium text-black"
-                style={{ backgroundColor: accentColor }}
-              >
-                {chapter.quality}
-              </span>
-            </div>
-            <p className="mt-3 text-xs leading-5 text-white/45">{chapter.summary}</p>
-            <p className="mt-3 text-[11px] text-white/25">
-              {chapter.blockIds.length} sections · starts at flow marker
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function TransitionSheet({
   boundary,
   blocks,
@@ -1056,6 +997,12 @@ export function PlaylistSequencer({
     view?.blocks.find((b) => b.id === selectedBlockId) || view?.blocks[0] || null;
   const activeBoundary =
     view?.transitions.find((t) => t.id === activeBoundaryId) || null;
+  const selectedBlockIndex = selectedBlock
+    ? (view?.blocks.findIndex((block) => block.id === selectedBlock.id) ?? -1)
+    : -1;
+  const activeChapter = selectedBlock
+    ? view?.chapters.find((chapter) => chapter.blockIds.includes(selectedBlock.id)) || null
+    : null;
 
   useEffect(() => {
     if (selectedBlock || !view?.blocks.length) return;
@@ -1412,22 +1359,6 @@ export function PlaylistSequencer({
         />
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.08 }}
-        className="mt-3"
-      >
-        <ChapterRail
-          chapters={view.chapters}
-          onSelectBlock={(id) => {
-            setSelectedBlockId(id);
-            setActiveBoundaryId(null);
-          }}
-          accentColor={accentColor}
-        />
-      </motion.div>
-
       {/* ── Transition sheet (shows when a seam dot is clicked) ── */}
       <AnimatePresence>
         {activeBoundary && (
@@ -1573,6 +1504,11 @@ export function PlaylistSequencer({
                 <span className="text-xs text-white/25">
                   {selectedBlock.tracks.length} tracks &middot; {selectedBlock.summary}
                 </span>
+                {activeChapter && (
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/45">
+                    {activeChapter.title} · {formatDuration(activeChapter.durationMs)} · {activeChapter.trackCount} tracks
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -1602,15 +1538,14 @@ export function PlaylistSequencer({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    updateDraft((d) => {
-                      const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
-                      if (i <= 0) return d;
-                      return { ...d, blocks: moveArrayItem(d.blocks, i, i - 1) };
-                    })
-                  }
+                  onClick={() => {
+                    if (selectedBlockIndex <= 0 || !view?.blocks[selectedBlockIndex - 1]) return;
+                    setSelectedBlockId(view.blocks[selectedBlockIndex - 1].id);
+                    setActiveBoundaryId(null);
+                  }}
+                  disabled={selectedBlockIndex <= 0}
                   className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
-                  title="Move section left"
+                  title="Previous section"
                 >
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -1618,15 +1553,20 @@ export function PlaylistSequencer({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    updateDraft((d) => {
-                      const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
-                      if (i < 0 || i >= d.blocks.length - 1) return d;
-                      return { ...d, blocks: moveArrayItem(d.blocks, i, i + 1) };
-                    })
-                  }
+                  onClick={() => {
+                    if (
+                      selectedBlockIndex < 0 ||
+                      selectedBlockIndex >= (view?.blocks.length || 0) - 1 ||
+                      !view?.blocks[selectedBlockIndex + 1]
+                    ) {
+                      return;
+                    }
+                    setSelectedBlockId(view.blocks[selectedBlockIndex + 1].id);
+                    setActiveBoundaryId(null);
+                  }}
+                  disabled={selectedBlockIndex < 0 || selectedBlockIndex >= view.blocks.length - 1}
                   className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
-                  title="Move section right"
+                  title="Next section"
                 >
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

@@ -711,7 +711,15 @@ export function buildMiniPlaylistChapters(
 
   const blockDurations = blocks.map((block) => totalDurationMs(block.tracks));
   const totalDuration = blockDurations.reduce((sum, value) => sum + value, 0);
-  const targetChapterCount = clamp(Math.round(totalDuration / (32 * 60_000)), 1, Math.max(1, blocks.length));
+  if (totalDuration < 75 * 60_000 || blocks.length < 3) {
+    return [] satisfies SequencerMiniPlaylist[];
+  }
+
+  const targetChapterCount = clamp(
+    Math.round(totalDuration / (44 * 60_000)),
+    2,
+    Math.min(8, Math.max(2, blocks.length))
+  );
   const targetDuration = totalDuration / targetChapterCount;
   const prefixDurations = [0];
   for (const duration of blockDurations) {
