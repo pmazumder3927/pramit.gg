@@ -28,33 +28,37 @@ export function MusicManagerShell({
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(255,107,61,0.06),transparent_30%)]" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_88%_14%,rgba(124,119,198,0.06),transparent_34%)]" />
 
-      <div className="relative z-10 border-b border-white/[0.06] bg-black/20 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
-          <div className="flex items-center gap-4">
+      <div className="relative z-10 border-b border-white/[0.06] bg-black/30 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-5">
             <Link
               href="/music/manage"
-              className="text-sm font-medium text-white/70 transition hover:text-white"
+              className="group flex items-center gap-2 transition"
             >
-              Music Manager
+              <span className="text-[10px] uppercase tracking-[0.25em] text-white/30 transition-colors group-hover:text-white/50">
+                Studio
+              </span>
             </Link>
 
-            <nav className="flex items-center gap-1">
+            <div className="h-4 w-px bg-white/[0.08]" />
+
+            <nav className="flex items-center gap-0.5">
               {NAV_ITEMS.map((item) => {
                 const active = isActive(pathname, item.href, item.match);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`relative rounded-lg px-3 py-1.5 text-xs transition ${
+                    className={`relative rounded-full px-3.5 py-1.5 text-[11px] tracking-wide transition ${
                       active
                         ? "text-white"
-                        : "text-white/35 hover:text-white/60"
+                        : "text-white/30 hover:text-white/55"
                     }`}
                   >
                     {active && (
                       <motion.div
-                        layoutId="music-manage-nav"
-                        className="absolute inset-0 rounded-lg bg-white/[0.08]"
+                        layoutId="studio-nav"
+                        className="absolute inset-0 rounded-full bg-white/[0.08] ring-1 ring-white/[0.06]"
                         transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
                       />
                     )}
@@ -64,23 +68,26 @@ export function MusicManagerShell({
               })}
 
               {isSequencer && (
-                <span className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-xs text-white">
-                  Sequencer
-                </span>
+                <>
+                  <span className="mx-1.5 text-white/15">/</span>
+                  <span className="rounded-full bg-accent-orange/10 px-3 py-1.5 text-[11px] tracking-wide text-accent-orange/80">
+                    Sequencer
+                  </span>
+                </>
               )}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Link
               href="/music"
-              className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs text-white/40 transition hover:text-white/60"
+              className="rounded-full px-3 py-1.5 text-[11px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/50"
             >
               Public
             </Link>
             <Link
               href="/dashboard"
-              className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs text-white/40 transition hover:text-white/60"
+              className="rounded-full px-3 py-1.5 text-[11px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/50"
             >
               Dashboard
             </Link>

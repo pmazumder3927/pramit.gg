@@ -248,7 +248,7 @@ function DashboardContent() {
                 Private Tooling
               </p>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                Music Manager
+                Studio
               </h2>
               <p className="mt-2 text-sm text-gray-400">
                 Review songs, manage buckets, and sequence playlists in one place.
@@ -259,7 +259,7 @@ function DashboardContent() {
               href="/music/manage"
               className="inline-flex items-center justify-center rounded-full bg-cyber-orange px-5 py-2.5 text-sm font-medium text-black transition hover:bg-opacity-90"
             >
-              Open Music Manager
+              Open Studio
             </Link>
           </div>
         </motion.div>
