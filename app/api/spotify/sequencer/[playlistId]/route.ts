@@ -66,6 +66,7 @@ export async function GET(request: Request, { params }: RouteProps) {
 
     return NextResponse.json(snapshot);
   } catch (error) {
+    console.error("[sequencer GET]", error);
     const message =
       error instanceof Error ? error.message : "Failed to load playlist sequencer";
     return NextResponse.json({ error: message }, { status: 500 });

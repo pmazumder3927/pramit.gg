@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
 import { AnimatePresence, motion } from "motion/react";
 import { useAlbumColor } from "@/app/lib/use-album-color";
-import { GradientOrbs } from "@/app/music/components";
 import { hexToRgb } from "@/app/music/lib/chaotic-styles";
 import {
   buildArcProfile,
@@ -41,6 +40,10 @@ interface DraftState {
   boundaryPreferences: Record<string, SequencerBoundaryPreference>;
   blocks: SequencerBlock[];
 }
+
+// ---------------------------------------------------------------------------
+// Pure logic helpers (unchanged)
+// ---------------------------------------------------------------------------
 
 function cloneBlocks(blocks: SequencerBlock[]) {
   return blocks.map((block) => ({
@@ -77,12 +80,11 @@ function annotateTracks(
   goalType: SequencerGoal,
   boundaryPreferences: Record<string, SequencerBoundaryPreference>
 ) {
-  const nextBlocks = cloneBlocks(blocks)
-    .map((block, blockIndex) => ({
-      ...block,
-      position: blockIndex,
-      warnings: [] as string[],
-    }));
+  const nextBlocks = cloneBlocks(blocks).map((block, blockIndex) => ({
+    ...block,
+    position: blockIndex,
+    warnings: [] as string[],
+  }));
 
   let globalPosition = 0;
   for (const block of nextBlocks) {
@@ -97,21 +99,17 @@ function annotateTracks(
       if (track.featureProfile.familiarity >= 0.76) roleTags.add("favorite");
       if (track.featureProfile.novelty >= 0.7) roleTags.add("new");
       if (track.featureProfile.bridgePotential >= 0.68) roleTags.add("bridge");
-
       if (
         previousTrack &&
         track.featureProfile.energy - previousTrack.featureProfile.energy >= 0.16
-      ) {
+      )
         roleTags.add("lift");
-      }
-
       if (
         previousTrack &&
         previousTrack.featureProfile.intensity - track.featureProfile.intensity >= 0.18 &&
         track.featureProfile.comfort >= 0.52
-      ) {
+      )
         roleTags.add("reset");
-      }
 
       return {
         ...track,
@@ -119,72 +117,56 @@ function annotateTracks(
         currentPosition: globalPosition++,
         roleTags: Array.from(roleTags).slice(0, 4),
         prevCompatibility: previousTrack
-          ? computeCompatibility(
-              previousTrack.featureProfile,
-              track.featureProfile,
-              goalType
-            )
+          ? computeCompatibility(previousTrack.featureProfile, track.featureProfile, goalType)
           : null,
         nextCompatibility: nextTrack
-          ? computeCompatibility(
-              track.featureProfile,
-              nextTrack.featureProfile,
-              goalType
-            )
+          ? computeCompatibility(track.featureProfile, nextTrack.featureProfile, goalType)
           : null,
       };
     });
 
     block.metrics = {
       cohesion:
-        block.tracks.length === 0
+        block.tracks.length <= 1
           ? 100
           : Math.round(
-              block.tracks.length === 1
-                ? 100
-                : block.tracks
-                    .slice(0, -1)
-                    .reduce(
-                      (sum, track, index) =>
-                        sum +
-                        computeCompatibility(
-                          track.featureProfile,
-                          block.tracks[index + 1].featureProfile,
-                          goalType
-                        ),
-                      0
-                    ) /
-                    (block.tracks.length - 1)
+              block.tracks
+                .slice(0, -1)
+                .reduce(
+                  (sum, track, index) =>
+                    sum +
+                    computeCompatibility(
+                      track.featureProfile,
+                      block.tracks[index + 1].featureProfile,
+                      goalType
+                    ),
+                  0
+                ) /
+                (block.tracks.length - 1)
             ),
       energy:
         block.tracks.length === 0
           ? 0
-          : block.tracks.reduce((sum, track) => sum + track.featureProfile.energy, 0) /
-            block.tracks.length,
+          : block.tracks.reduce((s, t) => s + t.featureProfile.energy, 0) / block.tracks.length,
       familiarity:
         block.tracks.length === 0
           ? 0
-          : block.tracks.reduce(
-              (sum, track) => sum + track.featureProfile.familiarity,
-              0
-            ) / block.tracks.length,
+          : block.tracks.reduce((s, t) => s + t.featureProfile.familiarity, 0) /
+            block.tracks.length,
       novelty:
         block.tracks.length === 0
           ? 0
-          : block.tracks.reduce((sum, track) => sum + track.featureProfile.novelty, 0) /
-            block.tracks.length,
+          : block.tracks.reduce((s, t) => s + t.featureProfile.novelty, 0) / block.tracks.length,
       intensity:
         block.tracks.length === 0
           ? 0
-          : block.tracks.reduce(
-              (sum, track) => sum + track.featureProfile.intensity,
-              0
-            ) / block.tracks.length,
+          : block.tracks.reduce((s, t) => s + t.featureProfile.intensity, 0) /
+            block.tracks.length,
     };
 
     block.summary =
       block.tracks.length === 0
-        ? "empty / staging / waiting for songs"
+        ? "empty"
         : [
             block.metrics.energy >= 0.62
               ? "high-energy"
@@ -201,11 +183,11 @@ function annotateTracks(
   }
 
   const transitions: SequencerBoundary[] = [];
-  const orderedTracks = nextBlocks.flatMap((block) => block.tracks);
+  const orderedTracks = nextBlocks.flatMap((b) => b.tracks);
 
-  for (let index = 0; index < nextBlocks.length - 1; index += 1) {
-    const current = nextBlocks[index];
-    const next = nextBlocks[index + 1];
+  for (let i = 0; i < nextBlocks.length - 1; i++) {
+    const current = nextBlocks[i];
+    const next = nextBlocks[i + 1];
     if (current.tracks.length === 0 || next.tracks.length === 0) continue;
     const tail = current.tracks[current.tracks.length - 1];
     const head = next.tracks[0];
@@ -219,22 +201,21 @@ function annotateTracks(
     );
     const bridgeCandidateTrackIds = orderedTracks
       .filter(
-        (track) =>
-          track.trackId !== tail.trackId &&
-          track.trackId !== head.trackId &&
-          track.blockId !== current.id &&
-          track.blockId !== next.id
+        (t) =>
+          t.trackId !== tail.trackId &&
+          t.trackId !== head.trackId &&
+          t.blockId !== current.id &&
+          t.blockId !== next.id
       )
-      .map((track) => {
-        const direct = compatibility;
-        const bridgeScore =
-          (computeCompatibility(tail.featureProfile, track.featureProfile, goalType) +
-            computeCompatibility(track.featureProfile, head.featureProfile, goalType)) /
+      .map((t) => ({
+        trackId: t.trackId,
+        bridgeScore:
+          (computeCompatibility(tail.featureProfile, t.featureProfile, goalType) +
+            computeCompatibility(t.featureProfile, head.featureProfile, goalType)) /
             2 -
-          direct +
-          track.featureProfile.bridgePotential * 20;
-        return { trackId: track.trackId, bridgeScore };
-      })
+          compatibility +
+          t.featureProfile.bridgePotential * 20,
+      }))
       .sort((a, b) => b.bridgeScore - a.bridgeScore)
       .slice(0, 3)
       .map((item) => item.trackId);
@@ -246,21 +227,18 @@ function annotateTracks(
       mode,
       compatibility,
       riskLabel: getRiskLabel(compatibility),
-      changeSummary: describeBoundaryChanges(
-        tail.featureProfile,
-        head.featureProfile
-      ),
+      changeSummary: describeBoundaryChanges(tail.featureProfile, head.featureProfile),
       bridgeCandidateTrackIds,
     });
 
-    if (compatibility < 52) current.warnings.push("edge transition is abrupt");
-    else if (compatibility < 74) current.warnings.push("edge transition is noticeable");
+    if (compatibility < 52) current.warnings.push("abrupt edge");
+    else if (compatibility < 74) current.warnings.push("noticeable edge");
   }
 
   return {
-    blocks: nextBlocks.map((block) => ({
-      ...block,
-      warnings: Array.from(new Set(block.warnings)).slice(0, 2),
+    blocks: nextBlocks.map((b) => ({
+      ...b,
+      warnings: Array.from(new Set(b.warnings)).slice(0, 2),
     })),
     transitions,
   };
@@ -274,37 +252,38 @@ function buildDraftPresentation(draft: DraftState) {
   );
   const arcProfile = buildArcProfile(draft.goalType, blocks);
   const metrics = buildQualityMetrics(blocks, draft.goalType, transitions);
-
   return { blocks, transitions, arcProfile, metrics };
 }
 
-function serializeDraft(view: ReturnType<typeof buildDraftPresentation>, draft: DraftState) {
+function serializeDraft(
+  view: ReturnType<typeof buildDraftPresentation>,
+  draft: DraftState
+) {
   const payload: SequencerSaveInput = {
     goalType: draft.goalType,
     secondaryGoal: draft.secondaryGoal,
     arcProfile: view.arcProfile,
     boundaryPreferences: draft.boundaryPreferences,
-    blocks: view.blocks.map((block) => ({
-      id: block.id,
-      name: block.name,
-      purpose: block.purpose,
-      position: block.position,
-      colorToken: block.colorToken,
-      notes: block.notes,
-      locked: block.locked,
+    blocks: view.blocks.map((b) => ({
+      id: b.id,
+      name: b.name,
+      purpose: b.purpose,
+      position: b.position,
+      colorToken: b.colorToken,
+      notes: b.notes,
+      locked: b.locked,
     })),
-    tracks: view.blocks.flatMap((block) =>
-      block.tracks.map((track) => ({
-        trackId: track.trackId,
-        blockId: block.id,
-        position: track.currentPosition,
-        roleTags: track.roleTags,
-        locked: track.locked,
-        hiddenFromAutosort: track.hiddenFromAutosort,
+    tracks: view.blocks.flatMap((b) =>
+      b.tracks.map((t) => ({
+        trackId: t.trackId,
+        blockId: b.id,
+        position: t.currentPosition,
+        roleTags: t.roleTags,
+        locked: t.locked,
+        hiddenFromAutosort: t.hiddenFromAutosort,
       }))
     ),
   };
-
   return payload;
 }
 
@@ -314,8 +293,8 @@ function reorderTracksWithinBlock(
   mode: "smooth" | "surprise"
 ) {
   const lockedIndexes = tracks
-    .map((track, index) => (track.locked ? index : -1))
-    .filter((index) => index >= 0);
+    .map((t, i) => (t.locked ? i : -1))
+    .filter((i) => i >= 0);
   const boundaryIndexes = [-1, ...lockedIndexes, tracks.length];
   const output = [...tracks];
 
@@ -324,50 +303,48 @@ function reorderTracksWithinBlock(
     const pool = [...segment];
     const ordered: SequencerTrack[] = [];
     const start = pool
-      .map((track) => ({
-        track,
+      .map((t) => ({
+        track: t,
         score:
           mode === "surprise"
-            ? track.featureProfile.anchor * 0.25 + track.featureProfile.novelty * 0.35
-            : track.featureProfile.comfort * 0.42 + track.featureProfile.anchor * 0.24,
+            ? t.featureProfile.anchor * 0.25 + t.featureProfile.novelty * 0.35
+            : t.featureProfile.comfort * 0.42 + t.featureProfile.anchor * 0.24,
       }))
       .sort((a, b) => b.score - a.score)[0]?.track;
 
     if (start) {
       ordered.push(start);
       pool.splice(
-        pool.findIndex((track) => track.trackId === start.trackId),
+        pool.findIndex((t) => t.trackId === start.trackId),
         1
       );
     }
 
     while (pool.length > 0) {
-      const previous = ordered[ordered.length - 1];
+      const prev = ordered[ordered.length - 1];
       const next = pool
-        .map((track) => ({
-          track,
+        .map((t) => ({
+          track: t,
           score:
-            computeCompatibility(previous.featureProfile, track.featureProfile, goalType) +
+            computeCompatibility(prev.featureProfile, t.featureProfile, goalType) +
             (mode === "surprise"
-              ? track.featureProfile.novelty * 22
-              : track.featureProfile.anchor * 14 + track.featureProfile.comfort * 10),
+              ? t.featureProfile.novelty * 22
+              : t.featureProfile.anchor * 14 + t.featureProfile.comfort * 10),
         }))
         .sort((a, b) => b.score - a.score)[0]?.track;
-
       if (!next) break;
       ordered.push(next);
       pool.splice(
-        pool.findIndex((track) => track.trackId === next.trackId),
+        pool.findIndex((t) => t.trackId === next.trackId),
         1
       );
     }
-
     return ordered;
   };
 
-  for (let index = 0; index < boundaryIndexes.length - 1; index += 1) {
-    const start = boundaryIndexes[index] + 1;
-    const end = boundaryIndexes[index + 1];
+  for (let i = 0; i < boundaryIndexes.length - 1; i++) {
+    const start = boundaryIndexes[i] + 1;
+    const end = boundaryIndexes[i + 1];
     const segment = output.slice(start, end);
     const reordered = reorderSegment(segment);
     output.splice(start, segment.length, ...reordered);
@@ -376,36 +353,613 @@ function reorderTracksWithinBlock(
   return output;
 }
 
-function MetricBadge({
-  label,
-  value,
+// ---------------------------------------------------------------------------
+// UI sub-components
+// ---------------------------------------------------------------------------
+
+const ROLE_COLORS: Record<string, string> = {
+  anchor: "bg-blue-400",
+  favorite: "bg-pink-400",
+  bridge: "bg-amber-400",
+  opener: "bg-emerald-400",
+  closer: "bg-purple-400",
+  new: "bg-cyan-400",
+  lift: "bg-orange-400",
+  reset: "bg-teal-400",
+};
+
+function CompatDot({ value }: { value: number | null }) {
+  if (value == null) return null;
+  const color =
+    value >= 74
+      ? "bg-emerald-400/70"
+      : value >= 52
+        ? "bg-amber-400/70"
+        : "bg-rose-400/70";
+  return (
+    <span
+      className={`inline-block h-1.5 w-1.5 rounded-full ${color}`}
+      title={`${value}/100 compatibility`}
+    />
+  );
+}
+
+function TrackRow({
+  track,
+  index,
+  total,
+  blockId,
+  blockCount,
+  accentColor,
+  onUpdate,
+}: {
+  track: SequencerTrack;
+  index: number;
+  total: number;
+  blockId: string;
+  blockCount: number;
+  accentColor: string;
+  onUpdate: (updater: (d: DraftState) => DraftState) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const rgb = hexToRgb(accentColor);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const moveTrack = (dir: -1 | 1) => {
+    const to = index + dir;
+    if (to < 0 || to >= total) return;
+    onUpdate((d) => ({
+      ...d,
+      blocks: d.blocks.map((b) =>
+        b.id === blockId ? { ...b, tracks: moveArrayItem(b.tracks, index, to) } : b
+      ),
+    }));
+  };
+
+  const toggleLock = () =>
+    onUpdate((d) => ({
+      ...d,
+      blocks: d.blocks.map((b) =>
+        b.id === blockId
+          ? {
+              ...b,
+              tracks: b.tracks.map((t) =>
+                t.trackId === track.trackId ? { ...t, locked: !t.locked } : t
+              ),
+            }
+          : b
+      ),
+    }));
+
+  const sendToBlock = (dir: "prev" | "next") =>
+    onUpdate((d) => {
+      const ci = d.blocks.findIndex((b) => b.id === blockId);
+      const ti = dir === "prev" ? ci - 1 : ci + 1;
+      if (ti < 0 || ti >= d.blocks.length) return d;
+      return {
+        ...d,
+        blocks: d.blocks.map((b, bi) => {
+          if (bi === ci) return { ...b, tracks: b.tracks.filter((t) => t.trackId !== track.trackId) };
+          if (bi === ti) {
+            const insertTracks = dir === "prev" ? [...b.tracks, track] : [track, ...b.tracks];
+            return { ...b, tracks: insertTracks };
+          }
+          return b;
+        }),
+      };
+    });
+
+  const splitAfter = () =>
+    onUpdate((d) => ({
+      ...d,
+      blocks: d.blocks.flatMap((b) => {
+        if (b.id !== blockId) return [b];
+        const left = b.tracks.slice(0, index + 1);
+        const right = b.tracks.slice(index + 1);
+        if (right.length === 0) return [b];
+        return [
+          { ...b, tracks: left },
+          {
+            ...b,
+            id: crypto.randomUUID(),
+            name: `${b.name} (split)`,
+            tracks: right,
+            locked: false,
+          },
+        ];
+      }),
+    }));
+
+  const hasJump = track.nextCompatibility != null && track.nextCompatibility < 58;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -16 }}
+      className="group relative flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]"
+    >
+      {/* Compatibility edge indicator */}
+      {track.prevCompatibility != null && (
+        <div
+          className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full"
+          style={{
+            backgroundColor:
+              track.prevCompatibility >= 74
+                ? "rgba(52,211,153,0.5)"
+                : track.prevCompatibility >= 52
+                  ? "rgba(251,191,36,0.5)"
+                  : "rgba(251,113,133,0.6)",
+          }}
+        />
+      )}
+
+      {/* Position number */}
+      <span className="w-5 flex-none text-center text-[11px] tabular-nums text-white/25">
+        {index + 1}
+      </span>
+
+      {/* Album art */}
+      <div className="relative h-10 w-10 flex-none overflow-hidden rounded-lg">
+        {track.albumImageUrl ? (
+          <Image src={track.albumImageUrl} alt="" fill className="object-cover" sizes="40px" />
+        ) : (
+          <div className="absolute inset-0 bg-white/5" />
+        )}
+      </div>
+
+      {/* Track info */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <h4 className="truncate text-sm font-medium text-white">{track.title}</h4>
+          {track.locked && (
+            <svg className="h-3 w-3 flex-none text-white/40" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+          <CompatDot value={track.nextCompatibility} />
+        </div>
+        <p className="truncate text-xs text-white/40">{track.artistDisplay}</p>
+        <div className="mt-1 flex items-center gap-1">
+          {track.roleTags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className={`inline-block h-1.5 w-1.5 rounded-full ${ROLE_COLORS[tag] || "bg-white/20"}`}
+              title={tag}
+            />
+          ))}
+          {track.roleTags.length > 0 && (
+            <span className="ml-1 text-[10px] text-white/25">
+              {track.roleTags.slice(0, 2).join(" / ")}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Hover actions */}
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={() => moveTrack(-1)}
+          disabled={index === 0}
+          className="rounded-lg p-1.5 text-white/40 transition hover:bg-white/[0.08] hover:text-white disabled:opacity-20"
+          title="Move up"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => moveTrack(1)}
+          disabled={index === total - 1}
+          className="rounded-lg p-1.5 text-white/40 transition hover:bg-white/[0.08] hover:text-white disabled:opacity-20"
+          title="Move down"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={toggleLock}
+          className={`rounded-lg p-1.5 transition ${
+            track.locked
+              ? "text-white/80 hover:bg-white/[0.08]"
+              : "text-white/40 hover:bg-white/[0.08] hover:text-white"
+          }`}
+          title={track.locked ? "Unlock" : "Lock position"}
+        >
+          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+            {track.locked ? (
+              <path
+                fillRule="evenodd"
+                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                clipRule="evenodd"
+              />
+            ) : (
+              <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
+            )}
+          </svg>
+        </button>
+
+        {/* More actions dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="rounded-lg p-1.5 text-white/40 transition hover:bg-white/[0.08] hover:text-white"
+          >
+            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+            </svg>
+          </button>
+
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-white/10 bg-charcoal-black/95 py-1 shadow-xl backdrop-blur-xl"
+              >
+                {index > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { sendToBlock("prev"); setMenuOpen(false); }}
+                    className="w-full px-3 py-2 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Send to previous section
+                  </button>
+                )}
+                {blockCount > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => { sendToBlock("next"); setMenuOpen(false); }}
+                    className="w-full px-3 py-2 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Send to next section
+                  </button>
+                )}
+                {index < total - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => { splitAfter(); setMenuOpen(false); }}
+                    className="w-full px-3 py-2 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Split section here
+                  </button>
+                )}
+                {hasJump && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdate((d) => ({
+                        ...d,
+                        blocks: d.blocks.map((b) =>
+                          b.id === blockId
+                            ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                            : b
+                        ),
+                      }));
+                      setMenuOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-amber-200/80 transition hover:bg-amber-400/10"
+                  >
+                    Smooth this jump
+                  </button>
+                )}
+                {track.songUrl && (
+                  <a
+                    href={track.songUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block w-full px-3 py-2 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Open in Spotify
+                  </a>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function FlowStrip({
+  blocks,
+  transitions,
+  selectedBlockId,
+  onSelectBlock,
+  onSelectTransition,
   accentColor,
 }: {
-  label: string;
-  value: number;
+  blocks: SequencerBlock[];
+  transitions: SequencerBoundary[];
+  selectedBlockId: string | null;
+  onSelectBlock: (id: string) => void;
+  onSelectTransition: (id: string) => void;
   accentColor: string;
 }) {
   const rgb = hexToRgb(accentColor);
+  const totalTracks = blocks.reduce((s, b) => s + b.tracks.length, 0) || 1;
+  const stripRef = useRef<HTMLDivElement>(null);
+
   return (
-    <div
-      className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
-      style={{
-        boxShadow: `0 14px 30px -18px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.45)`,
-      }}
-    >
-      <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">{label}</p>
-      <div className="mt-2 flex items-end gap-2">
-        <span className="text-xl font-semibold text-white">{value}</span>
-        <span className="pb-0.5 text-xs text-white/45">/100</span>
+    <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div ref={stripRef} className="flex items-end gap-0" style={{ height: 88 }}>
+        {blocks.map((block, bi) => {
+          const pct = Math.max(6, (block.tracks.length / totalTracks) * 100);
+          const isSelected = block.id === selectedBlockId;
+
+          return (
+            <Fragment key={block.id}>
+              <button
+                type="button"
+                onClick={() => onSelectBlock(block.id)}
+                className="relative flex items-end gap-px overflow-hidden transition-all duration-300"
+                style={{
+                  width: `${pct}%`,
+                  height: "100%",
+                  background: isSelected
+                    ? `linear-gradient(180deg, rgba(${rgb.r},${rgb.g},${rgb.b},0.06) 0%, rgba(${rgb.r},${rgb.g},${rgb.b},0.14) 100%)`
+                    : "transparent",
+                  borderBottom: isSelected ? `2px solid ${accentColor}` : "2px solid transparent",
+                }}
+              >
+                {/* Energy waveform bars */}
+                <div className="flex h-full w-full items-end justify-center gap-px px-1 pb-5">
+                  {block.tracks.map((track) => {
+                    const barH = 10 + track.featureProfile.energy * 48;
+                    return (
+                      <div
+                        key={track.trackId}
+                        className="rounded-t-sm transition-all duration-500"
+                        style={{
+                          height: barH,
+                          flex: "1 1 0",
+                          minWidth: 2,
+                          maxWidth: 10,
+                          backgroundColor: isSelected
+                            ? `rgba(${rgb.r},${rgb.g},${rgb.b},${0.35 + track.featureProfile.energy * 0.55})`
+                            : `rgba(255,255,255,${0.06 + track.featureProfile.energy * 0.14})`,
+                        }}
+                      />
+                    );
+                  })}
+                  {block.tracks.length === 0 && (
+                    <div className="flex h-full items-center">
+                      <span className="text-[10px] text-white/20">empty</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Block label */}
+                <div className="absolute bottom-0 left-0 right-0 px-2 py-1">
+                  <p
+                    className={`truncate text-[10px] font-medium transition-colors ${
+                      isSelected ? "text-white/70" : "text-white/30"
+                    }`}
+                  >
+                    {block.name}
+                  </p>
+                </div>
+              </button>
+
+              {/* Seam dot */}
+              {bi < blocks.length - 1 && transitions[bi] && (
+                <button
+                  type="button"
+                  onClick={() => onSelectTransition(transitions[bi].id)}
+                  className="relative z-10 flex h-full flex-none items-center px-0.5"
+                  title={`${transitions[bi].compatibility}/100 — ${transitions[bi].riskLabel}`}
+                >
+                  <motion.div
+                    className={`h-2 w-2 rounded-full ${
+                      transitions[bi].riskLabel === "smooth"
+                        ? "bg-emerald-400/80"
+                        : transitions[bi].riskLabel === "noticeable"
+                          ? "bg-amber-400/80"
+                          : "bg-rose-400/80"
+                    }`}
+                    animate={
+                      transitions[bi].riskLabel === "abrupt"
+                        ? { scale: [1, 1.3, 1], opacity: [0.8, 1, 0.8] }
+                        : {}
+                    }
+                    transition={
+                      transitions[bi].riskLabel === "abrupt"
+                        ? { duration: 2, repeat: Infinity }
+                        : {}
+                    }
+                  />
+                </button>
+              )}
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function transitionToneClass(riskLabel: SequencerBoundary["riskLabel"]) {
-  if (riskLabel === "smooth") return "text-emerald-300 border-emerald-400/20 bg-emerald-400/10";
-  if (riskLabel === "noticeable") return "text-amber-200 border-amber-400/20 bg-amber-400/10";
-  return "text-rose-200 border-rose-400/20 bg-rose-400/10";
+function TransitionSheet({
+  boundary,
+  blocks,
+  accentColor,
+  onClose,
+  onUpdate,
+  goalType,
+}: {
+  boundary: SequencerBoundary;
+  blocks: SequencerBlock[];
+  accentColor: string;
+  onClose: () => void;
+  onUpdate: (updater: (d: DraftState) => DraftState) => void;
+  goalType: SequencerGoal;
+}) {
+  const fromBlock = blocks.find((b) => b.id === boundary.fromBlockId);
+  const toBlock = blocks.find((b) => b.id === boundary.toBlockId);
+  const riskClass =
+    boundary.riskLabel === "smooth"
+      ? "text-emerald-300 border-emerald-400/20 bg-emerald-400/10"
+      : boundary.riskLabel === "noticeable"
+        ? "text-amber-200 border-amber-400/20 bg-amber-400/10"
+        : "text-rose-200 border-rose-400/20 bg-rose-400/10";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 24 }}
+      className="overflow-hidden rounded-2xl border border-white/[0.08] bg-charcoal-black/80 backdrop-blur-xl"
+    >
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+        <div className="flex items-center gap-3">
+          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${riskClass}`}>
+            {boundary.riskLabel}
+          </span>
+          <span className="text-xs text-white/40">
+            {fromBlock?.name} → {toBlock?.name}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-1 text-white/30 transition hover:text-white"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="px-5 py-4">
+        <p className="text-sm text-white/60">
+          This seam shifts{" "}
+          <span className="text-white/90">
+            {boundary.changeSummary.join(", ") || "subtle traits"}
+          </span>
+          .
+        </p>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {boundary.bridgeCandidateTrackIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onUpdate((d) => {
+                  const candidateId = boundary.bridgeCandidateTrackIds[0];
+                  if (!candidateId) return d;
+                  const fromIdx = d.blocks.findIndex((b) => b.tracks.some((t) => t.trackId === candidateId));
+                  const leftIdx = d.blocks.findIndex((b) => b.id === boundary.fromBlockId);
+                  if (fromIdx < 0 || leftIdx < 0) return d;
+                  const candidate = d.blocks[fromIdx].tracks.find((t) => t.trackId === candidateId);
+                  if (!candidate) return d;
+                  const bridgeBlock: SequencerBlock = {
+                    id: crypto.randomUUID(),
+                    name: "bridge",
+                    purpose: "bridge transition",
+                    position: leftIdx + 1,
+                    colorToken: accentColor,
+                    notes: null,
+                    locked: false,
+                    summary: "bridge",
+                    warnings: [],
+                    metrics: {
+                      cohesion: 100,
+                      energy: candidate.featureProfile.energy,
+                      familiarity: candidate.featureProfile.familiarity,
+                      novelty: candidate.featureProfile.novelty,
+                      intensity: candidate.featureProfile.intensity,
+                    },
+                    tracks: [candidate],
+                  };
+                  const blocks = d.blocks
+                    .map((b) => ({ ...b, tracks: b.tracks.filter((t) => t.trackId !== candidateId) }))
+                    .filter((b) => b.tracks.length > 0);
+                  blocks.splice(leftIdx + 1, 0, bridgeBlock);
+                  return { ...d, blocks };
+                });
+                onClose();
+              }}
+              className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              Insert bridge song
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              onUpdate((d) => ({
+                ...d,
+                blocks: d.blocks.map((b) =>
+                  b.id === boundary.fromBlockId
+                    ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                    : b
+                ),
+              }));
+              onClose();
+            }}
+            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            Soften previous ending
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onUpdate((d) => ({
+                ...d,
+                blocks: d.blocks.map((b) =>
+                  b.id === boundary.toBlockId
+                    ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                    : b
+                ),
+              }));
+              onClose();
+            }}
+            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            Strengthen next opening
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onUpdate((d) => ({
+                ...d,
+                boundaryPreferences: {
+                  ...d.boundaryPreferences,
+                  [boundary.id]: { mode: "intentional" },
+                },
+              }));
+              onClose();
+            }}
+            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-left text-xs text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            Mark as intentional shift
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 const fetcher = async (url: string) => {
@@ -419,6 +973,10 @@ const fetcher = async (url: string) => {
   return json as SequencerSnapshot;
 };
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function PlaylistSequencer({
   playlistId,
   backHref = "/music",
@@ -429,31 +987,29 @@ export function PlaylistSequencer({
   );
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [selectedBoundaryId, setSelectedBoundaryId] = useState<string | null>(null);
+  const [activeBoundaryId, setActiveBoundaryId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showCoach, setShowCoach] = useState(false);
+  const [editingBlockName, setEditingBlockName] = useState(false);
 
   useEffect(() => {
-    if (!data) return;
-    if (isDirty) return;
-
+    if (!data || isDirty) return;
     const nextDraft = deepCloneDraft(data);
     setDraft(nextDraft);
     setSelectedBlockId(nextDraft.blocks[0]?.id || null);
-    setSelectedBoundaryId(data.transitions[0]?.id || null);
   }, [data, isDirty]);
 
   const accentColor = useAlbumColor(data?.playlist.imageUrl || null);
   const rgb = hexToRgb(accentColor);
   const view = useMemo(() => (draft ? buildDraftPresentation(draft) : null), [draft]);
-  const selectedBlock = view?.blocks.find((block) => block.id === selectedBlockId) || view?.blocks[0] || null;
-  const selectedBoundary =
-    view?.transitions.find((transition) => transition.id === selectedBoundaryId) ||
-    view?.transitions[0] ||
-    null;
+  const selectedBlock =
+    view?.blocks.find((b) => b.id === selectedBlockId) || view?.blocks[0] || null;
+  const activeBoundary =
+    view?.transitions.find((t) => t.id === activeBoundaryId) || null;
 
   useEffect(() => {
     if (selectedBlock || !view?.blocks.length) return;
@@ -463,9 +1019,8 @@ export function PlaylistSequencer({
   const updateDraft = (updater: (current: DraftState) => DraftState) => {
     setDraft((current) => {
       if (!current) return current;
-      const next = updater(current);
       setIsDirty(true);
-      return next;
+      return updater(current);
     });
   };
 
@@ -473,23 +1028,20 @@ export function PlaylistSequencer({
     if (!draft || !view) return null;
     setIsSaving(true);
     setNotice(null);
-
     try {
-      const response = await fetch(`/api/spotify/sequencer/${playlistId}`, {
+      const res = await fetch(`/api/spotify/sequencer/${playlistId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(serializeDraft(view, draft)),
       });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to save");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
       setIsDirty(false);
       await mutate(json, false);
-      if (showSavedNotice) setNotice("Sequence saved.");
+      if (showSavedNotice) setNotice("Saved.");
       return json as SequencerSnapshot;
-    } catch (saveError) {
-      setNotice(
-        saveError instanceof Error ? saveError.message : "Failed to save sequence."
-      );
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Save failed.");
       return null;
     } finally {
       setIsSaving(false);
@@ -502,25 +1054,15 @@ export function PlaylistSequencer({
     setNotice(null);
     if (isDirty) {
       const saved = await persistDraft(false);
-      if (!saved) {
-        setIsRegenerating(false);
-        return;
-      }
+      if (!saved) { setIsRegenerating(false); return; }
     }
-
     try {
-      const nextSnapshot = await fetcher(
-        `/api/spotify/sequencer/${playlistId}?regenerate=1`
-      );
+      const next = await fetcher(`/api/spotify/sequencer/${playlistId}?regenerate=1`);
       setIsDirty(false);
-      await mutate(nextSnapshot, false);
-      setNotice("Rebuilt the structure from the current goal.");
-    } catch (regenError) {
-      setNotice(
-        regenError instanceof Error
-          ? regenError.message
-          : "Failed to rebuild the structure."
-      );
+      await mutate(next, false);
+      setNotice("Rebuilt from current goal.");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Rebuild failed.");
     } finally {
       setIsRegenerating(false);
     }
@@ -528,38 +1070,31 @@ export function PlaylistSequencer({
 
   const handleApply = async () => {
     if (!draft) return;
-
     if (isDirty) {
       const saved = await persistDraft(false);
       if (!saved) return;
     }
-
     setIsApplying(true);
     setNotice(null);
     try {
-      const response = await fetch(`/api/spotify/sequencer/${playlistId}/apply`, {
-        method: "POST",
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to apply to Spotify");
-      setNotice("Applied the draft order back to Spotify.");
-    } catch (applyError) {
-      setNotice(
-        applyError instanceof Error
-          ? applyError.message
-          : "Failed to apply the order to Spotify."
-      );
+      const res = await fetch(`/api/spotify/sequencer/${playlistId}/apply`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Apply failed");
+      setNotice("Applied to Spotify.");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Apply failed.");
     } finally {
       setIsApplying(false);
     }
   };
 
+  // Loading / error states
   if (isLoading || !draft || !view || !data) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-void-black">
-        <div className="flex items-center gap-3 text-white/55">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-          <span className="text-sm">Mapping the playlist flow...</span>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-white/40">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+          <span className="text-sm">Mapping the flow...</span>
         </div>
       </div>
     );
@@ -567,16 +1102,13 @@ export function PlaylistSequencer({
 
   if ((error as FetchError | undefined)?.status === 401) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-void-black px-6">
-        <div className="max-w-sm rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 text-center">
-          <p className="text-xs uppercase tracking-[0.28em] text-white/35">Private</p>
-          <h2 className="mt-4 text-2xl font-semibold text-white">Sign in to sequence playlists.</h2>
-          <p className="mt-3 text-sm text-white/55">
-            This workspace writes structure back to your Spotify playlists.
-          </p>
+      <div className="flex min-h-[60vh] items-center justify-center px-6">
+        <div className="max-w-sm rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-white/30">Private</p>
+          <h2 className="mt-3 text-xl font-semibold text-white">Sign in to sequence playlists</h2>
           <a
             href="/api/auth/login"
-            className="mt-6 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-gray-200"
+            className="mt-5 inline-flex rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-gray-200"
           >
             Sign in
           </a>
@@ -587,15 +1119,13 @@ export function PlaylistSequencer({
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-void-black px-6">
-        <div className="max-w-md rounded-[2rem] border border-red-500/20 bg-red-500/10 p-8 text-center">
-          <h2 className="text-2xl font-semibold text-white">Sequencer unavailable.</h2>
-          <p className="mt-3 text-sm text-red-100/70">
-            {error.message || "Failed to load this playlist."}
-          </p>
+      <div className="flex min-h-[60vh] items-center justify-center px-6">
+        <div className="max-w-md rounded-2xl border border-rose-500/20 bg-rose-500/10 p-8 text-center">
+          <h2 className="text-xl font-semibold text-white">Sequencer unavailable</h2>
+          <p className="mt-2 text-sm text-rose-100/60">{error.message}</p>
           <Link
             href={backHref}
-            className="mt-6 inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm text-white transition hover:bg-white/10"
+            className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-white transition hover:bg-white/10"
           >
             Back
           </Link>
@@ -604,1088 +1134,491 @@ export function PlaylistSequencer({
     );
   }
 
+  const totalTracks = view.blocks.reduce((s, b) => s + b.tracks.length, 0);
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-void-black via-charcoal-black to-void-black page-reveal">
-      <GradientOrbs primaryColor={accentColor} />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.05),transparent_36%)]" />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: `radial-gradient(circle at 82% 20%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2), transparent 34%)`,
-        }}
-      />
+    <main className="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6">
+      {/* ── Header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/[0.06]"
+        style={{ boxShadow: `0 20px 60px -30px rgba(${rgb.r},${rgb.g},${rgb.b},0.5)` }}
+      >
+        {/* Background art */}
+        <div className="absolute inset-0">
+          {data.playlist.imageUrl ? (
+            <>
+              <Image
+                src={data.playlist.imageUrl}
+                alt=""
+                fill
+                className="object-cover opacity-30 blur-sm"
+                sizes="100vw"
+                priority
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-charcoal-black to-void-black" />
+          )}
+        </div>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs uppercase tracking-[0.24em] text-white/55 transition hover:border-white/20 hover:text-white"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back
-            </Link>
+        <div className="relative z-10 px-5 py-5 sm:px-6">
+          {/* Top bar */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Link
+                href={backHref}
+                className="rounded-lg p-1.5 text-white/40 transition hover:bg-white/[0.08] hover:text-white"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </Link>
+              <div>
+                <h1 className="text-lg font-semibold text-white sm:text-xl">
+                  {data.playlist.name}
+                </h1>
+                <p className="text-xs text-white/35">
+                  {totalTracks} tracks &middot; {view.blocks.length} sections
+                </p>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {isDirty && (
+                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-amber-200/80">
+                  unsaved
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={isSaving || isApplying || isRegenerating}
+                className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-1.5 text-xs text-white/60 transition hover:bg-white/[0.1] hover:text-white disabled:opacity-40"
+              >
+                {isRegenerating ? "Rebuilding..." : "Rebuild"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void persistDraft()}
+                disabled={!isDirty || isSaving || isApplying}
+                className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-1.5 text-xs text-white/60 transition hover:bg-white/[0.1] hover:text-white disabled:opacity-30"
+              >
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={handleApply}
+                disabled={isSaving || isApplying || isRegenerating}
+                className="rounded-full px-4 py-1.5 text-xs font-medium text-black transition disabled:opacity-40"
+                style={{ backgroundColor: accentColor }}
+              >
+                {isApplying ? "Applying..." : "Apply to Spotify"}
+              </button>
+            </div>
+          </div>
+
+          {/* Goal pills */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-white/25">Goal</span>
+            {SEQUENCER_GOALS.map((goal) => (
+              <motion.button
+                key={goal}
+                type="button"
+                whileTap={{ scale: 0.95 }}
+                onClick={() => updateDraft((d) => ({ ...d, goalType: goal }))}
+                className={`rounded-full px-3 py-1.5 text-xs transition-all ${
+                  draft.goalType === goal
+                    ? "font-medium text-black"
+                    : "border border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                }`}
+                style={
+                  draft.goalType === goal
+                    ? {
+                        backgroundColor: accentColor,
+                        boxShadow: `0 4px 14px rgba(${rgb.r},${rgb.g},${rgb.b},0.35)`,
+                      }
+                    : {}
+                }
+              >
+                {SEQUENCER_GOAL_LABELS[goal]}
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Compact metrics strip */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/30">
+            {[
+              { label: "Cohesion", value: view.metrics.cohesion },
+              { label: "Arc", value: view.metrics.arcFit },
+              { label: "Variety", value: view.metrics.variety },
+              { label: "Anchors", value: view.metrics.anchorBalance },
+              { label: "Pacing", value: view.metrics.noveltyPacing },
+              { label: "Ending", value: view.metrics.endingStrength },
+            ].map((m) => (
+              <span key={m.label}>
+                {m.label}{" "}
+                <span
+                  className={
+                    m.value >= 75
+                      ? "text-emerald-300/70"
+                      : m.value >= 55
+                        ? "text-amber-200/70"
+                        : "text-rose-300/70"
+                  }
+                >
+                  {m.value}
+                </span>
+              </span>
+            ))}
             <button
               type="button"
-              onClick={handleRegenerate}
-              disabled={isSaving || isApplying || isRegenerating}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.08] disabled:opacity-50"
+              onClick={() => setShowCoach(!showCoach)}
+              className="text-white/40 transition hover:text-white/70"
             >
-              {isRegenerating ? "Rebuilding..." : "Rebuild Shape"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void persistDraft();
-              }}
-              disabled={!isDirty || isSaving || isApplying}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.08] disabled:opacity-40"
-            >
-              {isSaving ? "Saving..." : isDirty ? "Save Draft" : "Saved"}
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              disabled={isSaving || isApplying || isRegenerating}
-              className="rounded-full px-5 py-2 text-sm font-medium text-black transition disabled:opacity-50"
-              style={{ backgroundColor: accentColor }}
-            >
-              {isApplying ? "Applying..." : "Apply to Spotify"}
+              {showCoach ? "Hide coach" : "Show coach"}
             </button>
           </div>
         </div>
+      </motion.div>
 
+      {/* Notice */}
+      <AnimatePresence>
         {notice && (
-          <div
-            className="mb-5 rounded-2xl border px-4 py-3 text-sm"
-            style={{
-              borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`,
-              backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
-              color: "rgba(255,255,255,0.84)",
-            }}
-          >
-            {notice}
-          </div>
-        )}
-
-        <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04]"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3 overflow-hidden rounded-xl border px-4 py-2.5 text-xs"
             style={{
-              boxShadow: `0 30px 80px -40px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`,
+              borderColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`,
+              backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`,
+              color: "rgba(255,255,255,0.75)",
             }}
-          >
-            <div className="relative min-h-[280px] overflow-hidden">
-              {data.playlist.imageUrl ? (
-                <>
-                  <Image
-                    src={data.playlist.imageUrl}
-                    alt={data.playlist.name}
-                    fill
-                    className="object-cover opacity-45"
-                    sizes="(max-width: 1024px) 100vw, 60vw"
-                    priority
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-br from-black/35 via-black/55 to-black/90" />
-                </>
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-charcoal-black via-black to-void-black" />
-              )}
-
-              <div className="relative z-10 flex h-full flex-col justify-between p-6 md:p-7">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">
-                      Playlist Sequencer
-                    </p>
-                    <h1 className="mt-3 max-w-2xl text-3xl font-semibold text-white md:text-5xl">
-                      {data.playlist.name}
-                    </h1>
-                    {data.playlist.description && (
-                      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65 md:text-base">
-                        {data.playlist.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="rounded-3xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur-md">
-                    <p className="text-[10px] uppercase tracking-[0.24em] text-white/35">Flow Goal</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {SEQUENCER_GOALS.map((goal) => (
-                        <button
-                          key={goal}
-                          type="button"
-                          onClick={() =>
-                            updateDraft((current) => ({
-                              ...current,
-                              goalType: goal,
-                            }))
-                          }
-                          className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                            draft.goalType === goal
-                              ? "border-white/20 bg-white text-black"
-                              : "border-white/10 bg-white/[0.05] text-white/65 hover:border-white/20 hover:text-white"
-                          }`}
-                        >
-                          {SEQUENCER_GOAL_LABELS[goal]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
-                  <MetricBadge label="Cohesion" value={view.metrics.cohesion} accentColor={accentColor} />
-                  <MetricBadge label="Arc Fit" value={view.metrics.arcFit} accentColor={accentColor} />
-                  <MetricBadge label="Variety" value={view.metrics.variety} accentColor={accentColor} />
-                  <MetricBadge label="Anchors" value={view.metrics.anchorBalance} accentColor={accentColor} />
-                  <MetricBadge label="Novelty" value={view.metrics.noveltyPacing} accentColor={accentColor} />
-                  <MetricBadge label="Ending" value={view.metrics.endingStrength} accentColor={accentColor} />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5"
           >
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">Arc Shape</p>
-                <h2 className="mt-2 text-lg font-semibold text-white">How the playlist feels over time</h2>
-              </div>
-              {isDirty && (
-                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-amber-100">
-                  Unsaved
-                </span>
-              )}
+              <span>{notice}</span>
+              <button type="button" onClick={() => setNotice(null)} className="text-white/40 hover:text-white">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            <div className="mt-5 space-y-4">
-              {[
-                { label: "Energy", values: view.arcProfile.energy },
-                { label: "Valence", values: view.arcProfile.valence },
-                { label: "Familiarity", values: view.arcProfile.familiarity },
-                { label: "Novelty", values: view.arcProfile.novelty },
-              ].map((lane) => (
-                <div key={lane.label}>
-                  <div className="mb-2 flex items-center justify-between text-xs text-white/50">
-                    <span>{lane.label}</span>
-                    <span>{view.arcProfile.preset}</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {lane.values.map((value, index) => (
-                      <div
-                        key={`${lane.label}-${index}`}
-                        className="h-12 rounded-2xl border border-white/8 bg-white/[0.03]"
-                        style={{
-                          background: `linear-gradient(180deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.25 + value * 0.45}) 0%, rgba(255,255,255,0.03) 100%)`,
-                        }}
-                      />
+      {/* ── Flow Strip (waveform) ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="mt-4"
+      >
+        <FlowStrip
+          blocks={view.blocks}
+          transitions={view.transitions}
+          selectedBlockId={selectedBlockId}
+          onSelectBlock={(id) => {
+            setSelectedBlockId(id);
+            setActiveBoundaryId(null);
+          }}
+          onSelectTransition={(id) => setActiveBoundaryId(id)}
+          accentColor={accentColor}
+        />
+      </motion.div>
+
+      {/* ── Transition sheet (shows when a seam dot is clicked) ── */}
+      <AnimatePresence>
+        {activeBoundary && (
+          <div className="mt-3">
+            <TransitionSheet
+              boundary={activeBoundary}
+              blocks={view.blocks}
+              accentColor={accentColor}
+              onClose={() => setActiveBoundaryId(null)}
+              onUpdate={updateDraft}
+              goalType={draft.goalType}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Coach panel (collapsible) ── */}
+      <AnimatePresence>
+        {showCoach && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3 overflow-hidden"
+          >
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/25">Flow Coach</p>
+                  <div className="mt-3 space-y-2">
+                    {data.suggestions
+                      .concat(
+                        view.metrics.tradeoffs.map((detail, i) => ({
+                          id: `tradeoff-${i}`,
+                          type: "structure" as const,
+                          title: "Tradeoff",
+                          detail,
+                        }))
+                      )
+                      .slice(0, 5)
+                      .map((item) => (
+                        <p key={item.id} className="text-xs leading-5 text-white/45">
+                          <span className="text-white/60">{item.title}:</span> {item.detail}
+                        </p>
+                      ))}
+                    {view.metrics.summary.map((s) => (
+                      <p key={s} className="text-xs italic leading-5 text-white/35">
+                        {s}
+                      </p>
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-5 space-y-2 text-sm text-white/58">
-              {view.metrics.summary.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateDraft((d) => ({
+                        ...d,
+                        blocks: d.blocks.map((b) => ({
+                          ...b,
+                          tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth"),
+                        })),
+                      }))
+                    }
+                    className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5 text-xs text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Smooth everything
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateDraft((d) => ({
+                        ...d,
+                        blocks: d.blocks.map((b) => ({
+                          ...b,
+                          tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "surprise"),
+                        })),
+                      }))
+                    }
+                    className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5 text-xs text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Add surprise
+                  </button>
+                </div>
+              </div>
             </div>
           </motion.div>
-        </section>
+        )}
+      </AnimatePresence>
 
-        <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">Flow Rail</p>
-              <h2 className="mt-2 text-lg font-semibold text-white">Sections, seams, and block order</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                updateDraft((current) => {
-                  const insertAt = current.blocks.length;
-                  return {
-                    ...current,
-                    blocks: [
-                      ...current.blocks,
-                      {
+      {/* ── Block detail + track list ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="mt-4"
+      >
+        {selectedBlock ? (
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            {/* Block toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: selectedBlock.colorToken || accentColor }}
+                />
+                {editingBlockName ? (
+                  <input
+                    autoFocus
+                    value={selectedBlock.name}
+                    onBlur={() => setEditingBlockName(false)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingBlockName(false)}
+                    onChange={(e) =>
+                      updateDraft((d) => ({
+                        ...d,
+                        blocks: d.blocks.map((b) =>
+                          b.id === selectedBlock.id ? { ...b, name: e.target.value } : b
+                        ),
+                      }))
+                    }
+                    className="rounded-lg border border-white/10 bg-transparent px-2 py-0.5 text-sm font-medium text-white outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingBlockName(true)}
+                    className="text-sm font-medium text-white transition hover:text-white/70"
+                  >
+                    {selectedBlock.name}
+                  </button>
+                )}
+                <span className="text-xs text-white/25">
+                  {selectedBlock.tracks.length} tracks &middot; {selectedBlock.summary}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraft((d) => ({
+                      ...d,
+                      blocks: d.blocks.map((b) =>
+                        b.id === selectedBlock.id
+                          ? { ...b, tracks: reorderTracksWithinBlock(b.tracks, d.goalType, "smooth") }
+                          : b
+                      ),
+                    }))
+                  }
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Reorder
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraft((d) => {
+                      const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
+                      if (i <= 0) return d;
+                      return { ...d, blocks: moveArrayItem(d.blocks, i, i - 1) };
+                    })
+                  }
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                  title="Move section left"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraft((d) => {
+                      const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
+                      if (i < 0 || i >= d.blocks.length - 1) return d;
+                      return { ...d, blocks: moveArrayItem(d.blocks, i, i + 1) };
+                    })
+                  }
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                  title="Move section right"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraft((d) => {
+                      const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
+                      if (i < 0 || i === d.blocks.length - 1) return d;
+                      const merged = [...d.blocks];
+                      merged[i] = { ...merged[i], tracks: [...merged[i].tracks, ...merged[i + 1].tracks] };
+                      merged.splice(i + 1, 1);
+                      return { ...d, blocks: merged };
+                    })
+                  }
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                  title="Merge with next section"
+                >
+                  Merge
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraft((d) => {
+                      const insertAt = d.blocks.findIndex((b) => b.id === selectedBlock.id) + 1;
+                      const nb: SequencerBlock = {
                         id: crypto.randomUUID(),
-                        name: `new block ${insertAt + 1}`,
-                        purpose: "manual bridge region",
+                        name: `section ${d.blocks.length + 1}`,
+                        purpose: "new section",
                         position: insertAt,
                         colorToken: accentColor,
                         notes: null,
                         locked: false,
                         summary: "empty",
                         warnings: [],
-                        metrics: {
-                          cohesion: 100,
-                          energy: 0,
-                          familiarity: 0,
-                          novelty: 0,
-                          intensity: 0,
-                        },
+                        metrics: { cohesion: 100, energy: 0, familiarity: 0, novelty: 0, intensity: 0 },
                         tracks: [],
-                      },
-                    ],
-                  };
-                })
-              }
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-            >
-              Insert Block
-            </button>
-          </div>
-
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {view.blocks.map((block, index) => (
-              <div key={block.id} className="flex items-center gap-3">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setSelectedBlockId(block.id);
-                    const nextBoundary = view.transitions.find(
-                      (transition) => transition.fromBlockId === block.id
-                    );
-                    if (nextBoundary) setSelectedBoundaryId(nextBoundary.id);
-                  }}
-                  className={`min-w-[250px] rounded-[1.75rem] border p-4 text-left transition ${
-                    selectedBlock?.id === block.id
-                      ? "border-white/22 bg-white/[0.08]"
-                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
-                  }`}
-                  style={{
-                    boxShadow:
-                      selectedBlock?.id === block.id
-                        ? `0 22px 50px -30px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`
-                        : "none",
-                  }}
+                      };
+                      const blocks = [...d.blocks];
+                      blocks.splice(insertAt, 0, nb);
+                      return { ...d, blocks };
+                    })
+                  }
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/40 transition hover:bg-white/[0.06] hover:text-white"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="mb-2 flex items-center gap-2">
-                        <span
-                          className="inline-flex h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: block.colorToken || accentColor }}
-                        />
-                        <span className="text-[11px] uppercase tracking-[0.22em] text-white/38">
-                          Section {index + 1}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-semibold text-white">{block.name}</h3>
-                      <p className="mt-2 text-sm text-white/55">{block.summary}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        updateDraft((current) => ({
-                          ...current,
-                          blocks: current.blocks.map((item) =>
-                            item.id === block.id ? { ...item, locked: !item.locked } : item
-                          ),
-                        }));
-                      }}
-                      className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-[0.18em] ${
-                        block.locked
-                          ? "border-white/18 bg-white text-black"
-                          : "border-white/10 bg-white/[0.04] text-white/55"
-                      }`}
-                    >
-                      {block.locked ? "Locked" : "Open"}
-                    </button>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between text-xs text-white/45">
-                    <span>{block.tracks.length} songs</span>
-                    <span>{Math.round(block.metrics.cohesion)}/100 cohesion</span>
-                  </div>
-
-                  {block.warnings.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {block.warnings.map((warning) => (
-                        <span
-                          key={warning}
-                          className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] text-amber-100"
-                        >
-                          {warning}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </motion.button>
-
-                {index < view.blocks.length - 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBoundaryId(view.transitions[index]?.id || null)}
-                    className={`rounded-full border px-3 py-2 text-xs ${transitionToneClass(
-                      view.transitions[index]?.riskLabel || "smooth"
-                    )}`}
-                  >
-                    {view.transitions[index]?.compatibility || 0}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 md:p-5"
-          >
-            {selectedBlock ? (
-              <>
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">Selected Block</p>
-                    <input
-                      value={selectedBlock.name}
-                      onChange={(event) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          blocks: current.blocks.map((block) =>
-                            block.id === selectedBlock.id
-                              ? { ...block, name: event.target.value }
-                              : block
-                          ),
-                        }))
-                      }
-                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-2xl font-semibold text-white outline-none placeholder:text-white/25"
-                    />
-                    <textarea
-                      value={selectedBlock.purpose}
-                      onChange={(event) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          blocks: current.blocks.map((block) =>
-                            block.id === selectedBlock.id
-                              ? { ...block, purpose: event.target.value }
-                              : block
-                          ),
-                        }))
-                      }
-                      rows={2}
-                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/68 outline-none placeholder:text-white/25"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const index = current.blocks.findIndex(
-                            (block) => block.id === selectedBlock.id
-                          );
-                          if (index <= 0) return current;
-                          return {
-                            ...current,
-                            blocks: moveArrayItem(current.blocks, index, index - 1),
-                          };
-                        })
-                      }
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-                    >
-                      Move Left
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const index = current.blocks.findIndex(
-                            (block) => block.id === selectedBlock.id
-                          );
-                          if (index < 0 || index >= current.blocks.length - 1) return current;
-                          return {
-                            ...current,
-                            blocks: moveArrayItem(current.blocks, index, index + 1),
-                          };
-                        })
-                      }
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-                    >
-                      Move Right
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const index = current.blocks.findIndex(
-                            (block) => block.id === selectedBlock.id
-                          );
-                          const nextBlock = {
-                            id: crypto.randomUUID(),
-                            name: `bridge ${index + 2}`,
-                            purpose: "manual bridge region",
-                            position: index + 1,
-                            colorToken: selectedBlock.colorToken,
-                            notes: null,
-                            locked: false,
-                            summary: "empty",
-                            warnings: [],
-                            metrics: {
-                              cohesion: 100,
-                              energy: 0,
-                              familiarity: 0,
-                              novelty: 0,
-                              intensity: 0,
-                            },
-                            tracks: [],
-                          } satisfies SequencerBlock;
-
-                          const blocks = [...current.blocks];
-                          blocks.splice(index + 1, 0, nextBlock);
-                          return { ...current, blocks };
-                        })
-                      }
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-                    >
-                      Insert After
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const index = current.blocks.findIndex(
-                            (block) => block.id === selectedBlock.id
-                          );
-                          if (index < 0 || index === current.blocks.length - 1) return current;
-                          const merged = [...current.blocks];
-                          merged[index] = {
-                            ...merged[index],
-                            tracks: [...merged[index].tracks, ...merged[index + 1].tracks],
-                          };
-                          merged.splice(index + 1, 1);
-                          return { ...current, blocks: merged };
-                        })
-                      }
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-                    >
-                      Merge Next
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          if (current.blocks.length <= 1) return current;
-                          const index = current.blocks.findIndex(
-                            (block) => block.id === selectedBlock.id
-                          );
-                          const targetIndex = index === 0 ? 1 : index - 1;
-                          const destination = current.blocks[targetIndex];
-                          return {
-                            ...current,
-                            blocks: current.blocks
-                              .filter((block) => block.id !== selectedBlock.id)
-                              .map((block) =>
-                                block.id === destination.id
-                                  ? { ...block, tracks: [...block.tracks, ...selectedBlock.tracks] }
-                                  : block
-                              ),
-                          };
-                        })
-                      }
-                      className="rounded-full border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-100 transition hover:bg-red-400/16"
-                    >
-                      Delete Block
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-4 flex flex-wrap gap-2">
+                  + Section
+                </button>
+                {view.blocks.length > 1 && (
                   <button
                     type="button"
                     onClick={() =>
-                      updateDraft((current) => ({
-                        ...current,
-                        blocks: current.blocks.map((block) =>
-                          block.id === selectedBlock.id
-                            ? {
-                                ...block,
-                                tracks: reorderTracksWithinBlock(
-                                  block.tracks,
-                                  current.goalType,
-                                  "smooth"
-                                ),
-                              }
-                            : block
-                        ),
-                      }))
+                      updateDraft((d) => {
+                        if (d.blocks.length <= 1) return d;
+                        const i = d.blocks.findIndex((b) => b.id === selectedBlock.id);
+                        const targetIdx = i === 0 ? 1 : i - 1;
+                        const dest = d.blocks[targetIdx];
+                        const nextBlocks = d.blocks
+                          .filter((b) => b.id !== selectedBlock.id)
+                          .map((b) =>
+                            b.id === dest.id
+                              ? { ...b, tracks: [...b.tracks, ...selectedBlock.tracks] }
+                              : b
+                          );
+                        setSelectedBlockId(dest.id);
+                        return { ...d, blocks: nextBlocks };
+                      })
                     }
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
+                    className="rounded-lg border border-rose-400/15 bg-rose-400/[0.06] px-3 py-1.5 text-xs text-rose-200/60 transition hover:bg-rose-400/10 hover:text-rose-100"
                   >
-                    Reorder Block
+                    Delete
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateDraft((current) => ({
-                        ...current,
-                        blocks: current.blocks.map((block) =>
-                          block.id === selectedBlock.id
-                            ? {
-                                ...block,
-                                tracks: reorderTracksWithinBlock(
-                                  block.tracks,
-                                  current.goalType,
-                                  "surprise"
-                                ),
-                              }
-                            : block
-                        ),
-                      }))
-                    }
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
-                  >
-                    Add Surprise
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <AnimatePresence initial={false}>
-                    {selectedBlock.tracks.map((track, index) => (
-                      <motion.div
-                        key={track.trackId}
-                        layout
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -12 }}
-                        className="rounded-[1.5rem] border border-white/10 bg-black/20 p-3"
-                      >
-                        <div className="flex gap-3">
-                          <div className="relative h-16 w-16 flex-none overflow-hidden rounded-2xl">
-                            {track.albumImageUrl ? (
-                              <Image
-                                src={track.albumImageUrl}
-                                alt={track.title}
-                                fill
-                                className="object-cover"
-                                sizes="64px"
-                              />
-                            ) : (
-                              <div className="absolute inset-0 bg-white/5" />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <h3 className="truncate text-sm font-medium text-white">
-                                  {track.title}
-                                </h3>
-                                <p className="truncate text-xs text-white/48">
-                                  {track.artistDisplay}
-                                </p>
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {track.roleTags.map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-white/55"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateDraft((current) => ({
-                                      ...current,
-                                      blocks: current.blocks.map((block) =>
-                                        block.id === selectedBlock.id
-                                          ? {
-                                              ...block,
-                                              tracks: block.tracks.map((item) =>
-                                                item.trackId === track.trackId
-                                                  ? { ...item, locked: !item.locked }
-                                                  : item
-                                              ),
-                                            }
-                                          : block
-                                      ),
-                                    }))
-                                  }
-                                  className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${
-                                    track.locked
-                                      ? "border-white/18 bg-white text-black"
-                                      : "border-white/10 bg-white/[0.05] text-white/55"
-                                  }`}
-                                >
-                                  {track.locked ? "Locked" : "Open"}
-                                </button>
-                                {track.songUrl && (
-                                  <a
-                                    href={track.songUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/55 transition hover:text-white"
-                                  >
-                                    Spotify
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/45">
-                              <span>{track.nextCompatibility ?? track.prevCompatibility ?? 100}/100 fit</span>
-                              <span>{track.featureProfile.genreFamily}</span>
-                              <span>{track.featureProfile.language}</span>
-                              <span>{track.featureProfile.texture}</span>
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() =>
-                                  updateDraft((current) => ({
-                                    ...current,
-                                    blocks: current.blocks.map((block) =>
-                                      block.id === selectedBlock.id
-                                        ? {
-                                            ...block,
-                                            tracks: moveArrayItem(block.tracks, index, index - 1),
-                                          }
-                                        : block
-                                    ),
-                                  }))
-                                }
-                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/65 transition hover:bg-white/[0.09] disabled:opacity-30"
-                              >
-                                Earlier
-                              </button>
-                              <button
-                                type="button"
-                                disabled={index === selectedBlock.tracks.length - 1}
-                                onClick={() =>
-                                  updateDraft((current) => ({
-                                    ...current,
-                                    blocks: current.blocks.map((block) =>
-                                      block.id === selectedBlock.id
-                                        ? {
-                                            ...block,
-                                            tracks: moveArrayItem(block.tracks, index, index + 1),
-                                          }
-                                        : block
-                                    ),
-                                  }))
-                                }
-                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/65 transition hover:bg-white/[0.09] disabled:opacity-30"
-                              >
-                                Later
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateDraft((current) => {
-                                    const currentIndex = current.blocks.findIndex(
-                                      (block) => block.id === selectedBlock.id
-                                    );
-                                    if (currentIndex <= 0) return current;
-                                    const previousBlock = current.blocks[currentIndex - 1];
-                                    return {
-                                      ...current,
-                                      blocks: current.blocks.map((block) => {
-                                        if (block.id === selectedBlock.id) {
-                                          return {
-                                            ...block,
-                                            tracks: block.tracks.filter(
-                                              (item) => item.trackId !== track.trackId
-                                            ),
-                                          };
-                                        }
-                                        if (block.id === previousBlock.id) {
-                                          return {
-                                            ...block,
-                                            tracks: [...block.tracks, track],
-                                          };
-                                        }
-                                        return block;
-                                      }),
-                                    };
-                                  })
-                                }
-                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/65 transition hover:bg-white/[0.09]"
-                              >
-                                To Previous Block
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateDraft((current) => {
-                                    const currentIndex = current.blocks.findIndex(
-                                      (block) => block.id === selectedBlock.id
-                                    );
-                                    if (currentIndex < 0 || currentIndex >= current.blocks.length - 1) {
-                                      return current;
-                                    }
-                                    const nextBlock = current.blocks[currentIndex + 1];
-                                    return {
-                                      ...current,
-                                      blocks: current.blocks.map((block) => {
-                                        if (block.id === selectedBlock.id) {
-                                          return {
-                                            ...block,
-                                            tracks: block.tracks.filter(
-                                              (item) => item.trackId !== track.trackId
-                                            ),
-                                          };
-                                        }
-                                        if (block.id === nextBlock.id) {
-                                          return {
-                                            ...block,
-                                            tracks: [track, ...block.tracks],
-                                          };
-                                        }
-                                        return block;
-                                      }),
-                                    };
-                                  })
-                                }
-                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/65 transition hover:bg-white/[0.09]"
-                              >
-                                To Next Block
-                              </button>
-                              {index < selectedBlock.tracks.length - 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateDraft((current) => ({
-                                      ...current,
-                                      blocks: current.blocks.flatMap((block) => {
-                                        if (block.id !== selectedBlock.id) return [block];
-                                        const leftTracks = block.tracks.slice(0, index + 1);
-                                        const rightTracks = block.tracks.slice(index + 1);
-                                        if (rightTracks.length === 0) return [block];
-                                        return [
-                                          { ...block, tracks: leftTracks },
-                                          {
-                                            ...block,
-                                            id: crypto.randomUUID(),
-                                            name: `${block.name} split`,
-                                            tracks: rightTracks,
-                                            locked: false,
-                                          },
-                                        ];
-                                      }),
-                                    }))
-                                  }
-                                  className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/65 transition hover:bg-white/[0.09]"
-                                >
-                                  Split After
-                                </button>
-                              )}
-                              {track.nextCompatibility != null && track.nextCompatibility < 58 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateDraft((current) => ({
-                                      ...current,
-                                      blocks: current.blocks.map((block) =>
-                                        block.id === selectedBlock.id
-                                          ? {
-                                              ...block,
-                                              tracks: reorderTracksWithinBlock(
-                                                block.tracks,
-                                                current.goalType,
-                                                "smooth"
-                                              ),
-                                            }
-                                          : block
-                                      ),
-                                    }))
-                                  }
-                                  className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-400/15"
-                                >
-                                  Smooth Jump
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-[1.75rem] border border-dashed border-white/10 px-5 py-10 text-center text-white/45">
-                Select a block to edit its local order.
-              </div>
-            )}
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 }}
-            className="space-y-5"
-          >
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">Transition Panel</p>
-                  <h2 className="mt-2 text-lg font-semibold text-white">Manage seams between blocks</h2>
-                </div>
-                {selectedBoundary && (
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs ${transitionToneClass(
-                      selectedBoundary.riskLabel
-                    )}`}
-                  >
-                    {selectedBoundary.riskLabel}
-                  </span>
                 )}
               </div>
+            </div>
 
-              {selectedBoundary ? (
-                <>
-                  <div className="mt-5 space-y-3">
-                    <p className="text-sm text-white/72">
-                      This seam shifts{" "}
-                      <span className="text-white">
-                        {selectedBoundary.changeSummary.join(", ") || "a few subtle traits"}
-                      </span>
-                      .
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {view.transitions.map((transition) => (
-                        <button
-                          key={transition.id}
-                          type="button"
-                          onClick={() => setSelectedBoundaryId(transition.id)}
-                          className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                            selectedBoundary.id === transition.id
-                              ? transitionToneClass(transition.riskLabel)
-                              : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white"
-                          }`}
-                        >
-                          {transition.compatibility} {transition.id.split(":").length > 1 ? "fit" : ""}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+            {/* Track list */}
+            <div className="space-y-1 p-3 sm:p-4">
+              <AnimatePresence initial={false} mode="popLayout">
+                {selectedBlock.tracks.map((track, i) => (
+                  <TrackRow
+                    key={track.trackId}
+                    track={track}
+                    index={i}
+                    total={selectedBlock.tracks.length}
+                    blockId={selectedBlock.id}
+                    blockCount={view.blocks.length}
+                    accentColor={accentColor}
+                    onUpdate={updateDraft}
+                  />
+                ))}
+              </AnimatePresence>
 
-                  <div className="mt-5 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const candidateId = selectedBoundary.bridgeCandidateTrackIds[0];
-                          if (!candidateId) return current;
-                          const fromIndex = current.blocks.findIndex((block) =>
-                            block.tracks.some((track) => track.trackId === candidateId)
-                          );
-                          const leftIndex = current.blocks.findIndex(
-                            (block) => block.id === selectedBoundary.fromBlockId
-                          );
-                          if (fromIndex < 0 || leftIndex < 0) return current;
-                          const candidate =
-                            current.blocks[fromIndex].tracks.find(
-                              (track) => track.trackId === candidateId
-                            ) || null;
-                          if (!candidate) return current;
-
-                          const bridgeBlock: SequencerBlock = {
-                            id: crypto.randomUUID(),
-                            name: "bridge",
-                            purpose: "bridge the boundary cleanly",
-                            position: leftIndex + 1,
-                            colorToken: accentColor,
-                            notes: null,
-                            locked: false,
-                            summary: "bridge / mixed / stabilizing",
-                            warnings: [],
-                            metrics: {
-                              cohesion: 100,
-                              energy: candidate.featureProfile.energy,
-                              familiarity: candidate.featureProfile.familiarity,
-                              novelty: candidate.featureProfile.novelty,
-                              intensity: candidate.featureProfile.intensity,
-                            },
-                            tracks: [candidate],
-                          };
-
-                          const blocks = current.blocks
-                            .map((block) => ({
-                              ...block,
-                              tracks: block.tracks.filter(
-                                (track) => track.trackId !== candidateId
-                              ),
-                            }))
-                            .filter((block) => block.tracks.length > 0);
-                          blocks.splice(leftIndex + 1, 0, bridgeBlock);
-
-                          return { ...current, blocks };
-                        })
-                      }
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm text-white/72 transition hover:bg-white/[0.08]"
-                    >
-                      Insert bridge song
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          blocks: current.blocks.map((block) =>
-                            block.id === selectedBoundary.fromBlockId
-                              ? {
-                                  ...block,
-                                  tracks: reorderTracksWithinBlock(
-                                    block.tracks,
-                                    current.goalType,
-                                    "smooth"
-                                  ),
-                                }
-                              : block
-                          ),
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm text-white/72 transition hover:bg-white/[0.08]"
-                    >
-                      Soften the previous ending
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          blocks: current.blocks.map((block) =>
-                            block.id === selectedBoundary.toBlockId
-                              ? {
-                                  ...block,
-                                  tracks: reorderTracksWithinBlock(
-                                    block.tracks,
-                                    current.goalType,
-                                    "smooth"
-                                  ),
-                                }
-                              : block
-                          ),
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm text-white/72 transition hover:bg-white/[0.08]"
-                    >
-                      Strengthen the next opening
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          boundaryPreferences: {
-                            ...current.boundaryPreferences,
-                            [selectedBoundary.id]: { mode: "intentional" },
-                          },
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm text-white/72 transition hover:bg-white/[0.08]"
-                    >
-                      Mark as intentional shift
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/45">
-                  This playlist only has one block so there is no seam to manage yet.
+              {selectedBlock.tracks.length === 0 && (
+                <div className="py-12 text-center text-xs text-white/25">
+                  No tracks in this section yet. Move songs here from another section.
                 </div>
               )}
             </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">Flow Coach</p>
-              <h2 className="mt-2 text-lg font-semibold text-white">Suggestions and tradeoffs</h2>
-
-              <div className="mt-5 space-y-3">
-                {data.suggestions
-                  .concat(
-                    view.metrics.tradeoffs.map((detail, index) => ({
-                      id: `tradeoff-${index}`,
-                      type: "structure" as const,
-                      title: "Tradeoff in play",
-                      detail,
-                    }))
-                  )
-                  .map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
-                  >
-                    <h3 className="text-sm font-medium text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-white/58">{item.detail}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateDraft((current) => ({
-                      ...current,
-                      blocks: current.blocks.map((block) => ({
-                        ...block,
-                        tracks: reorderTracksWithinBlock(
-                          block.tracks,
-                          current.goalType,
-                          "smooth"
-                        ),
-                      })),
-                    }))
-                  }
-                  className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-white/72 transition hover:bg-white/[0.08]"
-                >
-                  Make this flow better
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateDraft((current) => ({
-                      ...current,
-                      goalType: "comfort",
-                    }))
-                  }
-                  className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-white/72 transition hover:bg-white/[0.08]"
-                >
-                  Make it more comforting
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateDraft((current) => ({
-                      ...current,
-                      goalType: "discovery",
-                    }))
-                  }
-                  className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-white/72 transition hover:bg-white/[0.08]"
-                >
-                  Make it more exploratory
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </section>
-      </main>
-    </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/[0.08] py-16 text-center text-sm text-white/30">
+            Select a section from the flow strip above
+          </div>
+        )}
+      </motion.div>
+    </main>
   );
 }

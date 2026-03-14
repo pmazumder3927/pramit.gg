@@ -1053,19 +1053,23 @@ async function upsertPlaylistIntoReviewTables(
     };
   });
 
-  await supabase
-    .from("spotify_review_tracks")
-    .upsert(reviewTrackRows, { onConflict: "track_id" });
+  for (const upsertChunk of chunk(reviewTrackRows, 100)) {
+    await supabase
+      .from("spotify_review_tracks")
+      .upsert(upsertChunk, { onConflict: "track_id" });
+  }
 
-  await supabase
-    .from("spotify_review_state")
-    .upsert(
-      trackIds.map((trackId) => ({
-        track_id: trackId,
-        next_review_at: nowIso(),
-      })),
-      { onConflict: "track_id", ignoreDuplicates: true }
-    );
+  for (const stateChunk of chunk(trackIds, 100)) {
+    await supabase
+      .from("spotify_review_state")
+      .upsert(
+        stateChunk.map((trackId) => ({
+          track_id: trackId,
+          next_review_at: nowIso(),
+        })),
+        { onConflict: "track_id", ignoreDuplicates: true }
+      );
+  }
 
   const { data: existingMemberships } = await supabase
     .from("spotify_review_track_buckets")
@@ -1080,28 +1084,32 @@ async function upsertPlaylistIntoReviewTables(
   const removedIds = Array.from(existingMembershipIds).filter((id) => !activeSet.has(id));
 
   if (removedIds.length > 0) {
-    await supabase
-      .from("spotify_review_track_buckets")
-      .update({
-        active: false,
-        removed_at: nowIso(),
-        updated_at: nowIso(),
-      })
-      .eq("bucket_id", playlist.id)
-      .in("track_id", removedIds);
+    for (const removeChunk of chunk(removedIds, 100)) {
+      await supabase
+        .from("spotify_review_track_buckets")
+        .update({
+          active: false,
+          removed_at: nowIso(),
+          updated_at: nowIso(),
+        })
+        .eq("bucket_id", playlist.id)
+        .in("track_id", removeChunk);
+    }
   }
 
-  await supabase.from("spotify_review_track_buckets").upsert(
-    trackIds.map((trackId) => ({
-      track_id: trackId,
-      bucket_id: playlist.id,
-      active: true,
-      removed_at: null,
-      added_via: "spotify",
-      updated_at: nowIso(),
-    })),
-    { onConflict: "track_id,bucket_id" }
-  );
+  for (const bucketChunk of chunk(trackIds, 100)) {
+    await supabase.from("spotify_review_track_buckets").upsert(
+      bucketChunk.map((trackId) => ({
+        track_id: trackId,
+        bucket_id: playlist.id,
+        active: true,
+        removed_at: null,
+        added_via: "spotify",
+        updated_at: nowIso(),
+      })),
+      { onConflict: "track_id,bucket_id" }
+    );
+  }
 }
 
 async function fetchReviewTracks(trackIds: string[]) {
@@ -1291,20 +1299,23 @@ async function persistSequence(
   }
 
   if (sequence.tracks.length > 0) {
-    await supabase.from("spotify_playlist_sequence_tracks").upsert(
-      sequence.tracks.map((track) => ({
-        playlist_id: playlistId,
-        track_id: track.trackId,
-        block_id: track.blockId,
-        position: track.position,
-        role_tags: track.roleTags,
-        locked: track.locked,
-        hidden_from_autosort: track.hiddenFromAutosort,
-        derived_profile: track.derivedProfile,
-        updated_at: nowIso(),
-      })),
-      { onConflict: "playlist_id,track_id" }
-    );
+    const trackUpsertRows = sequence.tracks.map((track) => ({
+      playlist_id: playlistId,
+      track_id: track.trackId,
+      block_id: track.blockId,
+      position: track.position,
+      role_tags: track.roleTags,
+      locked: track.locked,
+      hidden_from_autosort: track.hiddenFromAutosort,
+      derived_profile: track.derivedProfile,
+      updated_at: nowIso(),
+    }));
+
+    for (const trackChunk of chunk(trackUpsertRows, 100)) {
+      await supabase
+        .from("spotify_playlist_sequence_tracks")
+        .upsert(trackChunk, { onConflict: "playlist_id,track_id" });
+    }
   }
 }
 
@@ -1331,6 +1342,7 @@ function composeSnapshot(params: {
   const orderedTracks = orderTracksWithCompatibility(
     params.tracks
       .sort((a, b) => a.position - b.position)
+      .filter((row) => params.trackMap.has(row.trackId))
       .map((row) => {
         const track = params.trackMap.get(row.trackId)!;
         return {
@@ -1392,41 +1404,44 @@ async function buildTrackMapForPlaylist(
   const artistMap = await fetchArtistDetails(artistIds);
   const reviewMap = new Map(reviewRows.map((row) => [row.track_id, row]));
 
-  const tracks = playlistTracks.map((item) => {
-    const spotifyTrack = item.track!;
-    const row = reviewMap.get(spotifyTrack.id)!;
-    const primaryArtistIds = spotifyTrack.artists
-      .map((artist) => artist.id)
-      .filter(Boolean) as string[];
-    const genres = unique(
-      primaryArtistIds.flatMap((artistId) => artistMap.get(artistId)?.genres || [])
-    );
-    const featureProfile = deriveTrackFeatures(row, genres);
+  const tracks = playlistTracks
+    .map((item) => {
+      const spotifyTrack = item.track!;
+      const row = reviewMap.get(spotifyTrack.id);
+      if (!row) return null;
+      const primaryArtistIds = spotifyTrack.artists
+        .map((artist) => artist.id)
+        .filter(Boolean) as string[];
+      const genres = unique(
+        primaryArtistIds.flatMap((artistId) => artistMap.get(artistId)?.genres || [])
+      );
+      const featureProfile = deriveTrackFeatures(row, genres);
 
-    return {
-      trackId: row.track_id,
-      spotifyUri: row.spotify_uri,
-      title: row.title,
-      artistDisplay: row.artist_display,
-      artistNames: row.artist_names || [],
-      albumName: row.album_name,
-      albumImageUrl: row.album_image_url,
-      previewUrl: row.preview_url,
-      songUrl: row.song_url,
-      durationMs: row.duration_ms,
-      popularity: row.popularity,
-      explicit: Boolean(row.explicit),
-      currentPosition: item.position,
-      blockId: "",
-      roleTags: [],
-      locked: false,
-      hiddenFromAutosort: false,
-      reasons: [],
-      featureProfile,
-      prevCompatibility: null,
-      nextCompatibility: null,
-    } satisfies SequencerTrack;
-  });
+      return {
+        trackId: row.track_id,
+        spotifyUri: row.spotify_uri,
+        title: row.title,
+        artistDisplay: row.artist_display,
+        artistNames: row.artist_names || [],
+        albumName: row.album_name,
+        albumImageUrl: row.album_image_url,
+        previewUrl: row.preview_url,
+        songUrl: row.song_url,
+        durationMs: row.duration_ms,
+        popularity: row.popularity,
+        explicit: Boolean(row.explicit),
+        currentPosition: item.position,
+        blockId: "",
+        roleTags: [],
+        locked: false,
+        hiddenFromAutosort: false,
+        reasons: [],
+        featureProfile,
+        prevCompatibility: null,
+        nextCompatibility: null,
+      } satisfies SequencerTrack;
+    })
+    .filter(Boolean) as SequencerTrack[];
 
   const withBridges = withBridgePotential(tracks);
   return new Map(withBridges.map((track) => [track.trackId, track]));
@@ -1441,8 +1456,8 @@ function generateInitialState(params: {
 }) {
   const tracks = params.playlistTracks
     .sort((a, b) => a.position - b.position)
-    .map((item) => params.trackMap.get(item.track!.id)!)
-    .filter(Boolean);
+    .map((item) => params.trackMap.get(item.track!.id))
+    .filter((t): t is SequencerTrack => t != null);
 
   const dominantLanguage = dominantLanguageForTracks(tracks);
   const ordered = chooseOrderedTracks(tracks, params.goalType, dominantLanguage);
