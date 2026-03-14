@@ -7,5 +7,5 @@ export const metadata = createMetadata({
 });
 
 export default function ReviewStatusPage() {
-  return <ReviewStatus />;
+  return <ReviewStatus reviewHref="/music/manage/review" />;
 }

@@ -387,7 +387,13 @@ function BucketPickerOverlay({
 // ReviewDeck
 // ---------------------------------------------------------------------------
 
-export function ReviewDeck() {
+export function ReviewDeck({
+  homeHref = "/music",
+  statusHref = "/music/review/status",
+}: {
+  homeHref?: string;
+  statusHref?: string;
+}) {
   // ---- Data ----
   const { data, error, isLoading, mutate } = useSWR<ReviewQueueSnapshot>(
     "/api/spotify/review",
@@ -928,7 +934,7 @@ export function ReviewDeck() {
 
       {/* Top bar */}
       <div className="relative z-10 flex flex-none items-center justify-between px-4 py-3">
-        <Link href="/music" className="text-xs text-gray-600 transition hover:text-gray-400">
+        <Link href={homeHref} className="text-xs text-gray-600 transition hover:text-gray-400">
           <svg className="inline h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -941,7 +947,7 @@ export function ReviewDeck() {
               Spotify
             </span>
           )}
-          <Link href="/music/review/status" className="transition hover:text-gray-400">
+          <Link href={statusHref} className="transition hover:text-gray-400">
             {data.stats.dueNow} due
           </Link>
           {sessionReviewed > 0 && <span>{sessionReviewed} done</span>}

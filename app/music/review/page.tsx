@@ -8,5 +8,10 @@ export const metadata = createMetadata({
 });
 
 export default function MusicReviewPage() {
-  return <ReviewDeck />;
+  return (
+    <ReviewDeck
+      homeHref="/music/manage"
+      statusHref="/music/manage/status"
+    />
+  );
 }

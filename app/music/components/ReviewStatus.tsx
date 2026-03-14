@@ -118,7 +118,11 @@ function TrackRow({ track, detail }: { track: ReviewTrack; detail: "due" | "revi
 // ReviewStatus
 // ---------------------------------------------------------------------------
 
-export function ReviewStatus() {
+export function ReviewStatus({
+  reviewHref = "/music/review",
+}: {
+  reviewHref?: string;
+}) {
   const { data, error, isLoading } = useSWR<ReviewStatusSnapshot>(
     "/api/spotify/review/status",
     fetcher,
@@ -218,7 +222,7 @@ export function ReviewStatus() {
       <div className="mx-auto max-w-lg px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
           <Link
-            href="/music/review"
+            href={reviewHref}
             className="text-xs text-gray-600 transition hover:text-gray-400"
           >
             <svg
