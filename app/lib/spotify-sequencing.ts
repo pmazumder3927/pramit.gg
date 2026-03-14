@@ -8,9 +8,9 @@ import {
   buildQualityMetrics,
   clamp,
   computeCompatibility,
+  computeSequencerCompatibility,
   describeBoundaryChanges,
   getBoundaryKey,
-  getGoalTargets,
   getRiskLabel,
   summarizeBlock,
 } from "@/app/music/lib/sequencer-heuristics";
@@ -25,6 +25,7 @@ import type {
   SequencerBoundary,
   SequencerBoundaryPreference,
   SequencerGoal,
+  SequencerModifier,
   SequencerPlaylistMeta,
   SequencerQualityMetrics,
   SequencerSaveInput,
@@ -32,6 +33,11 @@ import type {
   SequencerSuggestion,
   SequencerTrack,
   SequencerTrackFeatures,
+} from "@/app/music/lib/sequencer-types";
+import {
+  SEQUENCER_GOAL_PURPOSES,
+  normalizeSequencerGoal,
+  normalizeSequencerModifier,
 } from "@/app/music/lib/sequencer-types";
 
 type SpotifyImage = { url: string };
@@ -121,19 +127,19 @@ type ReviewTrackRow = {
 };
 
 const GOAL_BLOCK_NAMES: Record<SequencerGoal, string[]> = {
-  emotion: [
+  journey: [
     "soft intro",
     "familiar anchors",
-    "deeper run",
-    "energetic lift",
-    "emotional comedown",
-    "closing tracks",
+    "deepening center",
+    "lift point",
+    "comedown",
+    "landing",
   ],
-  language: [
-    "easy immersion",
-    "anchor phrases",
-    "deeper language run",
-    "bridge region",
+  immersion: [
+    "entry zone",
+    "same-world anchors",
+    "deeper pocket",
+    "seam bridge",
     "settling close",
   ],
   discovery: [
@@ -144,12 +150,14 @@ const GOAL_BLOCK_NAMES: Record<SequencerGoal, string[]> = {
     "statement close",
   ],
   comfort: ["warm open", "trusted core", "gentle drift", "soft landing"],
-  background: [
+  atmosphere: [
     "setting the room",
-    "steady glide",
-    "textural shift",
+    "locked pocket",
+    "textural bloom",
     "long exhale",
   ],
+  drive: ["ignition", "open road", "night stretch", "peak lane", "last pull"],
+  release: ["low burn", "set the fuse", "lift zone", "payoff", "afterglow"],
 };
 
 function nameBlockFromContent(
@@ -249,14 +257,6 @@ function nameBlockFromContent(
 
   return `${genreHint}${moodWord} stretch`.trim();
 }
-
-const GOAL_PURPOSES: Record<SequencerGoal, string> = {
-  emotion: "shape the emotional climb with gentle steps",
-  language: "hold immersion without exhausting the ear",
-  discovery: "alternate anchors with underexplored picks",
-  comfort: "keep the room familiar and low-friction",
-  background: "maintain atmosphere with minimal clashes",
-};
 
 const BLOCK_COLORS = [
   "#ff6b3d",
@@ -646,13 +646,13 @@ function chooseOrderedTracks(
   tracks: SequencerTrack[],
   goal: SequencerGoal,
   dominantLanguage: string | null,
-  secondaryGoal: SequencerGoal | null,
+  secondaryGoal: SequencerModifier | null,
   arcProfile?: SequencerArcProfile | null
 ) {
   if (tracks.length <= 2) return tracks;
 
   const languagePrioritized =
-    goal === "language" && dominantLanguage
+    goal === "immersion" && dominantLanguage
       ? [...tracks].sort((left, right) => {
           const leftMatch = left.featureProfile.language === dominantLanguage ? 1 : 0;
           const rightMatch = right.featureProfile.language === dominantLanguage ? 1 : 0;
@@ -766,7 +766,7 @@ function pickBoundaryIndexes(tracks: SequencerTrack[], goal: SequencerGoal) {
 function buildInitialBlocks(
   orderedTracks: SequencerTrack[],
   goal: SequencerGoal,
-  secondaryGoal: SequencerGoal | null,
+  secondaryGoal: SequencerModifier | null,
   arcProfile?: SequencerArcProfile | null
 ): { blocks: SequencePersistenceBlock[]; tracks: SequencePersistenceTrack[] } {
   const blocks: SequencePersistenceBlock[] = [];
@@ -798,7 +798,7 @@ function buildInitialBlocks(
     blocks.push({
       id: blockId,
       name: blockName,
-      purpose: GOAL_PURPOSES[goal],
+      purpose: SEQUENCER_GOAL_PURPOSES[goal],
       position: blockIndex,
       colorToken: BLOCK_COLORS[blockIndex % BLOCK_COLORS.length],
       notes: null,
@@ -825,12 +825,14 @@ function bridgeCandidatesForBoundary(
   allTracks: SequencerTrack[],
   left: SequencerTrack,
   right: SequencerTrack,
-  goal: SequencerGoal
+  goal: SequencerGoal,
+  secondaryGoal: SequencerModifier | null
 ) {
-  const directCompatibility = computeCompatibility(
+  const directCompatibility = computeSequencerCompatibility(
     left.featureProfile,
     right.featureProfile,
-    goal
+    goal,
+    secondaryGoal
   );
 
   return allTracks
@@ -840,15 +842,17 @@ function bridgeCandidatesForBoundary(
         track.trackId !== right.trackId
     )
     .map((track) => {
-      const leftCompatibility = computeCompatibility(
+      const leftCompatibility = computeSequencerCompatibility(
         left.featureProfile,
         track.featureProfile,
-        goal
+        goal,
+        secondaryGoal
       );
-      const rightCompatibility = computeCompatibility(
+      const rightCompatibility = computeSequencerCompatibility(
         track.featureProfile,
         right.featureProfile,
-        goal
+        goal,
+        secondaryGoal
       );
       const score =
         (leftCompatibility + rightCompatibility) / 2 -
@@ -869,7 +873,8 @@ function bridgeCandidatesForBoundary(
 function hydrateBlocks(
   orderedTracks: SequencerTrack[],
   blockRows: SequencePersistenceBlock[],
-  goal: SequencerGoal
+  goal: SequencerGoal,
+  secondaryGoal: SequencerModifier | null
 ) {
   const blockMap = new Map<string, SequencerBlock>();
 
@@ -923,7 +928,7 @@ function hydrateBlocks(
         novelty: average(block.tracks.map((track) => track.featureProfile.novelty)),
         intensity: average(block.tracks.map((track) => track.featureProfile.intensity)),
       };
-      block.metrics = buildBlockMetrics(block, goal);
+      block.metrics = buildBlockMetrics(block, goal, secondaryGoal);
       block.summary = summarizeBlock(block);
       block.warnings = [];
       return block;
@@ -935,6 +940,7 @@ function hydrateBlocks(
 function buildTransitions(
   blocks: SequencerBlock[],
   goal: SequencerGoal,
+  secondaryGoal: SequencerModifier | null,
   boundaryPreferences: Record<string, SequencerBoundaryPreference>
 ) {
   const orderedTracks = blocks.flatMap((block) => block.tracks);
@@ -950,10 +956,11 @@ function buildTransitions(
     const head = next.tracks[0];
     const boundaryId = getBoundaryKey(current.id, next.id);
     const mode = boundaryPreferences[boundaryId]?.mode || "smooth";
-    const compatibility = computeCompatibility(
+    const compatibility = computeSequencerCompatibility(
       tail.featureProfile,
       head.featureProfile,
       goal,
+      secondaryGoal,
       mode
     );
     const riskLabel = getRiskLabel(compatibility);
@@ -966,7 +973,13 @@ function buildTransitions(
       compatibility,
       riskLabel,
       changeSummary: describeBoundaryChanges(tail.featureProfile, head.featureProfile),
-      bridgeCandidateTrackIds: bridgeCandidatesForBoundary(orderedTracks, tail, head, goal),
+      bridgeCandidateTrackIds: bridgeCandidatesForBoundary(
+        orderedTracks,
+        tail,
+        head,
+        goal,
+        secondaryGoal
+      ),
     });
 
     if (riskLabel !== "smooth") {
@@ -987,7 +1000,8 @@ function buildSuggestions(
   blocks: SequencerBlock[],
   transitions: SequencerBoundary[],
   metrics: SequencerQualityMetrics,
-  goal: SequencerGoal
+  goal: SequencerGoal,
+  secondaryGoal: SequencerModifier | null
 ) {
   const suggestions: SequencerSuggestion[] = [];
 
@@ -1020,14 +1034,20 @@ function buildSuggestions(
   }
 
   if (metrics.endingStrength < 66) {
+    const endingDetail =
+      goal === "discovery"
+        ? "Use a stronger final statement or a favorite with sharper identity."
+        : goal === "release"
+          ? "Use a clearer payoff track or a closer that releases more tension."
+          : secondaryGoal === "soft-landing"
+            ? "The softer finish still needs a more decisive landing track."
+            : "Use a softer closer or a more familiar landing track.";
+
     suggestions.push({
       id: "ending",
       type: "ending",
       title: "The ending lands softly but not clearly.",
-      detail:
-        goal === "discovery"
-          ? "Use a stronger final statement or a favorite with sharper identity."
-          : "Use a softer closer or a more familiar landing track.",
+      detail: endingDetail,
       blockId: blocks[blocks.length - 1]?.id,
     });
   }
@@ -1046,25 +1066,28 @@ function buildSuggestions(
 
 function orderTracksWithCompatibility(
   tracks: SequencerTrack[],
-  goal: SequencerGoal
+  goal: SequencerGoal,
+  secondaryGoal: SequencerModifier | null
 ) {
   return tracks.map((track, index) => ({
     ...track,
     currentPosition: index,
     prevCompatibility:
       index > 0
-        ? computeCompatibility(
+        ? computeSequencerCompatibility(
             tracks[index - 1].featureProfile,
             track.featureProfile,
-            goal
+            goal,
+            secondaryGoal
           )
         : null,
     nextCompatibility:
       index < tracks.length - 1
-        ? computeCompatibility(
+        ? computeSequencerCompatibility(
             track.featureProfile,
             tracks[index + 1].featureProfile,
-            goal
+            goal,
+            secondaryGoal
           )
         : null,
   }));
@@ -1297,7 +1320,7 @@ async function persistSequence(
   playlistId: string,
   sequence: {
     goalType: SequencerGoal;
-    secondaryGoal: SequencerGoal | null;
+    secondaryGoal: SequencerModifier | null;
     arcProfile: SequencerArcProfile;
     boundaryPreferences: Record<string, SequencerBoundaryPreference>;
     blocks: SequencePersistenceBlock[];
@@ -1421,7 +1444,7 @@ function dominantLanguageForTracks(tracks: SequencerTrack[]) {
 function composeSnapshot(params: {
   playlist: SequencerPlaylistMeta;
   goalType: SequencerGoal;
-  secondaryGoal: SequencerGoal | null;
+  secondaryGoal: SequencerModifier | null;
   arcProfile?: SequencerArcProfile | null;
   blocks: SequencePersistenceBlock[];
   tracks: SequencePersistenceTrack[];
@@ -1444,13 +1467,19 @@ function composeSnapshot(params: {
           roleTags: row.roleTags,
         };
       }),
-    params.goalType
+    params.goalType,
+    params.secondaryGoal
   ).map((track, index, allTracks) => ({
     ...track,
     roleTags: roleTagsForTrack(track, index, allTracks.length, allTracks[index - 1]),
   }));
 
-  const hydratedBlocks = hydrateBlocks(orderedTracks, params.blocks, params.goalType);
+  const hydratedBlocks = hydrateBlocks(
+    orderedTracks,
+    params.blocks,
+    params.goalType,
+    params.secondaryGoal
+  );
   const arcProfile =
     params.arcProfile && params.arcProfile.energy.length > 0
       ? params.arcProfile
@@ -1458,6 +1487,7 @@ function composeSnapshot(params: {
   const transitions = buildTransitions(
     hydratedBlocks,
     params.goalType,
+    params.secondaryGoal,
     params.boundaryPreferences
   );
   const chapters = buildMiniPlaylistChapters(hydratedBlocks, {
@@ -1465,12 +1495,18 @@ function composeSnapshot(params: {
     secondaryGoal: params.secondaryGoal,
     arcProfile,
   });
-  const metrics = buildQualityMetrics(hydratedBlocks, params.goalType, transitions);
+  const metrics = buildQualityMetrics(
+    hydratedBlocks,
+    params.goalType,
+    transitions,
+    params.secondaryGoal
+  );
   const suggestions = buildSuggestions(
     hydratedBlocks,
     transitions,
     metrics,
-    params.goalType
+    params.goalType,
+    params.secondaryGoal
   );
 
   return {
@@ -1550,7 +1586,7 @@ async function buildTrackMapForPlaylist(
 function generateInitialState(params: {
   playlist: SequencerPlaylistMeta;
   goalType: SequencerGoal;
-  secondaryGoal: SequencerGoal | null;
+  secondaryGoal: SequencerModifier | null;
   trackMap: Map<string, SequencerTrack>;
   playlistTracks: Array<SpotifyPlaylistTrackItem & { position: number }>;
 }) {
@@ -1616,9 +1652,8 @@ export async function getPlaylistSequence(
     currentTrackIds.length === storedTrackIds.length &&
     currentTrackIds.every((trackId) => storedTrackIds.includes(trackId));
 
-  const goalType = (stored.sequenceRow?.goal_type as SequencerGoal) || "emotion";
-  const secondaryGoal =
-    (stored.sequenceRow?.secondary_goal as SequencerGoal | null) || null;
+  const goalType = normalizeSequencerGoal(stored.sequenceRow?.goal_type) || "journey";
+  const secondaryGoal = normalizeSequencerModifier(stored.sequenceRow?.secondary_goal);
 
   if (!stored.sequenceRow || stored.blockRows.length === 0 || stored.trackRows.length === 0 || !hasSameTracks || options?.regenerate) {
     const generated = generateInitialState({
@@ -1681,7 +1716,7 @@ export async function savePlaylistSequence(
     .map((block, index) => ({
       id: block.id,
       name: block.name.trim() || `section ${index + 1}`,
-      purpose: block.purpose || GOAL_PURPOSES[input.goalType],
+      purpose: block.purpose || SEQUENCER_GOAL_PURPOSES[input.goalType],
       position: index,
       colorToken: block.colorToken || BLOCK_COLORS[index % BLOCK_COLORS.length],
       notes: block.notes,

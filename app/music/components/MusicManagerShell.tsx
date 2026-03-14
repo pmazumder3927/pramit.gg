@@ -34,10 +34,10 @@ export function MusicManagerShell({
           <div className="flex items-center gap-5">
             <Link
               href="/music/manage"
-              className="group flex items-center gap-2 transition"
+              className="group flex items-baseline gap-px transition"
             >
-              <span className="text-[10px] uppercase tracking-[0.25em] text-white/30 transition-colors group-hover:text-white/50">
-                Studio
+              <span className="text-sm font-light text-white/40 transition-colors group-hover:text-white/65">
+                its 3 am
               </span>
             </Link>
 
@@ -58,7 +58,7 @@ export function MusicManagerShell({
                   >
                     {active && (
                       <motion.div
-                        layoutId="studio-nav"
+                        layoutId="3am-nav"
                         className="absolute inset-0 rounded-full bg-white/[0.08] ring-1 ring-white/[0.06]"
                         transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
                       />

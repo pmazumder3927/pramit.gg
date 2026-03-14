@@ -1,13 +1,14 @@
 import {
   average,
   clamp,
-  computeCompatibility,
+  computeSequencerCompatibility,
   getGoalTargets,
 } from "@/app/music/lib/sequencer-heuristics";
 import type {
   SequencerArcProfile,
   SequencerBlock,
   SequencerGoal,
+  SequencerModifier,
   SequencerMiniPlaylist,
   SequencerTrack,
 } from "@/app/music/lib/sequencer-types";
@@ -16,7 +17,7 @@ type ReorderMode = "smooth" | "surprise";
 
 interface OptimizerOptions {
   goalType: SequencerGoal;
-  secondaryGoal?: SequencerGoal | null;
+  secondaryGoal?: SequencerModifier | null;
   arcProfile?: SequencerArcProfile | null;
   mode?: ReorderMode;
   leadingTrack?: SequencerTrack | null;
@@ -58,64 +59,124 @@ function interpolate(values: number[], ratio: number, fallback: number) {
   return values[left] * (1 - weight) + values[right] * weight;
 }
 
-function blendedCompatibility(
+function compatibilityWithModifier(
   left: SequencerTrack,
   right: SequencerTrack,
   goalType: SequencerGoal,
-  secondaryGoal: SequencerGoal | null | undefined
+  secondaryGoal: SequencerModifier | null | undefined
 ) {
-  const primary = computeCompatibility(left.featureProfile, right.featureProfile, goalType);
-  if (!secondaryGoal || secondaryGoal === goalType) return primary;
-  const secondary = computeCompatibility(
+  return computeSequencerCompatibility(
     left.featureProfile,
     right.featureProfile,
+    goalType,
     secondaryGoal
   );
-  return Math.round(primary * 0.7 + secondary * 0.3);
+}
+
+function applyModifierToTarget(
+  target: {
+    energy: number;
+    familiarity: number;
+    novelty: number;
+    intensity: number;
+    valence: number;
+  },
+  modifier: SequencerModifier | null | undefined,
+  ratio: number
+) {
+  if (!modifier) return target;
+
+  switch (modifier) {
+    case "smooth":
+      return {
+        ...target,
+        familiarity: clamp(target.familiarity + 0.06),
+        novelty: clamp(target.novelty - 0.06),
+        intensity: clamp(target.intensity - 0.04),
+      };
+    case "adventurous":
+      return {
+        ...target,
+        energy: clamp(target.energy + 0.02),
+        familiarity: clamp(target.familiarity - 0.06),
+        novelty: clamp(target.novelty + 0.12),
+        intensity: clamp(target.intensity + 0.08),
+      };
+    case "anchored":
+      return {
+        ...target,
+        familiarity: clamp(target.familiarity + 0.12),
+        novelty: clamp(target.novelty - 0.05),
+      };
+    case "energized":
+      return {
+        ...target,
+        energy: clamp(target.energy + 0.14),
+        intensity: clamp(target.intensity + 0.12),
+        valence: clamp(target.valence + 0.04),
+      };
+    case "soft-landing":
+      return ratio < 0.56
+        ? target
+        : {
+            ...target,
+            energy: clamp(target.energy - (ratio - 0.56) * 0.28),
+            familiarity: clamp(target.familiarity + (ratio - 0.56) * 0.18),
+            intensity: clamp(target.intensity - (ratio - 0.56) * 0.32),
+          };
+    case "focused":
+      return {
+        ...target,
+        familiarity: clamp(target.familiarity + 0.06),
+        novelty: clamp(target.novelty - 0.04),
+        intensity: clamp(target.intensity - 0.02),
+      };
+    case "contrast":
+      return {
+        ...target,
+        energy: clamp(target.energy + (ratio > 0.55 ? 0.08 : -0.04)),
+        familiarity: clamp(target.familiarity - 0.05),
+        novelty: clamp(target.novelty + 0.05),
+        intensity: clamp(target.intensity + 0.1),
+        valence: clamp(target.valence + (ratio > 0.55 ? 0.06 : -0.04)),
+      };
+    default:
+      return target;
+  }
 }
 
 function trackTargetProfile(
   ratio: number,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerGoal | null,
+  secondaryGoal?: SequencerModifier | null,
   arcProfile?: SequencerArcProfile | null
 ) {
   const primary = getGoalTargets(goalType, ratio);
-  const secondary =
-    secondaryGoal && secondaryGoal !== goalType
-      ? getGoalTargets(secondaryGoal, ratio)
-      : primary;
-
-  const energy =
-    arcProfile?.energy?.length
+  const base = {
+    energy: arcProfile?.energy?.length
       ? interpolate(arcProfile.energy, ratio, primary.energy)
-      : primary.energy * 0.72 + secondary.energy * 0.28;
-  const familiarity =
-    arcProfile?.familiarity?.length
+      : primary.energy,
+    familiarity: arcProfile?.familiarity?.length
       ? interpolate(arcProfile.familiarity, ratio, primary.familiarity)
-      : primary.familiarity * 0.72 + secondary.familiarity * 0.28;
-  const novelty =
-    arcProfile?.novelty?.length
+      : primary.familiarity,
+    novelty: arcProfile?.novelty?.length
       ? interpolate(arcProfile.novelty, ratio, primary.novelty)
-      : primary.novelty * 0.72 + secondary.novelty * 0.28;
-
-  return {
-    energy,
-    familiarity,
-    novelty,
-    intensity: primary.intensity * 0.72 + secondary.intensity * 0.28,
+      : primary.novelty,
+    intensity: primary.intensity,
     valence:
       arcProfile?.valence?.length
         ? interpolate(arcProfile.valence, ratio, 0.5 + primary.intensity * 0.15)
-        : 0.5 + (primary.intensity * 0.72 + secondary.intensity * 0.28) * 0.15,
+        : 0.5 + primary.intensity * 0.15,
   };
+
+  return applyModifierToTarget(base, secondaryGoal, ratio);
 }
 
 function arcAffinity(
   track: SequencerTrack,
   ratio: number,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerGoal | null,
+  secondaryGoal?: SequencerModifier | null,
   arcProfile?: SequencerArcProfile | null
 ) {
   const target = trackTargetProfile(ratio, goalType, secondaryGoal, arcProfile);
@@ -135,34 +196,56 @@ function arcAffinity(
 function openerStrength(
   track: SequencerTrack,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerGoal | null
+  secondaryGoal?: SequencerModifier | null
 ) {
-  const languageFocus =
-    goalType === "language" || secondaryGoal === "language"
-      ? track.featureProfile.language !== "Unknown"
-        ? 0.08
-        : 0
-      : 0;
+  let score =
+    track.featureProfile.comfort * 0.42 +
+    track.featureProfile.anchor * 0.28 +
+    (1 - track.featureProfile.demand) * 0.18 +
+    (1 - track.featureProfile.novelty) * 0.12;
 
-  return (
-    (track.featureProfile.comfort * 0.42 +
-      track.featureProfile.anchor * 0.28 +
-      (1 - track.featureProfile.demand) * 0.18 +
-      (1 - track.featureProfile.novelty) * 0.12 +
-      languageFocus) *
-    100
-  );
+  if (goalType === "immersion" && track.featureProfile.language !== "Unknown") score += 0.08;
+  if (goalType === "drive") score += track.featureProfile.energy * 0.1;
+  if (goalType === "release") {
+    score += track.featureProfile.anchor * 0.08 + track.featureProfile.comfort * 0.04;
+  }
+
+  switch (secondaryGoal) {
+    case "smooth":
+      score += track.featureProfile.comfort * 0.08;
+      break;
+    case "adventurous":
+      score += track.featureProfile.novelty * 0.12;
+      break;
+    case "anchored":
+      score += track.featureProfile.anchor * 0.16;
+      break;
+    case "energized":
+      score += track.featureProfile.energy * 0.18 + track.featureProfile.intensity * 0.08;
+      break;
+    case "soft-landing":
+      score += track.featureProfile.comfort * 0.04;
+      break;
+    case "focused":
+      score += track.featureProfile.language !== "Unknown" ? 0.12 : 0;
+      break;
+    case "contrast":
+      score += track.featureProfile.intensity * 0.08 + track.featureProfile.novelty * 0.04;
+      break;
+  }
+
+  return score * 100;
 }
 
 function closerStrength(
   track: SequencerTrack,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerGoal | null
+  secondaryGoal?: SequencerModifier | null
 ) {
-  const discoveryWeight =
-    goalType === "discovery" || secondaryGoal === "discovery";
+  const statementEnding =
+    goalType === "discovery" || goalType === "drive" || goalType === "release";
 
-  const value = discoveryWeight
+  let value = statementEnding
     ? track.featureProfile.anchor * 0.34 +
       track.featureProfile.intensity * 0.28 +
       (1 - track.featureProfile.novelty) * 0.1 +
@@ -171,6 +254,46 @@ function closerStrength(
       (1 - track.featureProfile.demand) * 0.28 +
       track.featureProfile.familiarity * 0.22 +
       track.featureProfile.anchor * 0.12;
+
+  if (goalType === "journey") {
+    value =
+      track.featureProfile.comfort * 0.34 +
+      track.featureProfile.anchor * 0.2 +
+      track.featureProfile.valence * 0.18 +
+      (1 - track.featureProfile.demand) * 0.28;
+  }
+
+  if (goalType === "release") {
+    value =
+      track.featureProfile.anchor * 0.32 +
+      track.featureProfile.intensity * 0.3 +
+      track.featureProfile.valence * 0.14 +
+      (1 - track.featureProfile.demand) * 0.24;
+  }
+
+  switch (secondaryGoal) {
+    case "smooth":
+      value += track.featureProfile.comfort * 0.08;
+      break;
+    case "adventurous":
+      value += track.featureProfile.intensity * 0.08 + track.featureProfile.novelty * 0.04;
+      break;
+    case "anchored":
+      value += track.featureProfile.anchor * 0.12 + track.featureProfile.familiarity * 0.08;
+      break;
+    case "energized":
+      value += track.featureProfile.energy * 0.16 + track.featureProfile.intensity * 0.08;
+      break;
+    case "soft-landing":
+      value += track.featureProfile.comfort * 0.2 + (1 - track.featureProfile.demand) * 0.12;
+      break;
+    case "focused":
+      value += track.featureProfile.language !== "Unknown" ? 0.06 : 0;
+      break;
+    case "contrast":
+      value += track.featureProfile.intensity * 0.12 + track.featureProfile.valence * 0.08;
+      break;
+  }
 
   return value * 100;
 }
@@ -218,16 +341,21 @@ function scoreSequence(
 
   const adjacencyPairs: number[] = [];
   if (leadingTrack && tracks[0]) {
-    adjacencyPairs.push(blendedCompatibility(leadingTrack, tracks[0], goalType, secondaryGoal));
+    adjacencyPairs.push(compatibilityWithModifier(leadingTrack, tracks[0], goalType, secondaryGoal));
   }
   for (let index = 0; index < tracks.length - 1; index += 1) {
     adjacencyPairs.push(
-      blendedCompatibility(tracks[index], tracks[index + 1], goalType, secondaryGoal)
+      compatibilityWithModifier(tracks[index], tracks[index + 1], goalType, secondaryGoal)
     );
   }
   if (trailingTrack && tracks[tracks.length - 1]) {
     adjacencyPairs.push(
-      blendedCompatibility(tracks[tracks.length - 1], trailingTrack, goalType, secondaryGoal)
+      compatibilityWithModifier(
+        tracks[tracks.length - 1],
+        trailingTrack,
+        goalType,
+        secondaryGoal
+      )
     );
   }
 
@@ -244,7 +372,17 @@ function scoreSequence(
     )
   );
 
-  const pacingPenalty = noveltyRunPenalty(tracks);
+  const pacingPenalty =
+    noveltyRunPenalty(tracks) *
+    (
+      secondaryGoal === "adventurous"
+        ? 0.55
+        : secondaryGoal === "anchored"
+          ? 1.2
+          : secondaryGoal === "contrast"
+            ? 0.85
+            : 1
+    );
   const anchorScore = anchorSpacingScore(tracks);
   const openerScore = openerStrength(tracks[0], goalType, secondaryGoal);
   const closerScore = closerStrength(tracks[tracks.length - 1], goalType, secondaryGoal);
@@ -290,7 +428,7 @@ function candidateScore(
     options.arcProfile
   );
   const continuity = prev
-    ? blendedCompatibility(prev, track, options.goalType, options.secondaryGoal)
+    ? compatibilityWithModifier(prev, track, options.goalType, options.secondaryGoal)
     : openerStrength(track, options.goalType, options.secondaryGoal);
 
   const needAnchor = state.tracksSinceAnchor >= 3;
@@ -312,12 +450,35 @@ function candidateScore(
       ? track.featureProfile.novelty * 16 +
         (track.featureProfile.genreFamily !== prev?.featureProfile.genreFamily ? 8 : 0)
       : 0;
+  const contrastBonus = prev
+    ? Math.abs(prev.featureProfile.energy - track.featureProfile.energy) * 18 +
+      Math.abs(prev.featureProfile.valence - track.featureProfile.valence) * 12 +
+      (prev.featureProfile.genreFamily !== track.featureProfile.genreFamily ? 6 : 0)
+    : track.featureProfile.intensity * 6;
+  const modifierBonus =
+    options.secondaryGoal === "anchored"
+      ? track.featureProfile.anchor * 12 + track.featureProfile.familiarity * 8
+      : options.secondaryGoal === "adventurous"
+        ? track.featureProfile.novelty * 14 + track.featureProfile.intensity * 6
+        : options.secondaryGoal === "energized"
+          ? track.featureProfile.energy * 16 + track.featureProfile.intensity * 10
+          : options.secondaryGoal === "focused"
+            ? (track.featureProfile.language !== "Unknown" ? 10 : 0) +
+              (prev && prev.featureProfile.language === track.featureProfile.language ? 8 : 0)
+            : options.secondaryGoal === "smooth"
+              ? track.featureProfile.comfort * 10
+              : options.secondaryGoal === "contrast"
+                ? contrastBonus
+              : options.secondaryGoal === "soft-landing" && ratio > 0.62
+                ? track.featureProfile.comfort * 14 + (1 - track.featureProfile.demand) * 8
+                : 0;
 
   return (
     continuity * (options.mode === "surprise" ? 0.44 : 0.58) +
     arcScore * 0.24 +
     anchorBonus +
     resetBonus +
+    modifierBonus +
     surpriseBonus -
     noveltyPenalty -
     demandPenalty
@@ -557,7 +718,7 @@ function segmentScore(
     );
   const cohesion = average(
     slice.slice(0, -1).map((track, index) =>
-      blendedCompatibility(track, slice[index + 1], options.goalType, options.secondaryGoal)
+      compatibilityWithModifier(track, slice[index + 1], options.goalType, options.secondaryGoal)
     )
   );
   const arcScore = average(
@@ -629,7 +790,7 @@ export function buildOptimizedBlockPlan(
           const seamBonus =
             start > 0
               ? 100 -
-                blendedCompatibility(
+                compatibilityWithModifier(
                   tracks[start - 1],
                   tracks[start],
                   options.goalType,
@@ -674,7 +835,7 @@ function chapterQuality(
   if (tracks.length === 0) return 0;
   const adjacency = average(
     tracks.slice(0, -1).map((track, index) =>
-      blendedCompatibility(track, tracks[index + 1], options.goalType, options.secondaryGoal)
+      compatibilityWithModifier(track, tracks[index + 1], options.goalType, options.secondaryGoal)
     )
   );
   const opener = openerStrength(tracks[0], options.goalType, options.secondaryGoal);

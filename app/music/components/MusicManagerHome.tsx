@@ -85,28 +85,6 @@ export function MusicManagerHome() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      {/* Hero header */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1
-          className="text-4xl font-light tracking-tight text-white sm:text-5xl"
-          style={{
-            backgroundImage: `linear-gradient(135deg, #fff 0%, rgba(${rgb.r},${rgb.g},${rgb.b},0.7) 50%, #7c77c6 100%)`,
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
-          Studio
-        </h1>
-        <p className="mt-2 text-sm font-light text-white/30">
-          shape the sound
-        </p>
-      </motion.div>
-
       {/* Review + Stats row */}
       <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
         {/* Review card */}

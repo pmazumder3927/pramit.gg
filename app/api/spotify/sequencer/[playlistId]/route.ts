@@ -7,6 +7,7 @@ import {
 import {
   SEQUENCER_BOUNDARY_MODES,
   SEQUENCER_GOALS,
+  SEQUENCER_MODIFIERS,
   type SequencerSaveInput,
 } from "@/app/music/lib/sequencer-types";
 
@@ -16,6 +17,12 @@ interface RouteProps {
 
 function isGoal(value: unknown): value is (typeof SEQUENCER_GOALS)[number] {
   return typeof value === "string" && SEQUENCER_GOALS.includes(value as any);
+}
+
+function isModifier(
+  value: unknown
+): value is (typeof SEQUENCER_MODIFIERS)[number] {
+  return typeof value === "string" && SEQUENCER_MODIFIERS.includes(value as any);
 }
 
 function isBoundaryMode(
@@ -28,7 +35,7 @@ function isValidSavePayload(body: any): body is SequencerSaveInput {
   return (
     body &&
     isGoal(body.goalType) &&
-    (body.secondaryGoal == null || isGoal(body.secondaryGoal)) &&
+    (body.secondaryGoal == null || isModifier(body.secondaryGoal)) &&
     body.arcProfile &&
     Array.isArray(body.blocks) &&
     Array.isArray(body.tracks) &&

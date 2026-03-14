@@ -1,12 +1,26 @@
 export const SEQUENCER_GOALS = [
-  "emotion",
-  "language",
+  "journey",
   "discovery",
+  "immersion",
   "comfort",
-  "background",
+  "atmosphere",
+  "drive",
+  "release",
 ] as const;
 
 export type SequencerGoal = (typeof SEQUENCER_GOALS)[number];
+
+export const SEQUENCER_MODIFIERS = [
+  "smooth",
+  "adventurous",
+  "anchored",
+  "energized",
+  "soft-landing",
+  "focused",
+  "contrast",
+] as const;
+
+export type SequencerModifier = (typeof SEQUENCER_MODIFIERS)[number];
 
 export const SEQUENCER_BOUNDARY_MODES = [
   "smooth",
@@ -160,7 +174,7 @@ export interface SequencerSnapshot {
   authenticated: boolean;
   playlist: SequencerPlaylistMeta;
   goalType: SequencerGoal;
-  secondaryGoal: SequencerGoal | null;
+  secondaryGoal: SequencerModifier | null;
   arcProfile: SequencerArcProfile;
   boundaryPreferences: Record<string, SequencerBoundaryPreference>;
   blocks: SequencerBlock[];
@@ -194,7 +208,7 @@ export interface SequencerSaveTrackInput {
 
 export interface SequencerSaveInput {
   goalType: SequencerGoal;
-  secondaryGoal: SequencerGoal | null;
+  secondaryGoal: SequencerModifier | null;
   arcProfile: SequencerArcProfile;
   boundaryPreferences: Record<string, SequencerBoundaryPreference>;
   blocks: SequencerSaveBlockInput[];
@@ -202,9 +216,96 @@ export interface SequencerSaveInput {
 }
 
 export const SEQUENCER_GOAL_LABELS: Record<SequencerGoal, string> = {
-  emotion: "Emotion",
-  language: "Language Immersion",
+  journey: "Journey",
   discovery: "Discovery",
+  immersion: "Immersion",
   comfort: "Comfort",
-  background: "Background",
+  atmosphere: "Atmosphere",
+  drive: "Drive",
+  release: "Release",
 };
+
+export const SEQUENCER_MODIFIER_LABELS: Record<SequencerModifier, string> = {
+  smooth: "Smooth",
+  adventurous: "Adventurous",
+  anchored: "Anchored",
+  energized: "Energized",
+  "soft-landing": "Soft Landing",
+  focused: "Focused",
+  contrast: "Contrast",
+};
+
+export const SEQUENCER_GOAL_DESCRIPTIONS: Record<SequencerGoal, string> = {
+  journey: "Shape a visible rise, depth, and release instead of staying flat.",
+  discovery: "Push unfamiliar songs forward without letting the set turn hostile.",
+  immersion: "Lock into one world long enough to feel coherent and absorbing.",
+  comfort: "Keep the playlist familiar, low-friction, and easy to settle into.",
+  atmosphere: "Prioritize mood and texture over obvious statements or big pivots.",
+  drive: "Keep forward pressure high and avoid stretches that sag.",
+  release: "Build toward a bigger payoff so the late stretch lands with force.",
+};
+
+export const SEQUENCER_GOAL_PURPOSES: Record<SequencerGoal, string> = {
+  journey: "shape a clear rise, depth, and release",
+  discovery: "push into new terrain without losing the listener",
+  immersion: "hold one world long enough to sink into it",
+  comfort: "keep the room familiar and low-friction",
+  atmosphere: "maintain a stable atmosphere with minimal grabs",
+  drive: "keep forward momentum without flattening the ride",
+  release: "build toward a bigger payoff and let the final stretch hit harder",
+};
+
+export const SEQUENCER_MODIFIER_DESCRIPTIONS: Record<SequencerModifier, string> = {
+  smooth: "Reduce rough seams and keep handoffs easier to live with.",
+  adventurous: "Allow stranger turns and push unfamiliar material harder.",
+  anchored: "Lean harder on recognizable anchors and recovery points.",
+  energized: "Keep the average lift and intensity higher.",
+  "soft-landing": "Protect the final stretch so it can come down cleanly.",
+  focused: "Tighten the palette around language, texture, and family.",
+  contrast: "Let sections separate more clearly with bigger lifts, drops, and turns.",
+};
+
+const LEGACY_GOAL_ALIASES: Record<string, SequencerGoal> = {
+  emotion: "journey",
+  language: "immersion",
+  background: "atmosphere",
+  journey: "journey",
+  discovery: "discovery",
+  immersion: "immersion",
+  comfort: "comfort",
+  atmosphere: "atmosphere",
+  drive: "drive",
+  release: "release",
+};
+
+const LEGACY_MODIFIER_ALIASES: Record<string, SequencerModifier> = {
+  smooth: "smooth",
+  adventurous: "adventurous",
+  anchored: "anchored",
+  energized: "energized",
+  "soft-landing": "soft-landing",
+  focused: "focused",
+  contrast: "contrast",
+  emotion: "adventurous",
+  language: "focused",
+  discovery: "adventurous",
+  comfort: "anchored",
+  background: "smooth",
+  journey: "adventurous",
+  immersion: "focused",
+  atmosphere: "smooth",
+  drive: "energized",
+  release: "contrast",
+};
+
+export function normalizeSequencerGoal(value: unknown): SequencerGoal | null {
+  if (typeof value !== "string") return null;
+  return LEGACY_GOAL_ALIASES[value] || null;
+}
+
+export function normalizeSequencerModifier(
+  value: unknown
+): SequencerModifier | null {
+  if (typeof value !== "string") return null;
+  return LEGACY_MODIFIER_ALIASES[value] || null;
+}

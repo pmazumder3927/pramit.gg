@@ -3,6 +3,7 @@ import type {
   SequencerBlock,
   SequencerBoundaryMode,
   SequencerGoal,
+  SequencerModifier,
   SequencerQualityMetrics,
   SequencerRiskLabel,
   SequencerTrack,
@@ -26,41 +27,55 @@ export function getGoalTargets(goal: SequencerGoal, ratio: number) {
   const t = clamp(ratio, 0, 1);
 
   switch (goal) {
-    case "emotion":
+    case "journey":
       return {
-        energy: t < 0.6 ? 0.2 + t * 0.7 : 0.62 - (t - 0.6) * 0.55,
-        familiarity: 0.68 - t * 0.12,
-        novelty: 0.32 + t * 0.1,
-        intensity: t < 0.55 ? 0.3 + t * 0.4 : 0.54 - (t - 0.55) * 0.2,
+        energy: t < 0.62 ? 0.22 + t * 0.78 : 0.7 - (t - 0.62) * 0.64,
+        familiarity: 0.72 - t * 0.12,
+        novelty: 0.24 + t * 0.22,
+        intensity: t < 0.64 ? 0.24 + t * 0.62 : 0.64 - (t - 0.64) * 0.36,
       };
-    case "language":
+    case "immersion":
       return {
-        energy: 0.35 + t * 0.18,
-        familiarity: 0.78 - t * 0.28,
-        novelty: 0.2 + t * 0.35,
-        intensity: 0.28 + t * 0.22,
+        energy: 0.3 + t * 0.12,
+        familiarity: 0.82 - t * 0.12,
+        novelty: 0.16 + t * 0.14,
+        intensity: 0.24 + t * 0.12,
       };
     case "discovery":
       return {
-        energy: 0.34 + t * 0.34,
-        familiarity: 0.64 - t * 0.12,
-        novelty: 0.48 + t * 0.26,
-        intensity: 0.36 + t * 0.26,
+        energy: 0.34 + t * 0.24,
+        familiarity: 0.68 - t * 0.24,
+        novelty: 0.34 + t * 0.36,
+        intensity: 0.28 + t * 0.26,
       };
     case "comfort":
       return {
-        energy: 0.26 + t * 0.08,
-        familiarity: 0.82 - t * 0.08,
-        novelty: 0.18 + t * 0.08,
-        intensity: 0.24 + t * 0.06,
+        energy: 0.18 + t * 0.08,
+        familiarity: 0.88 - t * 0.08,
+        novelty: 0.12 + t * 0.06,
+        intensity: 0.16 + t * 0.06,
       };
-    case "background":
+    case "atmosphere":
+      return {
+        energy: 0.24 + t * 0.06,
+        familiarity: 0.56 + t * 0.02,
+        novelty: 0.18 + t * 0.08,
+        intensity: 0.18 + t * 0.1,
+      };
+    case "drive":
+      return {
+        energy: t < 0.44 ? 0.46 + t * 0.44 : 0.65 + (t - 0.44) * 0.22,
+        familiarity: 0.56 - t * 0.02,
+        novelty: 0.22 + t * 0.14,
+        intensity: t < 0.68 ? 0.38 + t * 0.42 : 0.66 + (t - 0.68) * 0.08,
+      };
+    case "release":
     default:
       return {
-        energy: 0.32 + t * 0.06,
-        familiarity: 0.58 + t * 0.04,
-        novelty: 0.24 + t * 0.08,
-        intensity: 0.26 + t * 0.08,
+        energy: t < 0.74 ? 0.22 + t * 0.66 : 0.71 - (t - 0.74) * 0.46,
+        familiarity: 0.66 - t * 0.08,
+        novelty: 0.26 + t * 0.18,
+        intensity: t < 0.78 ? 0.24 + t * 0.72 : 0.8 - (t - 0.78) * 0.52,
       };
   }
 }
@@ -79,60 +94,82 @@ const GOAL_WEIGHT_MAP: Record<
     noveltyPressure: number;
   }
 > = {
-  emotion: {
-    energy: 1.15,
-    valence: 1,
-    intensity: 1,
-    lyricDensity: 0.55,
-    familiarity: 0.9,
-    genre: 0.55,
-    texture: 0.75,
-    language: 0.45,
-    noveltyPressure: 0.8,
+  journey: {
+    energy: 1.2,
+    valence: 1.05,
+    intensity: 1.05,
+    lyricDensity: 0.5,
+    familiarity: 0.82,
+    genre: 0.45,
+    texture: 0.72,
+    language: 0.35,
+    noveltyPressure: 0.75,
   },
-  language: {
-    energy: 0.7,
-    valence: 0.45,
-    intensity: 0.65,
-    lyricDensity: 0.85,
-    familiarity: 0.75,
-    genre: 0.4,
-    texture: 0.45,
-    language: 1.4,
-    noveltyPressure: 0.95,
+  immersion: {
+    energy: 0.72,
+    valence: 0.38,
+    intensity: 0.62,
+    lyricDensity: 0.78,
+    familiarity: 0.82,
+    genre: 0.48,
+    texture: 0.76,
+    language: 1.28,
+    noveltyPressure: 1.02,
   },
   discovery: {
-    energy: 0.7,
+    energy: 0.78,
     valence: 0.55,
-    intensity: 0.7,
+    intensity: 0.74,
     lyricDensity: 0.55,
-    familiarity: 0.5,
-    genre: 0.7,
-    texture: 0.65,
+    familiarity: 0.42,
+    genre: 0.78,
+    texture: 0.68,
     language: 0.4,
-    noveltyPressure: 0.45,
+    noveltyPressure: 0.32,
   },
   comfort: {
-    energy: 0.95,
-    valence: 0.6,
-    intensity: 0.95,
-    lyricDensity: 0.55,
-    familiarity: 1.15,
+    energy: 1.02,
+    valence: 0.68,
+    intensity: 1.02,
+    lyricDensity: 0.5,
+    familiarity: 1.18,
     genre: 0.55,
-    texture: 0.8,
+    texture: 0.82,
     language: 0.4,
-    noveltyPressure: 1.15,
+    noveltyPressure: 1.18,
   },
-  background: {
-    energy: 0.95,
-    valence: 0.45,
-    intensity: 1.15,
-    lyricDensity: 0.9,
-    familiarity: 0.55,
-    genre: 0.45,
-    texture: 0.9,
-    language: 0.35,
-    noveltyPressure: 0.95,
+  atmosphere: {
+    energy: 0.92,
+    valence: 0.42,
+    intensity: 1.08,
+    lyricDensity: 1.08,
+    familiarity: 0.48,
+    genre: 0.38,
+    texture: 1.12,
+    language: 0.26,
+    noveltyPressure: 0.96,
+  },
+  drive: {
+    energy: 1.34,
+    valence: 0.48,
+    intensity: 1.26,
+    lyricDensity: 0.42,
+    familiarity: 0.42,
+    genre: 0.3,
+    texture: 0.5,
+    language: 0.22,
+    noveltyPressure: 0.38,
+  },
+  release: {
+    energy: 0.88,
+    valence: 0.92,
+    intensity: 0.86,
+    lyricDensity: 0.48,
+    familiarity: 0.66,
+    genre: 0.42,
+    texture: 0.62,
+    language: 0.32,
+    noveltyPressure: 0.56,
   },
 };
 
@@ -195,6 +232,69 @@ export function computeCompatibility(
   return Math.round(compatibility);
 }
 
+export function computeModifierAdjustment(
+  left: SequencerTrackFeatures,
+  right: SequencerTrackFeatures,
+  modifier: SequencerModifier | null | undefined
+) {
+  if (!modifier) return 0;
+
+  const energyDiff = Math.abs(left.energy - right.energy);
+  const intensityDiff = Math.abs(left.intensity - right.intensity);
+  const valenceDiff = Math.abs(left.valence - right.valence);
+  const noveltyMean = (left.novelty + right.novelty) / 2;
+  const familiarityMean = (left.familiarity + right.familiarity) / 2;
+  const anchorMean = (left.anchor + right.anchor) / 2;
+  const avgEnergy = (left.energy + right.energy) / 2;
+  const avgIntensity = (left.intensity + right.intensity) / 2;
+  const avgComfort = (left.comfort + right.comfort) / 2;
+  const sameLanguage = left.language === right.language;
+  const sameTexture = left.texture === right.texture;
+  const sameGenre = left.genreFamily === right.genreFamily;
+
+  switch (modifier) {
+    case "smooth":
+      return (
+        10 -
+        energyDiff * 18 -
+        intensityDiff * 14 -
+        valenceDiff * 8 +
+        (sameTexture ? 4 : -3) +
+        (sameGenre ? 2 : -2)
+      );
+    case "adventurous":
+      return noveltyMean * 12 + intensityDiff * 4 + (sameGenre ? -2 : 4) + (sameLanguage ? -1 : 2);
+    case "anchored":
+      return anchorMean * 12 + avgComfort * 6 + familiarityMean * 4 - noveltyMean * 6 - energyDiff * 3;
+    case "energized":
+      return (
+        avgEnergy * 14 +
+        avgIntensity * 10 -
+        Math.max(0, 0.38 - avgEnergy) * 16 -
+        Math.max(0, 0.32 - avgIntensity) * 10
+      );
+    case "soft-landing":
+      return avgComfort * 10 + familiarityMean * 4 - intensityDiff * 5 - Math.max(0, avgEnergy - 0.56) * 6;
+    case "focused":
+      return (sameLanguage ? 7 : -5) + (sameTexture ? 4 : -3) + (sameGenre ? 3 : -2) - energyDiff * 4;
+    case "contrast":
+      return energyDiff * 12 + valenceDiff * 10 + intensityDiff * 6 + (sameTexture ? -2 : 3) + (sameGenre ? -1 : 2);
+    default:
+      return 0;
+  }
+}
+
+export function computeSequencerCompatibility(
+  left: SequencerTrackFeatures,
+  right: SequencerTrackFeatures,
+  goal: SequencerGoal,
+  modifier: SequencerModifier | null | undefined,
+  mode: SequencerBoundaryMode = "smooth"
+) {
+  const primary = computeCompatibility(left, right, goal, mode);
+  return Math.round(clamp((primary + computeModifierAdjustment(left, right, modifier)) / 100, 0, 1) * 100);
+}
+
 export function getRiskLabel(compatibility: number): SequencerRiskLabel {
   if (compatibility >= 74) return "smooth";
   if (compatibility >= 52) return "noticeable";
@@ -234,19 +334,28 @@ export function buildArcProfile(goal: SequencerGoal, blocks: SequencerBlock[]): 
   };
 }
 
-function sequenceCompatibility(tracks: SequencerTrack[], goal: SequencerGoal) {
+function sequenceCompatibility(
+  tracks: SequencerTrack[],
+  goal: SequencerGoal,
+  modifier?: SequencerModifier | null
+) {
   const compatibilities = tracks.slice(0, -1).map((track, index) =>
-    computeCompatibility(
+    computeSequencerCompatibility(
       track.featureProfile,
       tracks[index + 1].featureProfile,
-      goal
+      goal,
+      modifier
     )
   );
 
   return average(compatibilities);
 }
 
-function buildTradeoffs(goal: SequencerGoal, metrics: Omit<SequencerQualityMetrics, "tradeoffs" | "summary">) {
+function buildTradeoffs(
+  goal: SequencerGoal,
+  modifier: SequencerModifier | null | undefined,
+  metrics: Omit<SequencerQualityMetrics, "tradeoffs" | "summary">
+) {
   const tradeoffs: string[] = [];
 
   if (metrics.cohesion > metrics.variety + 10) {
@@ -261,8 +370,36 @@ function buildTradeoffs(goal: SequencerGoal, metrics: Omit<SequencerQualityMetri
     tradeoffs.push("Safer pacing, weaker discovery push.");
   }
 
-  if (goal === "language" && metrics.transitionHealth > 76 && metrics.variety < 58) {
+  if (goal === "immersion" && metrics.transitionHealth > 76 && metrics.variety < 58) {
     tradeoffs.push("Cleaner immersion, less stylistic spread.");
+  }
+
+  if (goal === "atmosphere" && metrics.variety > 64) {
+    tradeoffs.push("More palette shifts, weaker atmosphere lock.");
+  }
+
+  if (goal === "drive" && metrics.transitionHealth > 80 && metrics.variety < 52) {
+    tradeoffs.push("Tighter momentum, less edge and release.");
+  }
+
+  if (goal === "release" && metrics.transitionHealth > 78 && metrics.variety < 56) {
+    tradeoffs.push("Cleaner setup, slightly less payoff contrast.");
+  }
+
+  if (modifier === "smooth" && metrics.transitionHealth < 72) {
+    tradeoffs.push("Smooth mode still has a few rough handoffs to clean up.");
+  }
+
+  if (modifier === "anchored" && metrics.anchorBalance < 68) {
+    tradeoffs.push("Anchored mode needs more recognizable reset points.");
+  }
+
+  if (modifier === "focused" && metrics.variety > 68) {
+    tradeoffs.push("The palette still wanders more than focused mode wants.");
+  }
+
+  if (modifier === "contrast" && metrics.variety < 58) {
+    tradeoffs.push("Section turns are still flatter than contrast mode wants.");
   }
 
   if (tradeoffs.length === 0) {
@@ -272,7 +409,11 @@ function buildTradeoffs(goal: SequencerGoal, metrics: Omit<SequencerQualityMetri
   return tradeoffs.slice(0, 3);
 }
 
-function buildSummary(goal: SequencerGoal, metrics: Omit<SequencerQualityMetrics, "tradeoffs" | "summary">) {
+function buildSummary(
+  goal: SequencerGoal,
+  modifier: SequencerModifier | null | undefined,
+  metrics: Omit<SequencerQualityMetrics, "tradeoffs" | "summary">
+) {
   const summary: string[] = [];
 
   if (metrics.transitionHealth < 60) {
@@ -289,6 +430,50 @@ function buildSummary(goal: SequencerGoal, metrics: Omit<SequencerQualityMetrics
     summary.push("New material is spaced well enough to stay inviting.");
   }
 
+  if (goal === "immersion" && metrics.transitionHealth > 76) {
+    summary.push("The sequence holds a steady world without obvious interruptions.");
+  }
+
+  if (goal === "drive" && metrics.arcFit > 74) {
+    summary.push("The sequence keeps forward pressure without flattening out.");
+  }
+
+  if (goal === "atmosphere" && metrics.cohesion > 76) {
+    summary.push("The atmosphere stays coherent section to section.");
+  }
+
+  if (goal === "release" && metrics.arcFit > 72 && metrics.endingStrength > 74) {
+    summary.push("The late stretch pays off with a clearer sense of release.");
+  }
+
+  if (modifier === "smooth" && metrics.transitionHealth > 78) {
+    summary.push("Smooth mode is paying off in cleaner handoffs.");
+  }
+
+  if (modifier === "adventurous" && metrics.noveltyPacing > 66) {
+    summary.push("The bolder picks are spaced well enough to stay fun.");
+  }
+
+  if (modifier === "anchored" && metrics.anchorBalance > 74) {
+    summary.push("Anchor songs are giving the sequence reliable recovery points.");
+  }
+
+  if (modifier === "energized" && metrics.arcFit > 72) {
+    summary.push("The energy stays elevated without breaking the larger arc.");
+  }
+
+  if (modifier === "soft-landing" && metrics.endingStrength > 76) {
+    summary.push("The final stretch settles without feeling like it fizzles.");
+  }
+
+  if (modifier === "focused" && metrics.transitionHealth > 74) {
+    summary.push("Focused mode keeps the palette locked section to section.");
+  }
+
+  if (modifier === "contrast" && metrics.variety > 64) {
+    summary.push("Contrast mode gives the sections more distinct identities.");
+  }
+
   if (metrics.endingStrength > 76) {
     summary.push("The ending lands with intent.");
   }
@@ -303,14 +488,16 @@ function buildSummary(goal: SequencerGoal, metrics: Omit<SequencerQualityMetrics
 export function buildQualityMetrics(
   blocks: SequencerBlock[],
   goal: SequencerGoal,
-  transitions: Array<{ compatibility: number }>
+  transitions: Array<{ compatibility: number }>,
+  modifier?: SequencerModifier | null
 ): SequencerQualityMetrics {
   const tracks = blocks.flatMap((block) => block.tracks);
   const compatibilities = tracks.slice(0, -1).map((track, index) =>
-    computeCompatibility(
+    computeSequencerCompatibility(
       track.featureProfile,
       tracks[index + 1].featureProfile,
-      goal
+      goal,
+      modifier
     )
   );
   const cohesion = Math.round(average(compatibilities));
@@ -379,8 +566,24 @@ export function buildQualityMetrics(
   const endingStrength = Math.round(
     average(
       endingTracks.map((track, index) => {
-        if (goal === "discovery") {
+        if (goal === "discovery" || goal === "drive") {
           return (track.featureProfile.anchor * 0.55 + track.featureProfile.intensity * 0.45) * 100;
+        }
+        if (goal === "release") {
+          return (
+            track.featureProfile.anchor * 0.38 +
+            track.featureProfile.intensity * 0.34 +
+            (1 - track.featureProfile.demand) * 0.16 +
+            track.featureProfile.valence * 0.12
+          ) * 100;
+        }
+        if (goal === "journey") {
+          return (
+            track.featureProfile.comfort * 0.4 +
+            track.featureProfile.anchor * 0.24 +
+            (1 - track.featureProfile.demand) * 0.2 +
+            track.featureProfile.valence * 0.16
+          ) * 100;
         }
         return (track.featureProfile.comfort * 0.6 + (1 - track.featureProfile.demand) * 0.4) * 100;
       })
@@ -399,8 +602,8 @@ export function buildQualityMetrics(
 
   return {
     ...base,
-    tradeoffs: buildTradeoffs(goal, base),
-    summary: buildSummary(goal, base),
+    tradeoffs: buildTradeoffs(goal, modifier, base),
+    summary: buildSummary(goal, modifier, base),
   };
 }
 
@@ -422,9 +625,13 @@ export function summarizeBlock(block: SequencerBlock) {
   return traits.join(" / ");
 }
 
-export function buildBlockMetrics(block: SequencerBlock, goal: SequencerGoal) {
+export function buildBlockMetrics(
+  block: SequencerBlock,
+  goal: SequencerGoal,
+  modifier?: SequencerModifier | null
+) {
   return {
     ...block.metrics,
-    cohesion: Math.round(sequenceCompatibility(block.tracks, goal)),
+    cohesion: Math.round(sequenceCompatibility(block.tracks, goal, modifier)),
   };
 }

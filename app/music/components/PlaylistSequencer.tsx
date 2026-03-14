@@ -10,7 +10,7 @@ import { hexToRgb } from "@/app/music/lib/chaotic-styles";
 import {
   buildArcProfile,
   buildQualityMetrics,
-  computeCompatibility,
+  computeSequencerCompatibility,
   describeBoundaryChanges,
   getBoundaryKey,
   getRiskLabel,
@@ -20,12 +20,17 @@ import {
   reorderTracksWithinBlockOptimized,
 } from "@/app/music/lib/sequencer-optimizer";
 import {
+  SEQUENCER_GOAL_DESCRIPTIONS,
   SEQUENCER_GOAL_LABELS,
   SEQUENCER_GOALS,
+  SEQUENCER_MODIFIER_DESCRIPTIONS,
+  SEQUENCER_MODIFIER_LABELS,
+  SEQUENCER_MODIFIERS,
   type SequencerBlock,
   type SequencerBoundary,
   type SequencerBoundaryPreference,
   type SequencerGoal,
+  type SequencerModifier,
   type SequencerSaveInput,
   type SequencerSnapshot,
   type SequencerTrack,
@@ -40,7 +45,7 @@ interface PlaylistSequencerProps {
 
 interface DraftState {
   goalType: SequencerGoal;
-  secondaryGoal: SequencerGoal | null;
+  secondaryGoal: SequencerModifier | null;
   boundaryPreferences: Record<string, SequencerBoundaryPreference>;
   blocks: SequencerBlock[];
 }
@@ -82,6 +87,7 @@ function moveArrayItem<T>(items: T[], from: number, to: number) {
 function annotateTracks(
   blocks: SequencerBlock[],
   goalType: SequencerGoal,
+  secondaryGoal: SequencerModifier | null,
   boundaryPreferences: Record<string, SequencerBoundaryPreference>
 ) {
   const nextBlocks = cloneBlocks(blocks).map((block, blockIndex) => ({
@@ -121,10 +127,20 @@ function annotateTracks(
         currentPosition: globalPosition++,
         roleTags: Array.from(roleTags).slice(0, 4),
         prevCompatibility: previousTrack
-          ? computeCompatibility(previousTrack.featureProfile, track.featureProfile, goalType)
+          ? computeSequencerCompatibility(
+              previousTrack.featureProfile,
+              track.featureProfile,
+              goalType,
+              secondaryGoal
+            )
           : null,
         nextCompatibility: nextTrack
-          ? computeCompatibility(track.featureProfile, nextTrack.featureProfile, goalType)
+          ? computeSequencerCompatibility(
+              track.featureProfile,
+              nextTrack.featureProfile,
+              goalType,
+              secondaryGoal
+            )
           : null,
       };
     });
@@ -139,10 +155,11 @@ function annotateTracks(
                 .reduce(
                   (sum, track, index) =>
                     sum +
-                    computeCompatibility(
+                    computeSequencerCompatibility(
                       track.featureProfile,
                       block.tracks[index + 1].featureProfile,
-                      goalType
+                      goalType,
+                      secondaryGoal
                     ),
                   0
                 ) /
@@ -197,10 +214,11 @@ function annotateTracks(
     const head = next.tracks[0];
     const id = getBoundaryKey(current.id, next.id);
     const mode = boundaryPreferences[id]?.mode || "smooth";
-    const compatibility = computeCompatibility(
+    const compatibility = computeSequencerCompatibility(
       tail.featureProfile,
       head.featureProfile,
       goalType,
+      secondaryGoal,
       mode
     );
     const bridgeCandidateTrackIds = orderedTracks
@@ -214,8 +232,18 @@ function annotateTracks(
       .map((t) => ({
         trackId: t.trackId,
         bridgeScore:
-          (computeCompatibility(tail.featureProfile, t.featureProfile, goalType) +
-            computeCompatibility(t.featureProfile, head.featureProfile, goalType)) /
+          (computeSequencerCompatibility(
+            tail.featureProfile,
+            t.featureProfile,
+            goalType,
+            secondaryGoal
+          ) +
+            computeSequencerCompatibility(
+              t.featureProfile,
+              head.featureProfile,
+              goalType,
+              secondaryGoal
+            )) /
             2 -
           compatibility +
           t.featureProfile.bridgePotential * 20,
@@ -252,6 +280,7 @@ function buildDraftPresentation(draft: DraftState) {
   const { blocks, transitions } = annotateTracks(
     draft.blocks,
     draft.goalType,
+    draft.secondaryGoal,
     draft.boundaryPreferences
   );
   const arcProfile = buildArcProfile(draft.goalType, blocks);
@@ -260,7 +289,12 @@ function buildDraftPresentation(draft: DraftState) {
     secondaryGoal: draft.secondaryGoal,
     arcProfile,
   });
-  const metrics = buildQualityMetrics(blocks, draft.goalType, transitions);
+  const metrics = buildQualityMetrics(
+    blocks,
+    draft.goalType,
+    transitions,
+    draft.secondaryGoal
+  );
   return { blocks, transitions, chapters, arcProfile, metrics };
 }
 
@@ -299,7 +333,7 @@ function serializeDraft(
 function reorderTracksWithinBlock(
   tracks: SequencerTrack[],
   goalType: SequencerGoal,
-  secondaryGoal: SequencerGoal | null,
+  secondaryGoal: SequencerModifier | null,
   mode: "smooth" | "surprise"
 ) {
   return reorderTracksWithinBlockOptimized(tracks, {
@@ -1222,13 +1256,8 @@ export function PlaylistSequencer({
                 key={goal}
                 type="button"
                 whileTap={{ scale: 0.95 }}
-                onClick={() =>
-                  updateDraft((d) => ({
-                    ...d,
-                    goalType: goal,
-                    secondaryGoal: d.secondaryGoal === goal ? null : d.secondaryGoal,
-                  }))
-                }
+                title={SEQUENCER_GOAL_DESCRIPTIONS[goal]}
+                onClick={() => updateDraft((d) => ({ ...d, goalType: goal }))}
                 className={`rounded-full px-3 py-1.5 text-xs transition-all ${
                   draft.goalType === goal
                     ? "font-medium text-black"
@@ -1247,8 +1276,11 @@ export function PlaylistSequencer({
               </motion.button>
             ))}
           </div>
+          <p className="mt-2 text-xs text-white/35">
+            {SEQUENCER_GOAL_DESCRIPTIONS[draft.goalType]}
+          </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-[10px] uppercase tracking-[0.2em] text-white/20">Modifier</span>
             <button
               type="button"
@@ -1268,28 +1300,34 @@ export function PlaylistSequencer({
             >
               None
             </button>
-            {SEQUENCER_GOALS.filter((goal) => goal !== draft.goalType).map((goal) => (
+            {SEQUENCER_MODIFIERS.map((modifier) => (
               <button
-                key={`modifier-${goal}`}
+                key={`modifier-${modifier}`}
                 type="button"
-                onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: goal }))}
+                title={SEQUENCER_MODIFIER_DESCRIPTIONS[modifier]}
+                onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: modifier }))}
                 className={`rounded-full px-3 py-1.5 text-xs transition ${
-                  draft.secondaryGoal === goal
+                  draft.secondaryGoal === modifier
                     ? "text-black shadow-sm"
                     : "bg-white/[0.03] text-white/40 hover:bg-white/[0.06] hover:text-white/70"
                 }`}
                 style={
-                  draft.secondaryGoal === goal
+                  draft.secondaryGoal === modifier
                     ? {
                         backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.82)`,
                       }
-                    : {}
+                  : {}
                 }
               >
-                {SEQUENCER_GOAL_LABELS[goal]}
+                {SEQUENCER_MODIFIER_LABELS[modifier]}
               </button>
             ))}
           </div>
+          <p className="mt-2 text-xs text-white/30">
+            {draft.secondaryGoal
+              ? SEQUENCER_MODIFIER_DESCRIPTIONS[draft.secondaryGoal]
+              : "No modifier. The sequencer will optimize only for the primary goal."}
+          </p>
 
           {/* Compact metrics strip */}
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/30">

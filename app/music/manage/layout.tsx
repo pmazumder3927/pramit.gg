@@ -4,9 +4,9 @@ import { createClient } from "@/utils/supabase/server";
 import { MusicManagerShell } from "@/app/music/components/MusicManagerShell";
 
 export const metadata = createMetadata({
-  title: "Studio",
+  title: "its 3 am",
   description:
-    "Private music studio for review and playlist sequencing.",
+    "Late-night music curation — review, sequence, and shape playlists.",
   noIndex: true,
 });
 
