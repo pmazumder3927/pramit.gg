@@ -1,14 +1,14 @@
 import { MetadataRoute } from "next";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/utils/supabase/server";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://pramit.gg";
 
   // Get all published posts from database
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data: posts } = await supabase
     .from("posts")
-    .select("id, created_at, updated_at")
+    .select("slug, created_at, updated_at")
     .eq("is_draft", false)
     .order("created_at", { ascending: false });
 
@@ -43,7 +43,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Dynamic post routes
   const postRoutes: MetadataRoute.Sitemap =
     posts?.map((post) => ({
-      url: `${baseUrl}/post/${post.id}`,
+      url: `${baseUrl}/post/${post.slug}`,
       lastModified: new Date(post.updated_at || post.created_at),
       changeFrequency: "monthly" as const,
       priority: 0.9,

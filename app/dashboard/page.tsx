@@ -45,19 +45,27 @@ function DashboardContent() {
 
   const fetchPosts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/dashboard/posts", {
+        cache: "no-store",
+      });
 
-      if (error) throw error;
-      setPosts(data || []);
+      if (response.status === 401) {
+        router.push("/api/auth/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch posts: ${response.status}`);
+      }
+
+      const { posts } = await response.json();
+      setPosts(posts || []);
     } catch (error) {
       console.error("Error fetching posts:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     checkUser();
@@ -532,7 +540,7 @@ function DashboardContent() {
                 </div>
                 <div className="flex gap-2 ml-4">
                   <button
-                    onClick={() => router.push(`/post/${post.id}`)}
+                    onClick={() => router.push(`/post/${post.slug}${post.is_draft ? '?preview=true' : ''}`)}
                     className="text-gray-400 hover:text-white transition-colors"
                     title="View post"
                   >

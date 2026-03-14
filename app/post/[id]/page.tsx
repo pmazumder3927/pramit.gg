@@ -1,19 +1,41 @@
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
-import { createPublicClient } from "@/utils/supabase/server";
+import { createPublicClient, createClient } from "@/utils/supabase/server";
 import { createMetadata } from "@/app/lib/metadata";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { Metadata } from "next";
 
 interface PostPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // Enable ISR with 5 minute revalidation for posts
 export const revalidate = 300;
 
-async function fetchPost(identifier: string): Promise<Post | null> {
+async function fetchPost(identifier: string, preview = false): Promise<Post | null> {
   try {
+    if (preview) {
+      // Use cookie-aware auth, then fetch via admin client so drafts stay private but viewable in the dashboard.
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from("posts")
+        .select("*")
+        .eq("slug", identifier)
+        .single();
+
+      if (error) {
+        console.error("Supabase error:", error);
+        return null;
+      }
+      return data;
+    }
+
     // Use public client (no cookies) to enable static generation/ISR
     const supabase = createPublicClient();
 
@@ -56,9 +78,12 @@ function generateExcerpt(content: string): string {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: PostPageProps): Promise<Metadata> {
   const { id } = await params;
-  const post = await fetchPost(id);
+  const resolvedSearchParams = await searchParams;
+  const preview = resolvedSearchParams.preview === "true";
+  const post = await fetchPost(id, preview);
 
   if (!post) {
     return createMetadata({
@@ -72,6 +97,7 @@ export async function generateMetadata({
     title: post.title,
     description: post.description || generateExcerpt(post.content),
     image: post.meta_image || post.media_url,
+    noIndex: preview,
     openGraph: {
       type: "article",
       publishedTime: post.created_at,
@@ -81,9 +107,11 @@ export async function generateMetadata({
   });
 }
 
-export default async function PostPage({ params }: PostPageProps) {
+export default async function PostPage({ params, searchParams }: PostPageProps) {
   const { id } = await params;
-  const post = await fetchPost(id);
+  const resolvedSearchParams = await searchParams;
+  const preview = resolvedSearchParams.preview === "true";
+  const post = await fetchPost(id, preview);
 
   if (!post) {
     notFound();
