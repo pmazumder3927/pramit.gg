@@ -196,18 +196,24 @@ function arcAffinity(
 function openerStrength(
   track: SequencerTrack,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerModifier | null
+  secondaryGoal?: SequencerModifier | null,
+  arcProfile?: SequencerArcProfile | null
 ) {
+  const endpointFit = arcAffinity(track, 0, goalType, secondaryGoal, arcProfile) / 100;
   let score =
-    track.featureProfile.comfort * 0.42 +
-    track.featureProfile.anchor * 0.28 +
-    (1 - track.featureProfile.demand) * 0.18 +
-    (1 - track.featureProfile.novelty) * 0.12;
+    endpointFit * 0.46 +
+    track.featureProfile.comfort * 0.18 +
+    track.featureProfile.anchor * 0.14 +
+    (1 - track.featureProfile.demand) * 0.12 +
+    (1 - track.featureProfile.novelty) * 0.1;
 
-  if (goalType === "immersion" && track.featureProfile.language !== "Unknown") score += 0.08;
-  if (goalType === "drive") score += track.featureProfile.energy * 0.1;
+  if (goalType === "immersion" && track.featureProfile.language !== "Unknown") score += 0.12;
+  if (goalType === "drive") score += track.featureProfile.energy * 0.18 + track.featureProfile.intensity * 0.06;
+  if (goalType === "discovery") score += track.featureProfile.anchor * 0.08 + track.featureProfile.novelty * 0.04;
+  if (goalType === "comfort") score += track.featureProfile.comfort * 0.14 + track.featureProfile.familiarity * 0.08;
+  if (goalType === "atmosphere") score += (1 - track.featureProfile.lyricDensity) * 0.08;
   if (goalType === "release") {
-    score += track.featureProfile.anchor * 0.08 + track.featureProfile.comfort * 0.04;
+    score += track.featureProfile.anchor * 0.12 + track.featureProfile.comfort * 0.08;
   }
 
   switch (secondaryGoal) {
@@ -240,35 +246,57 @@ function openerStrength(
 function closerStrength(
   track: SequencerTrack,
   goalType: SequencerGoal,
-  secondaryGoal?: SequencerModifier | null
+  secondaryGoal?: SequencerModifier | null,
+  arcProfile?: SequencerArcProfile | null
 ) {
+  const endpointFit = arcAffinity(track, 1, goalType, secondaryGoal, arcProfile) / 100;
   const statementEnding =
     goalType === "discovery" || goalType === "drive" || goalType === "release";
 
-  let value = statementEnding
-    ? track.featureProfile.anchor * 0.34 +
-      track.featureProfile.intensity * 0.28 +
-      (1 - track.featureProfile.novelty) * 0.1 +
-      (1 - track.featureProfile.demand) * 0.28
-    : track.featureProfile.comfort * 0.38 +
-      (1 - track.featureProfile.demand) * 0.28 +
-      track.featureProfile.familiarity * 0.22 +
-      track.featureProfile.anchor * 0.12;
+  let value =
+    endpointFit * 0.44 +
+    (statementEnding
+      ? track.featureProfile.anchor * 0.18 +
+        track.featureProfile.intensity * 0.16 +
+        (1 - track.featureProfile.novelty) * 0.06 +
+        (1 - track.featureProfile.demand) * 0.16
+      : track.featureProfile.comfort * 0.2 +
+        (1 - track.featureProfile.demand) * 0.16 +
+        track.featureProfile.familiarity * 0.12 +
+        track.featureProfile.anchor * 0.08);
 
   if (goalType === "journey") {
     value =
-      track.featureProfile.comfort * 0.34 +
-      track.featureProfile.anchor * 0.2 +
-      track.featureProfile.valence * 0.18 +
-      (1 - track.featureProfile.demand) * 0.28;
+      endpointFit * 0.42 +
+      track.featureProfile.comfort * 0.18 +
+      track.featureProfile.anchor * 0.12 +
+      track.featureProfile.valence * 0.14 +
+      (1 - track.featureProfile.demand) * 0.14;
+  }
+
+  if (goalType === "comfort") {
+    value =
+      endpointFit * 0.4 +
+      track.featureProfile.comfort * 0.22 +
+      track.featureProfile.familiarity * 0.14 +
+      (1 - track.featureProfile.demand) * 0.16;
+  }
+
+  if (goalType === "atmosphere") {
+    value =
+      endpointFit * 0.42 +
+      track.featureProfile.comfort * 0.16 +
+      (1 - track.featureProfile.lyricDensity) * 0.14 +
+      (1 - track.featureProfile.demand) * 0.14;
   }
 
   if (goalType === "release") {
     value =
-      track.featureProfile.anchor * 0.32 +
-      track.featureProfile.intensity * 0.3 +
-      track.featureProfile.valence * 0.14 +
-      (1 - track.featureProfile.demand) * 0.24;
+      endpointFit * 0.4 +
+      track.featureProfile.anchor * 0.18 +
+      track.featureProfile.intensity * 0.18 +
+      track.featureProfile.valence * 0.12 +
+      (1 - track.featureProfile.demand) * 0.12;
   }
 
   switch (secondaryGoal) {
@@ -384,8 +412,13 @@ function scoreSequence(
             : 1
     );
   const anchorScore = anchorSpacingScore(tracks);
-  const openerScore = openerStrength(tracks[0], goalType, secondaryGoal);
-  const closerScore = closerStrength(tracks[tracks.length - 1], goalType, secondaryGoal);
+  const openerScore = openerStrength(tracks[0], goalType, secondaryGoal, arcProfile);
+  const closerScore = closerStrength(
+    tracks[tracks.length - 1],
+    goalType,
+    secondaryGoal,
+    arcProfile
+  );
 
   const surpriseBoost =
     mode === "surprise"
@@ -429,7 +462,7 @@ function candidateScore(
   );
   const continuity = prev
     ? compatibilityWithModifier(prev, track, options.goalType, options.secondaryGoal)
-    : openerStrength(track, options.goalType, options.secondaryGoal);
+    : openerStrength(track, options.goalType, options.secondaryGoal, options.arcProfile);
 
   const needAnchor = state.tracksSinceAnchor >= 3;
   const anchorBonus = needAnchor ? track.featureProfile.anchor * 18 : track.featureProfile.anchor * 4;
@@ -455,6 +488,17 @@ function candidateScore(
       Math.abs(prev.featureProfile.valence - track.featureProfile.valence) * 12 +
       (prev.featureProfile.genreFamily !== track.featureProfile.genreFamily ? 6 : 0)
     : track.featureProfile.intensity * 6;
+  const closerBias =
+    ratio > 0.78
+      ? closerStrength(
+          track,
+          options.goalType,
+          options.secondaryGoal,
+          options.arcProfile
+        ) *
+        ((ratio - 0.78) / 0.22) *
+        0.16
+      : 0;
   const modifierBonus =
     options.secondaryGoal === "anchored"
       ? track.featureProfile.anchor * 12 + track.featureProfile.familiarity * 8
@@ -478,6 +522,7 @@ function candidateScore(
     arcScore * 0.24 +
     anchorBonus +
     resetBonus +
+    closerBias +
     modifierBonus +
     surpriseBonus -
     noveltyPenalty -
@@ -503,7 +548,8 @@ function finalizeBeamState(state: BeamState, options: OptimizerOptions) {
     closerStrength(
       state.ordered[state.ordered.length - 1],
       options.goalType,
-      options.secondaryGoal
+      options.secondaryGoal,
+      options.arcProfile
     ) *
       0.18
   );
@@ -567,7 +613,7 @@ function optimizeTrackOrder(
   const sortedOpeners = [...tracks]
     .map((track) => ({
       track,
-      score: openerStrength(track, options.goalType, options.secondaryGoal),
+      score: openerStrength(track, options.goalType, options.secondaryGoal, options.arcProfile),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, Math.min(8, tracks.length));
@@ -575,7 +621,7 @@ function optimizeTrackOrder(
   let beam: BeamState[] = sortedOpeners.map(({ track }) => ({
     ordered: [track],
     remaining: tracks.filter((candidate) => candidate.trackId !== track.trackId),
-    score: openerStrength(track, options.goalType, options.secondaryGoal) * 0.28,
+    score: openerStrength(track, options.goalType, options.secondaryGoal, options.arcProfile) * 0.28,
     tracksSinceAnchor: track.featureProfile.anchor >= 0.7 ? 0 : 1,
     noveltyRun: track.featureProfile.novelty >= 0.68 ? 1 : 0,
     demandRun: track.featureProfile.demand >= 0.72 ? 1 : 0,
@@ -732,11 +778,17 @@ function segmentScore(
       )
     )
   );
-  const openerScore = openerStrength(slice[0], options.goalType, options.secondaryGoal);
+  const openerScore = openerStrength(
+    slice[0],
+    options.goalType,
+    options.secondaryGoal,
+    options.arcProfile
+  );
   const closerScore = closerStrength(
     slice[slice.length - 1],
     options.goalType,
-    options.secondaryGoal
+    options.secondaryGoal,
+    options.arcProfile
   );
 
   return cohesion * 0.42 + arcScore * 0.22 + durationFit * 0.2 + openerScore * 0.08 + closerScore * 0.08;
@@ -838,11 +890,17 @@ function chapterQuality(
       compatibilityWithModifier(track, tracks[index + 1], options.goalType, options.secondaryGoal)
     )
   );
-  const opener = openerStrength(tracks[0], options.goalType, options.secondaryGoal);
+  const opener = openerStrength(
+    tracks[0],
+    options.goalType,
+    options.secondaryGoal,
+    options.arcProfile
+  );
   const closer = closerStrength(
     tracks[tracks.length - 1],
     options.goalType,
-    options.secondaryGoal
+    options.secondaryGoal,
+    options.arcProfile
   );
   return Math.round(adjacency * 0.56 + opener * 0.16 + closer * 0.16 + anchorSpacingScore(tracks) * 0.12);
 }

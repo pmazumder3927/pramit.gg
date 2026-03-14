@@ -14,9 +14,11 @@ import {
   describeBoundaryChanges,
   getBoundaryKey,
   getRiskLabel,
+  isPersonallyNewFeature,
 } from "@/app/music/lib/sequencer-heuristics";
 import {
   buildMiniPlaylistChapters,
+  buildOptimizedTrackOrder,
   reorderTracksWithinBlockOptimized,
 } from "@/app/music/lib/sequencer-optimizer";
 import {
@@ -84,6 +86,56 @@ function moveArrayItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
+function hasImmovableTracks(blocks: SequencerBlock[]) {
+  return blocks.some((block) =>
+    block.tracks.some((track) => track.locked || track.hiddenFromAutosort)
+  );
+}
+
+function resequenceDraftForMode(
+  draft: DraftState,
+  goalType: SequencerGoal,
+  secondaryGoal: SequencerModifier | null
+) {
+  const totalTracks = draft.blocks.reduce((sum, block) => sum + block.tracks.length, 0);
+  if (totalTracks <= 2) {
+    return {
+      ...draft,
+      goalType,
+      secondaryGoal,
+    };
+  }
+
+  const nextBlocks = cloneBlocks(draft.blocks);
+  const orderedTracks = buildOptimizedTrackOrder(
+    nextBlocks.flatMap((block) => block.tracks),
+    {
+      goalType,
+      secondaryGoal,
+    }
+  );
+
+  let cursor = 0;
+  const rebuiltBlocks = nextBlocks.map((block) => {
+    if (block.tracks.length === 0) return block;
+    const nextTracks = orderedTracks
+      .slice(cursor, cursor + block.tracks.length)
+      .map((track) => ({ ...track, blockId: block.id }));
+    cursor += block.tracks.length;
+    return {
+      ...block,
+      tracks: nextTracks,
+    };
+  });
+
+  return {
+    ...draft,
+    goalType,
+    secondaryGoal,
+    blocks: rebuiltBlocks,
+  };
+}
+
 function annotateTracks(
   blocks: SequencerBlock[],
   goalType: SequencerGoal,
@@ -107,7 +159,7 @@ function annotateTracks(
       if (trackIndex === block.tracks.length - 1) roleTags.add("closer");
       if (track.featureProfile.anchor >= 0.72) roleTags.add("anchor");
       if (track.featureProfile.familiarity >= 0.76) roleTags.add("favorite");
-      if (track.featureProfile.novelty >= 0.7) roleTags.add("new");
+      if (isPersonallyNewFeature(track.featureProfile)) roleTags.add("new");
       if (track.featureProfile.bridgePotential >= 0.68) roleTags.add("bridge");
       if (
         previousTrack &&
@@ -1051,6 +1103,25 @@ export function PlaylistSequencer({
     });
   };
 
+  const applyModeSelection = (
+    goalType: SequencerGoal,
+    secondaryGoal: SequencerModifier | null
+  ) => {
+    if (!draft) return;
+    if (hasImmovableTracks(draft.blocks)) {
+      updateDraft((current) => ({
+        ...current,
+        goalType,
+        secondaryGoal,
+      }));
+      setNotice("Mode updated. Rebuild to fully resequence while keeping locked songs in place.");
+      return;
+    }
+
+    setNotice(null);
+    updateDraft((current) => resequenceDraftForMode(current, goalType, secondaryGoal));
+  };
+
   const persistDraft = async (showSavedNotice = true) => {
     if (!draft || !view) return null;
     setIsSaving(true);
@@ -1257,7 +1328,7 @@ export function PlaylistSequencer({
                 type="button"
                 whileTap={{ scale: 0.95 }}
                 title={SEQUENCER_GOAL_DESCRIPTIONS[goal]}
-                onClick={() => updateDraft((d) => ({ ...d, goalType: goal }))}
+                onClick={() => applyModeSelection(goal, draft.secondaryGoal)}
                 className={`rounded-full px-3 py-1.5 text-xs transition-all ${
                   draft.goalType === goal
                     ? "font-medium text-black"
@@ -1284,7 +1355,7 @@ export function PlaylistSequencer({
             <span className="text-[10px] uppercase tracking-[0.2em] text-white/20">Modifier</span>
             <button
               type="button"
-              onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: null }))}
+              onClick={() => applyModeSelection(draft.goalType, null)}
               className={`rounded-full px-3 py-1.5 text-xs transition ${
                 draft.secondaryGoal == null
                   ? "text-black shadow-sm"
@@ -1305,7 +1376,7 @@ export function PlaylistSequencer({
                 key={`modifier-${modifier}`}
                 type="button"
                 title={SEQUENCER_MODIFIER_DESCRIPTIONS[modifier]}
-                onClick={() => updateDraft((d) => ({ ...d, secondaryGoal: modifier }))}
+                onClick={() => applyModeSelection(draft.goalType, modifier)}
                 className={`rounded-full px-3 py-1.5 text-xs transition ${
                   draft.secondaryGoal === modifier
                     ? "text-black shadow-sm"

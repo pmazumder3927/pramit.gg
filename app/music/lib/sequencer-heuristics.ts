@@ -295,6 +295,12 @@ export function computeSequencerCompatibility(
   return Math.round(clamp((primary + computeModifierAdjustment(left, right, modifier)) / 100, 0, 1) * 100);
 }
 
+export function isPersonallyNewFeature(
+  feature: Pick<SequencerTrackFeatures, "familiarity" | "novelty">
+) {
+  return feature.novelty >= 0.66 && feature.familiarity <= 0.54;
+}
+
 export function getRiskLabel(compatibility: number): SequencerRiskLabel {
   if (compatibility >= 74) return "smooth";
   if (compatibility >= 52) return "noticeable";

@@ -12,6 +12,7 @@ import {
   describeBoundaryChanges,
   getBoundaryKey,
   getRiskLabel,
+  isPersonallyNewFeature,
   summarizeBlock,
 } from "@/app/music/lib/sequencer-heuristics";
 import {
@@ -173,6 +174,9 @@ function nameBlockFromContent(
   const avgNovelty = average(tracks.map((t) => t.featureProfile.novelty));
   const avgIntensity = average(tracks.map((t) => t.featureProfile.intensity));
   const avgComfort = average(tracks.map((t) => t.featureProfile.comfort));
+  const personallyNewShare =
+    tracks.filter((track) => isPersonallyNewFeature(track.featureProfile)).length /
+    Math.max(1, tracks.length);
 
   // Dominant genre family
   const genreCounts = new Map<string, number>();
@@ -249,7 +253,10 @@ function nameBlockFromContent(
   if (avgEnergy >= 0.6 && avgNovelty >= 0.5) return `${genreHint}energy push`.trim();
   if (avgEnergy >= 0.6) return `${genreHint}${energyWord} stretch`.trim();
   if (avgComfort >= 0.65 && avgFamiliarity >= 0.65) return `${genreHint}comfort zone`.trim();
-  if (avgNovelty >= 0.55) return `${genreHint}new finds`.trim();
+  if (avgNovelty >= 0.58 && avgFamiliarity <= 0.56 && personallyNewShare >= 0.45) {
+    return `${genreHint}new finds`.trim();
+  }
+  if (avgNovelty >= 0.58) return `${genreHint}wildcard run`.trim();
   if (avgIntensity >= 0.55) return `${genreHint}deep cut`.trim();
   if (avgEnergy <= 0.3) return `${genreHint}${energyWord} drift`.trim();
   if (dominantTexture === "acoustic") return "acoustic pocket";
@@ -495,6 +502,7 @@ function inferLyricDensity(genres: string[], title: string, durationMs: number |
 
 function deriveTrackFeatures(row: ReviewTrackRow, genres: string[]) {
   const daysSinceListen = differenceInDays(row.last_played_at);
+  const daysSinceAdded = differenceInDays(row.added_to_liked_at);
   const state = normalizeSingleRelation(row.spotify_review_state) || {};
   const reviewCount = Number(state.review_count || 0);
   const confirmStreak = Number(state.confirm_streak || 0);
@@ -504,6 +512,9 @@ function deriveTrackFeatures(row: ReviewTrackRow, genres: string[]) {
   const skipPenalty = clamp((deferCount + unsureCount * 1.2) / 8, 0, 0.65);
   const recencySignal =
     daysSinceListen == null ? 0.34 : 1 - clamp(daysSinceListen / 120, 0, 1);
+  const tenureSignal =
+    daysSinceAdded == null ? 0 : clamp(daysSinceAdded / 240, 0, 1);
+  const librarySignal = row.is_liked ? 0.1 : 0;
 
   const familiarity = clamp(
     reviewCount / 12 * 0.28 +
@@ -511,14 +522,18 @@ function deriveTrackFeatures(row: ReviewTrackRow, genres: string[]) {
       playCount / 25 * 0.12 +
       ((row.popularity ?? 45) / 100) * 0.16 +
       recencySignal * 0.32 -
-      skipPenalty * 0.28
+      skipPenalty * 0.28 +
+      tenureSignal * 0.18 +
+      librarySignal
   );
 
   const novelty = clamp(
     (1 - familiarity) * 0.58 +
-      (reviewCount === 0 ? 0.26 : 0) +
-      (daysSinceListen != null && daysSinceListen >= 60 ? 0.12 : 0) +
-      ((row.spotify_review_track_buckets || []).length <= 1 ? 0.06 : 0)
+      (reviewCount === 0 ? 0.2 : 0) +
+      (daysSinceListen != null && daysSinceListen >= 60 && familiarity <= 0.54 ? 0.08 : 0) +
+      ((row.spotify_review_track_buckets || []).length <= 1 ? 0.04 : 0) -
+      tenureSignal * 0.16 -
+      librarySignal * 0.12
   );
 
   const energy = inferEnergy(genres, row.popularity, Boolean(row.explicit), row.duration_ms);
@@ -566,7 +581,7 @@ function roleTagsForTrack(
   if (index === 0) tags.add("opener");
   if (index === total - 1) tags.add("closer");
   if (track.featureProfile.anchor >= 0.72) tags.add("anchor");
-  if (track.featureProfile.novelty >= 0.7) tags.add("new");
+  if (isPersonallyNewFeature(track.featureProfile)) tags.add("new");
   if (track.featureProfile.familiarity >= 0.76) tags.add("favorite");
   if (track.featureProfile.bridgePotential >= 0.68) tags.add("bridge");
 
