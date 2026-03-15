@@ -299,22 +299,34 @@ function buildPlaylistOccurrences(
   playlistTracks: Array<SpotifyPlaylistTrackItem & { position: number }>
 ): PlaylistOccurrenceItem[] {
   const duplicateCounts = new Map<string, number>();
+  const addedAtCountsByTrack = new Map<string, Map<string, number>>();
   for (const item of playlistTracks) {
     const trackId = item.track?.id;
     if (!trackId) continue;
     duplicateCounts.set(trackId, (duplicateCounts.get(trackId) || 0) + 1);
+    if (item.added_at) {
+      const addedAtCounts = addedAtCountsByTrack.get(trackId) || new Map<string, number>();
+      addedAtCounts.set(item.added_at, (addedAtCounts.get(item.added_at) || 0) + 1);
+      addedAtCountsByTrack.set(trackId, addedAtCounts);
+    }
   }
 
+  const occurrenceOrder = new Map<string, number>();
   const occurrences = playlistTracks
     .filter((item): item is SpotifyPlaylistTrackItem & { position: number; track: SpotifyTrackPayload } => Boolean(item.track?.id))
     .map((item) => {
       const sourceTrackId = item.track.id;
+      const duplicateIndex = (occurrenceOrder.get(sourceTrackId) || 0) + 1;
+      occurrenceOrder.set(sourceTrackId, duplicateIndex);
+      const addedAtCounts = addedAtCountsByTrack.get(sourceTrackId);
+      const hasUniqueAddedAt =
+        Boolean(item.added_at) && (addedAtCounts?.get(item.added_at as string) || 0) === 1;
       const occurrenceId =
         (duplicateCounts.get(sourceTrackId) || 0) <= 1
           ? sourceTrackId
-          : item.added_at
+          : hasUniqueAddedAt
             ? `${sourceTrackId}::${item.added_at}`
-            : `${sourceTrackId}::missing`;
+            : `${sourceTrackId}::copy-${duplicateIndex}`;
 
       return {
         ...item,
@@ -324,9 +336,7 @@ function buildPlaylistOccurrences(
     });
 
   if (new Set(occurrences.map((item) => item.occurrenceId)).size !== occurrences.length) {
-    throw new Error(
-      "This playlist has duplicate copies of the same track without distinct added times, so sequencing cannot preserve them yet."
-    );
+    throw new Error("Could not assign unique occurrence IDs for playlist tracks.");
   }
 
   return occurrences;
