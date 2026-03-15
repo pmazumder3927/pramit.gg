@@ -1469,28 +1469,17 @@ async function persistSequence(
     throwSupabaseError("persist sequence blocks", upsertBlocksResult.error);
   }
 
-  const existingTracksResult = await supabase
+  // Reordering can swap positions between existing rows, which conflicts with the
+  // unique (playlist_id, position) constraint during row-by-row upserts.
+  // Clear the derived track rows first, then insert the fresh ordering.
+  const deleteTracksResult = await supabase
     .from("spotify_playlist_sequence_tracks")
-    .select("track_id")
+    .delete()
     .eq("playlist_id", playlistId);
-  throwSupabaseError("load existing tracks", existingTracksResult.error);
-  const existingTrackIds = new Set(
-    ((existingTracksResult.data as any[]) || []).map((row) => row.track_id as string)
-  );
-  const nextTrackIds = new Set(sequence.tracks.map((track) => track.trackId));
-  const staleTrackIds = Array.from(existingTrackIds).filter((id) => !nextTrackIds.has(id));
-
-  if (staleTrackIds.length > 0) {
-    const deleteTracksResult = await supabase
-      .from("spotify_playlist_sequence_tracks")
-      .delete()
-      .eq("playlist_id", playlistId)
-      .in("track_id", staleTrackIds);
-    throwSupabaseError("delete stale tracks", deleteTracksResult.error);
-  }
+  throwSupabaseError("reset sequence tracks", deleteTracksResult.error);
 
   if (sequence.tracks.length > 0) {
-    const trackUpsertRows = sequence.tracks.map((track) => ({
+    const trackInsertRows = sequence.tracks.map((track) => ({
       playlist_id: playlistId,
       track_id: track.trackId,
       block_id: track.blockId,
@@ -1502,11 +1491,11 @@ async function persistSequence(
       updated_at: nowIso(),
     }));
 
-    for (const trackChunk of chunk(trackUpsertRows, 100)) {
-      const upsertTracksResult = await supabase
+    for (const trackChunk of chunk(trackInsertRows, 100)) {
+      const insertTracksResult = await supabase
         .from("spotify_playlist_sequence_tracks")
-        .upsert(trackChunk, { onConflict: "playlist_id,track_id" });
-      throwSupabaseError("persist sequence tracks", upsertTracksResult.error);
+        .insert(trackChunk);
+      throwSupabaseError("persist sequence tracks", insertTracksResult.error);
     }
   }
 }
