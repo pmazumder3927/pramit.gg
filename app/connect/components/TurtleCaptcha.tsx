@@ -17,7 +17,10 @@ import {
 type TurtleCaptchaProps = {
   disabled?: boolean;
   refreshKey?: number;
-  onChange: (payload: ConfessionalCaptchaSubmission | null, solved: boolean) => void;
+  onChange: (
+    payload: ConfessionalCaptchaSubmission | null,
+    solved: boolean,
+  ) => void;
 };
 
 type CaptchaResponse = {
@@ -42,7 +45,8 @@ export default function TurtleCaptcha({
 }: TurtleCaptchaProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentStrokeRef = useRef<TurtlePoint[]>([]);
-  const [challengeResponse, setChallengeResponse] = useState<CaptchaResponse | null>(null);
+  const [challengeResponse, setChallengeResponse] =
+    useState<CaptchaResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [phrase, setPhrase] = useState("");
@@ -58,17 +62,30 @@ export default function TurtleCaptcha({
   const drawingEvaluation = evaluateTurtleDrawing(strokes);
   const glyphPrompt = challenge
     ? challenge.glyphOrder
-        .map((glyphId) => challenge.glyphs.find((glyph) => glyph.id === glyphId)?.label ?? glyphId)
+        .map(
+          (glyphId) =>
+            challenge.glyphs.find((glyph) => glyph.id === glyphId)?.label ??
+            glyphId,
+        )
         .join(" -> ")
     : "";
-  const phraseSolved = challenge ? normalizeCaptchaPhrase(phrase) === challenge.phrase : false;
+  const phraseSolved = challenge
+    ? normalizeCaptchaPhrase(phrase) === challenge.phrase
+    : false;
   const glyphSolved =
     challenge &&
     selectedGlyphs.length === challenge.glyphOrder.length &&
-    selectedGlyphs.every((glyphId, index) => glyphId === challenge.glyphOrder[index]);
-  const solved = Boolean(challenge && phraseSolved && glyphSolved && drawingEvaluation.ok);
+    selectedGlyphs.every(
+      (glyphId, index) => glyphId === challenge.glyphOrder[index],
+    );
+  const solved = Boolean(
+    challenge && phraseSolved && glyphSolved && drawingEvaluation.ok,
+  );
   const currentStep = Math.min(strokes.length + 1, 7);
-  const showDrawingError = strokes.length > 0 && !drawingEvaluation.ok && drawingEvaluation.errors.length > 0;
+  const showDrawingError =
+    strokes.length > 0 &&
+    !drawingEvaluation.ok &&
+    drawingEvaluation.errors.length > 0;
 
   useEffect(() => {
     let ignore = false;
@@ -192,7 +209,7 @@ export default function TurtleCaptcha({
         glyphOrder: selectedGlyphs,
         strokes,
       },
-      true
+      true,
     );
   }, [challenge, onChange, phrase, selectedGlyphs, solved, strokes, token]);
 
@@ -277,7 +294,7 @@ export default function TurtleCaptcha({
     setGlyphFeedback(
       nextSelection.length === challenge.glyphOrder.length
         ? "Glyph sequence accepted."
-        : `Accepted ${nextSelection.length}/${challenge.glyphOrder.length}.`
+        : `Accepted ${nextSelection.length}/${challenge.glyphOrder.length}.`,
     );
   };
 
@@ -331,7 +348,9 @@ export default function TurtleCaptcha({
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-        <p className="text-sm font-light text-white/40">loading the anti-bot ritual...</p>
+        <p className="text-sm font-light text-white/40">
+          loading the anti-bot ritual...
+        </p>
       </div>
     );
   }
@@ -358,10 +377,10 @@ export default function TurtleCaptcha({
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-[11px] uppercase tracking-[0.28em] text-white/30">
-            human verification ritual
+            captcha ritual
           </p>
           <h3 className="mt-1 text-lg font-light text-white/85">
-            complete every strange step before the whisper opens
+            complete every step to whisper
           </h3>
         </div>
 
@@ -387,7 +406,8 @@ export default function TurtleCaptcha({
             1. recite the passphrase
           </p>
           <p className="mb-3 text-sm font-light text-white/60">
-            Type this exactly: <span className="text-white/85">{challenge.phrase}</span>
+            Type this exactly:{" "}
+            <span className="text-white/85">{challenge.phrase}</span>
           </p>
           <input
             value={phrase}
@@ -419,16 +439,22 @@ export default function TurtleCaptcha({
                   disabled={disabled || isSelected || Boolean(glyphSolved)}
                   className="group rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-left transition-all duration-300 hover:border-white/20 hover:bg-white/[0.04] disabled:opacity-50"
                   style={{
-                    boxShadow: isSelected ? `inset 0 0 0 1px ${glyph.accent}` : undefined,
+                    boxShadow: isSelected
+                      ? `inset 0 0 0 1px ${glyph.accent}`
+                      : undefined,
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xl" style={{ color: glyph.accent }}>
                       {glyph.symbol}
                     </span>
-                    <span className="text-xs text-white/25">{isSelected ? position + 1 : ""}</span>
+                    <span className="text-xs text-white/25">
+                      {isSelected ? position + 1 : ""}
+                    </span>
                   </div>
-                  <p className="mt-2 text-sm font-light text-white/75">{glyph.label}</p>
+                  <p className="mt-2 text-sm font-light text-white/75">
+                    {glyph.label}
+                  </p>
                 </button>
               );
             })}
@@ -456,7 +482,8 @@ export default function TurtleCaptcha({
                 3. draw the turtle blueprint
               </p>
               <p className="text-sm font-light text-white/60">
-                Current stroke: {currentStep}/7. The first stroke must be the shell.
+                Current stroke: {currentStep}/7. The first stroke must be the
+                shell.
               </p>
             </div>
 
@@ -472,7 +499,10 @@ export default function TurtleCaptcha({
               <button
                 type="button"
                 onClick={clearDrawing}
-                disabled={disabled || (strokes.length === 0 && currentStroke.length === 0)}
+                disabled={
+                  disabled ||
+                  (strokes.length === 0 && currentStroke.length === 0)
+                }
                 className="rounded-xl border border-white/10 px-3 py-2 text-xs font-light text-white/50 transition-colors duration-300 hover:text-white/80 disabled:opacity-30"
               >
                 clear turtle
