@@ -36,7 +36,7 @@ export default function AnimatedHero() {
               ease: [0.25, 0.1, 0.25, 1],
             }}
           >
-            a living, evolving journal of interests, projects, and experiences
+            a journal of interests, projects, and experiences
           </motion.p>
         </div>
       </div>
