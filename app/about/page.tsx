@@ -7,8 +7,7 @@ export default function About() {
   const content = {
     back: "back",
     title: "about",
-    intro:
-      "hey, i'm pramit. this is my digital space — a living journal where i share things that capture my attention",
+    intro: "hello. this is a place where i share things that i think are cool",
     philosophy:
       "i believe in building things that feels personal and alive. this site is an experiment in that philosophy",
     interests:
