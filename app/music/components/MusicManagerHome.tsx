@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { useAlbumColor } from "@/app/lib/use-album-color";
 import { hexToRgb } from "@/app/music/lib/chaotic-styles";
 import type {
+  ReviewDuplicatesSnapshot,
   ReviewQueueSnapshot,
   ReviewStatusSnapshot,
 } from "@/app/music/lib/review-types";
@@ -61,10 +62,24 @@ export function MusicManagerHome() {
     "/api/spotify/manage/playlists",
     fetcher
   );
+  const { data: duplicates } = useSWR<ReviewDuplicatesSnapshot>(
+    "/api/spotify/review/duplicates",
+    fetcher
+  );
 
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const playlists = playlistsResponse?.playlists || [];
+  const duplicatePlaylistMap = useMemo(
+    () =>
+      new Map(
+        (duplicates?.playlists || []).map((playlist) => [
+          playlist.playlistId,
+          playlist,
+        ])
+      ),
+    [duplicates]
+  );
   const currentTrack = reviewQueue?.currentTrack || null;
   const accentColor = useAlbumColor(
     currentTrack?.albumImageUrl || playlists[0]?.imageUrl || null
@@ -82,6 +97,8 @@ export function MusicManagerHome() {
   }, [deferredQuery, playlists]);
 
   const structured = playlists.filter((p) => p.hasSequence).length;
+  const likedDuplicateGroups = duplicates?.likedSongs.duplicateGroupCount || 0;
+  const playlistDuplicateCount = duplicates?.playlists.length || 0;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -210,6 +227,130 @@ export function MusicManagerHome() {
         </motion.div>
       </div>
 
+      {duplicates && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mt-4 grid gap-4 lg:grid-cols-2"
+        >
+          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.06] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-amber-200/45">
+                  Liked Songs Duplicates
+                </p>
+                <h2 className="mt-2 text-lg font-medium text-white">
+                  {likedDuplicateGroups > 0
+                    ? `${likedDuplicateGroups} song${likedDuplicateGroups === 1 ? "" : "s"} look duplicated`
+                    : "Liked Songs looks clean"}
+                </h2>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-light text-amber-100">
+                  {duplicates.likedSongs.extraTrackCount}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-amber-100/35">
+                  extra versions
+                </p>
+              </div>
+            </div>
+
+            {duplicates.likedSongs.groups.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {duplicates.likedSongs.groups.slice(0, 4).map((group) => (
+                  <div
+                    key={group.key}
+                    className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white/90">
+                          {group.title}
+                        </p>
+                        <p className="truncate text-xs text-amber-100/55">
+                          {group.artistDisplay}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-amber-100/10 px-2.5 py-1 text-[10px] font-medium text-amber-100/80">
+                        {group.trackCount} versions
+                      </span>
+                    </div>
+                    <p className="mt-2 truncate text-[11px] text-white/35">
+                      {group.tracks
+                        .map((track) => track.albumName || "Unknown album")
+                        .filter((album, index, all) => all.indexOf(album) === index)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm font-light text-white/40">
+                No obvious duplicate song versions are currently saved in your liked songs.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-white/25">
+                  Playlist Duplicates
+                </p>
+                <h2 className="mt-2 text-lg font-medium text-white">
+                  {playlistDuplicateCount > 0
+                    ? `${playlistDuplicateCount} playlist${playlistDuplicateCount === 1 ? "" : "s"} need cleanup`
+                    : "Playlists look clean"}
+                </h2>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-light text-white">
+                  {duplicates.playlists.reduce(
+                    (sum, playlist) => sum + playlist.extraTrackCount,
+                    0
+                  )}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/20">
+                  extra copies
+                </p>
+              </div>
+            </div>
+
+            {duplicates.playlists.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {duplicates.playlists.slice(0, 5).map((playlist) => (
+                  <div
+                    key={playlist.playlistId}
+                    className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white/90">
+                          {playlist.playlistName}
+                        </p>
+                        <p className="truncate text-[11px] text-white/35">
+                          {playlist.sampleGroups
+                            .map((group) => group.title)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/70">
+                        {playlist.extraTrackCount} extra
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm font-light text-white/40">
+                No obvious duplicate song versions are showing up across your playlist buckets.
+              </p>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* Playlists */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -230,85 +371,101 @@ export function MusicManagerHome() {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredPlaylists.map((playlist, i) => (
-            <motion.div
-              key={playlist.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.06 + i * 0.015 }}
-            >
-              <Link
-                href={`/music/manage/sequencer/${playlist.id}`}
-                className="group relative flex gap-3.5 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 transition-all duration-300 hover:border-white/[0.1] hover:bg-white/[0.04]"
+          {filteredPlaylists.map((playlist, i) => {
+            const duplicateSummary = duplicatePlaylistMap.get(playlist.id);
+
+            return (
+              <motion.div
+                key={playlist.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 + i * 0.015 }}
               >
-                {/* Hover glow */}
-                <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/[0.02] opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
+                <Link
+                  href={`/music/manage/sequencer/${playlist.id}`}
+                  className="group relative flex gap-3.5 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 transition-all duration-300 hover:border-white/[0.1] hover:bg-white/[0.04]"
+                >
+                  {/* Hover glow */}
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/[0.02] opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
 
-                {/* Playlist art */}
-                <div className="relative h-14 w-14 flex-none overflow-hidden rounded-lg ring-1 ring-white/[0.06]">
-                  {playlist.imageUrl ? (
-                    <Image
-                      src={playlist.imageUrl}
-                      alt=""
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-110"
-                      sizes="56px"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 bg-white/[0.04]" />
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-medium text-white/90 transition-colors group-hover:text-white">
-                    {playlist.name}
-                  </h3>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-white/25">
-                    <span>{playlist.trackCount} tracks</span>
-                    {playlist.hasSequence && (
-                      <span
-                        className="rounded-full px-1.5 py-px text-[10px] font-medium"
-                        style={{
-                          backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.15)`,
-                          color: accentColor,
-                        }}
-                      >
-                        shaped
-                      </span>
-                    )}
-                    {!playlist.public && (
-                      <span className="text-white/15">private</span>
+                  {/* Playlist art */}
+                  <div className="relative h-14 w-14 flex-none overflow-hidden rounded-lg ring-1 ring-white/[0.06]">
+                    {playlist.imageUrl ? (
+                      <Image
+                        src={playlist.imageUrl}
+                        alt=""
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-110"
+                        sizes="56px"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-white/[0.04]" />
                     )}
                   </div>
-                  {playlist.hasSequence && (
-                    <p className="mt-1.5 text-[10px] font-light text-white/15">
-                      saved {relativeTime(playlist.lastSequencedAt)}
-                      {playlist.lastAppliedAt &&
-                        ` · applied ${relativeTime(playlist.lastAppliedAt)}`}
-                    </p>
-                  )}
-                </div>
 
-                {/* Arrow */}
-                <div className="flex items-center">
-                  <svg
-                    className="h-3 w-3 text-white/10 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white/30"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium text-white/90 transition-colors group-hover:text-white">
+                      {playlist.name}
+                    </h3>
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-white/25">
+                      <span>{playlist.trackCount} tracks</span>
+                      {playlist.hasSequence && (
+                        <span
+                          className="rounded-full px-1.5 py-px text-[10px] font-medium"
+                          style={{
+                            backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.15)`,
+                            color: accentColor,
+                          }}
+                        >
+                          shaped
+                        </span>
+                      )}
+                      {duplicateSummary && (
+                        <span className="rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-200">
+                          {duplicateSummary.extraTrackCount} dupe
+                          {duplicateSummary.extraTrackCount === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {!playlist.public && (
+                        <span className="text-white/15">private</span>
+                      )}
+                    </div>
+                    {duplicateSummary ? (
+                      <p className="mt-1.5 truncate text-[10px] font-light text-amber-100/45">
+                        {duplicateSummary.sampleGroups
+                          .map((group) => group.title)
+                          .join(" · ")}
+                      </p>
+                    ) : playlist.hasSequence ? (
+                      <p className="mt-1.5 text-[10px] font-light text-white/15">
+                        saved {relativeTime(playlist.lastSequencedAt)}
+                        {playlist.lastAppliedAt &&
+                          ` · applied ${relativeTime(playlist.lastAppliedAt)}`}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex items-center">
+                    <svg
+                      className="h-3 w-3 text-white/10 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white/30"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
 
           {filteredPlaylists.length === 0 && (
             <div className="col-span-full py-16 text-center text-xs font-light text-white/20">

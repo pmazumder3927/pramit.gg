@@ -91,3 +91,45 @@ export interface ReviewStatusSnapshot {
   unbucketed: ReviewTrack[];
   allBuckets: ReviewBucket[];
 }
+
+export interface ReviewDuplicateTrack {
+  trackId: string;
+  title: string;
+  artistDisplay: string;
+  artistNames: string[];
+  albumName: string | null;
+  albumImageUrl: string | null;
+  isLiked: boolean;
+}
+
+export interface ReviewDuplicateGroup {
+  key: string;
+  title: string;
+  artistDisplay: string;
+  trackCount: number;
+  extraTrackCount: number;
+  tracks: ReviewDuplicateTrack[];
+}
+
+export interface ReviewPlaylistDuplicateSummary {
+  playlistId: string;
+  playlistName: string;
+  duplicateGroupCount: number;
+  extraTrackCount: number;
+  sampleGroups: Array<{
+    key: string;
+    title: string;
+    artistDisplay: string;
+    trackCount: number;
+    extraTrackCount: number;
+  }>;
+}
+
+export interface ReviewDuplicatesSnapshot {
+  likedSongs: {
+    duplicateGroupCount: number;
+    extraTrackCount: number;
+    groups: ReviewDuplicateGroup[];
+  };
+  playlists: ReviewPlaylistDuplicateSummary[];
+}

@@ -3,11 +3,18 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 
+import type { ConfessionalCaptchaSubmission } from "@/app/lib/confessional-captcha";
+import TurtleCaptcha from "@/app/connect/components/TurtleCaptcha";
+
 export default function ConfessionalBooth() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [characterCount, setCharacterCount] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [captchaPayload, setCaptchaPayload] = useState<ConfessionalCaptchaSubmission | null>(null);
+  const [captchaSolved, setCaptchaSolved] = useState(false);
+  const [captchaRefreshKey, setCaptchaRefreshKey] = useState(0);
 
   const maxLength = 500;
 
@@ -16,13 +23,20 @@ export default function ConfessionalBooth() {
     if (value.length <= maxLength) {
       setMessage(value);
       setCharacterCount(value.length);
+      setSubmitError(null);
     }
   };
 
   const submitMessage = async () => {
     if (!message.trim() || isSubmitting) return;
 
+    if (!captchaPayload || !captchaSolved) {
+      setSubmitError("Complete the captcha ritual before sending.");
+      return;
+    }
+
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       const response = await fetch("/api/confessional", {
@@ -33,6 +47,7 @@ export default function ConfessionalBooth() {
         body: JSON.stringify({
           message: message.trim(),
           timestamp: new Date().toISOString(),
+          captcha: captchaPayload,
         }),
       });
 
@@ -40,13 +55,29 @@ export default function ConfessionalBooth() {
         setIsSubmitted(true);
         setMessage("");
         setCharacterCount(0);
+        setCaptchaPayload(null);
+        setCaptchaSolved(false);
+        setCaptchaRefreshKey((current) => current + 1);
 
         setTimeout(() => {
           setIsSubmitted(false);
         }, 3000);
+      } else {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+
+        setSubmitError(data?.error ?? "Could not send the message.");
+
+        if (response.status === 400) {
+          setCaptchaPayload(null);
+          setCaptchaSolved(false);
+          setCaptchaRefreshKey((current) => current + 1);
+        }
       }
     } catch (error) {
       console.error("Error submitting message:", error);
+      setSubmitError("Could not send the message. Try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -112,13 +143,31 @@ export default function ConfessionalBooth() {
                 <span>completely anonymous · no tracking</span>
               </div>
 
+              <div className="mb-6">
+                <TurtleCaptcha
+                  disabled={isSubmitting}
+                  refreshKey={captchaRefreshKey}
+                  onChange={(payload, solved) => {
+                    setCaptchaPayload(payload);
+                    setCaptchaSolved(solved);
+                    setSubmitError(null);
+                  }}
+                />
+              </div>
+
+              {submitError ? (
+                <div className="mb-6 rounded-xl border border-rose-400/20 bg-rose-500/5 px-4 py-3 text-sm font-light text-rose-100/80">
+                  {submitError}
+                </div>
+              ) : null}
+
               {/* Submit Button */}
               <motion.button
                 onClick={submitMessage}
-                disabled={!message.trim() || isSubmitting}
+                disabled={!message.trim() || isSubmitting || !captchaSolved}
                 className="w-full py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/70 text-sm font-light hover:bg-white/[0.08] hover:text-white/90 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                whileHover={{ scale: message.trim() ? 1.01 : 1 }}
-                whileTap={{ scale: message.trim() ? 0.99 : 1 }}
+                whileHover={{ scale: message.trim() && captchaSolved ? 1.01 : 1 }}
+                whileTap={{ scale: message.trim() && captchaSolved ? 0.99 : 1 }}
               >
                 {isSubmitting ? (
                   <span className="flex items-center justify-center gap-2">
@@ -131,7 +180,7 @@ export default function ConfessionalBooth() {
                     sending...
                   </span>
                 ) : (
-                  "whisper away"
+                  captchaSolved ? "whisper away" : "finish the ritual to whisper"
                 )}
               </motion.button>
             </motion.div>

@@ -5,6 +5,10 @@ import { getAccessToken } from "@/app/lib/spotify";
 import type {
   ReviewActionInput,
   ReviewBucket,
+  ReviewDuplicatesSnapshot,
+  ReviewDuplicateGroup,
+  ReviewDuplicateTrack,
+  ReviewPlaylistDuplicateSummary,
   ReviewQueueSnapshot,
   ReviewStatusSnapshot,
   ReviewTrack,
@@ -686,6 +690,208 @@ function rankTrack(
       unsureCount: state.unsure_count || 0,
       isLiked: Boolean(row.is_liked),
     }),
+  };
+}
+
+function normalizeDuplicateText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeDuplicateTitle(title: string | null | undefined) {
+  const stripped = (title || "")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s[-:]\s.*$/g, " ");
+
+  return normalizeDuplicateText(stripped);
+}
+
+function duplicateKeyForTrack(track: {
+  title: string;
+  artistNames: string[];
+  artistDisplay: string;
+}) {
+  const primaryArtist = track.artistNames[0] || track.artistDisplay || "";
+  const normalizedTitle = normalizeDuplicateTitle(track.title);
+  const normalizedArtist = normalizeDuplicateText(primaryArtist);
+  return normalizedTitle && normalizedArtist
+    ? `${normalizedArtist}::${normalizedTitle}`
+    : null;
+}
+
+function buildDuplicateGroups(
+  tracks: ReviewDuplicateTrack[]
+): ReviewDuplicateGroup[] {
+  const groups = new Map<string, ReviewDuplicateTrack[]>();
+
+  for (const track of tracks) {
+    const key = duplicateKeyForTrack({
+      title: track.title,
+      artistNames: track.artistNames,
+      artistDisplay: track.artistDisplay,
+    });
+    if (!key) continue;
+    const existing = groups.get(key) || [];
+    existing.push(track);
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.entries())
+    .filter(([, groupedTracks]) => groupedTracks.length > 1)
+    .map(([key, groupedTracks]) => ({
+      key,
+      title: groupedTracks[0].title,
+      artistDisplay: groupedTracks[0].artistDisplay,
+      trackCount: groupedTracks.length,
+      extraTrackCount: Math.max(0, groupedTracks.length - 1),
+      tracks: [...groupedTracks].sort((a, b) => {
+        if (a.isLiked !== b.isLiked) return a.isLiked ? -1 : 1;
+        return (a.albumName || "").localeCompare(b.albumName || "");
+      }),
+    }))
+    .sort((a, b) => {
+      if (b.extraTrackCount !== a.extraTrackCount) {
+        return b.extraTrackCount - a.extraTrackCount;
+      }
+      return a.title.localeCompare(b.title);
+    });
+}
+
+function toDuplicateTrack(row: any): ReviewDuplicateTrack {
+  return {
+    trackId: row.track_id as string,
+    title: row.title as string,
+    artistDisplay: (row.artist_display as string) || "Unknown artist",
+    artistNames: (row.artist_names as string[]) || [],
+    albumName: (row.album_name as string | null) || null,
+    albumImageUrl: (row.album_image_url as string | null) || null,
+    isLiked: Boolean(row.is_liked),
+  };
+}
+
+export async function getReviewDuplicates(): Promise<ReviewDuplicatesSnapshot> {
+  await syncLibrary();
+  const supabase = createAdminClient();
+
+  const [{ data: bucketRows }, { data: trackRows }] = await Promise.all([
+    supabase
+      .from("spotify_review_buckets")
+      .select("bucket_id, name, description, image_url, playlist_url, track_count, follower_count, is_active")
+      .eq("is_active", true),
+    supabase.from("spotify_review_tracks").select(
+      `
+        track_id,
+        title,
+        artist_names,
+        artist_display,
+        album_name,
+        album_image_url,
+        is_liked,
+        source_snapshot,
+        spotify_review_track_buckets (
+          active,
+          spotify_review_buckets (
+            bucket_id,
+            name,
+            description,
+            image_url,
+            playlist_url,
+            track_count,
+            follower_count,
+            is_active
+          )
+        )
+      `
+    ),
+  ]);
+
+  const allBuckets: ReviewBucket[] = (bucketRows || []).map((bucket: any) => ({
+    bucketId: bucket.bucket_id,
+    name: bucket.name,
+    description: bucket.description,
+    imageUrl: bucket.image_url,
+    playlistUrl: bucket.playlist_url,
+    trackCount: bucket.track_count || 0,
+    followerCount: bucket.follower_count || 0,
+    isActive: bucket.is_active,
+  }));
+  const bucketMap = new Map(allBuckets.map((bucket) => [bucket.bucketId, bucket]));
+
+  const likedTracks: ReviewDuplicateTrack[] = [];
+  const playlistTrackMap = new Map<string, ReviewDuplicateTrack[]>();
+
+  for (const row of (trackRows || []) as any[]) {
+    const track = toDuplicateTrack(row);
+    const memberships = (row.spotify_review_track_buckets || []).filter(
+      (membership: any) => membership.active
+    );
+
+    let activeBuckets = memberships
+      .map((membership: any) => membership.spotify_review_buckets)
+      .filter(Boolean)
+      .map((bucket: any) => bucketMap.get(bucket.bucket_id as string))
+      .filter(Boolean) as ReviewBucket[];
+
+    if (activeBuckets.length === 0 && row.source_snapshot?.bucket_ids?.length > 0) {
+      activeBuckets = (row.source_snapshot.bucket_ids as string[])
+        .map((bucketId) => bucketMap.get(bucketId))
+        .filter(Boolean) as ReviewBucket[];
+    }
+
+    if (track.isLiked) {
+      likedTracks.push(track);
+    }
+
+    for (const bucket of activeBuckets) {
+      const tracksForBucket = playlistTrackMap.get(bucket.bucketId) || [];
+      tracksForBucket.push(track);
+      playlistTrackMap.set(bucket.bucketId, tracksForBucket);
+    }
+  }
+
+  const likedGroups = buildDuplicateGroups(likedTracks).slice(0, 8);
+  const playlistSummaries: ReviewPlaylistDuplicateSummary[] = Array.from(
+    playlistTrackMap.entries()
+  )
+    .map(([playlistId, tracks]) => {
+      const groups = buildDuplicateGroups(tracks);
+      const bucket = bucketMap.get(playlistId);
+      return {
+        playlistId,
+        playlistName: bucket?.name || "Playlist",
+        duplicateGroupCount: groups.length,
+        extraTrackCount: groups.reduce((sum, group) => sum + group.extraTrackCount, 0),
+        sampleGroups: groups.slice(0, 3).map((group) => ({
+          key: group.key,
+          title: group.title,
+          artistDisplay: group.artistDisplay,
+          trackCount: group.trackCount,
+          extraTrackCount: group.extraTrackCount,
+        })),
+      };
+    })
+    .filter((playlist) => playlist.duplicateGroupCount > 0)
+    .sort((a, b) => {
+      if (b.extraTrackCount !== a.extraTrackCount) {
+        return b.extraTrackCount - a.extraTrackCount;
+      }
+      return a.playlistName.localeCompare(b.playlistName);
+    });
+
+  return {
+    likedSongs: {
+      duplicateGroupCount: likedGroups.length,
+      extraTrackCount: likedGroups.reduce((sum, group) => sum + group.extraTrackCount, 0),
+      groups: likedGroups,
+    },
+    playlists: playlistSummaries,
   };
 }
 
