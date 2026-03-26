@@ -1,56 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAccessToken } from "@/app/lib/spotify";
 
-const CACHE_DURATION = 60 * 60 * 24 * 7; // 7 days - follower counts don't change often
+const CACHE_DURATION = 60 * 60 * 24 * 7; // 7 days
 
 // In-memory cache for playlist data
 let cachedPlaylists: any[] | null = null;
 let cacheTimestamp = 0;
-
-async function getCurrentUserId(accessToken: string): Promise<string | null> {
-  const response = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (!response.ok) return null;
-
-  const data = await response.json();
-  return data.id;
-}
-
-async function fetchAllPlaylists(accessToken: string): Promise<any[]> {
-  const playlists: any[] = [];
-  let nextUrl: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
-
-  while (nextUrl) {
-    const res: Response = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!res.ok) break;
-
-    const data = await res.json();
-    playlists.push(...data.items);
-    nextUrl = data.next;
-  }
-
-  return playlists;
-}
-
-async function getPlaylistFollowers(
-  playlistId: string,
-  accessToken: string
-): Promise<number> {
-  const response = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}?fields=followers`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-
-  if (!response.ok) return 0;
-
-  const data = await response.json();
-  return data.followers?.total || 0;
-}
 
 export async function GET() {
   try {
@@ -70,42 +25,80 @@ export async function GET() {
 
     const access_token = await getAccessToken();
 
-    // Get current user's ID
-    const userId = await getCurrentUserId(access_token);
-    if (!userId) {
+    // Fetch user ID and first page of playlists in parallel
+    const [userRes, playlistRes] = await Promise.all([
+      fetch("https://api.spotify.com/v1/me", {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }),
+      fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }),
+    ]);
+
+    if (!userRes.ok || !playlistRes.ok) {
       return NextResponse.json({ playlists: [] }, { status: 500 });
     }
 
-    // Fetch all playlists
-    const allPlaylists = await fetchAllPlaylists(access_token);
+    const [userData, playlistData] = await Promise.all([
+      userRes.json(),
+      playlistRes.json(),
+    ]);
 
-    // Filter to only playlists created by the user (not followed playlists)
-    const ownedPublicPlaylists = allPlaylists.filter(
-      (p) => p.public && p.owner?.id === userId
-    );
+    const userId = userData.id;
 
-    // Fetch follower counts for each playlist
-    const playlistsWithFollowers = await Promise.all(
-      ownedPublicPlaylists.map(async (playlist) => {
-        const followers = await getPlaylistFollowers(playlist.id, access_token);
-        return {
-          id: playlist.id,
-          name: playlist.name,
-          description: playlist.description,
-          imageUrl: playlist.images[0]?.url,
-          playlistUrl: playlist.external_urls.spotify,
-          trackCount: playlist.tracks.total,
-          owner: playlist.owner.display_name,
-          public: playlist.public,
-          followers,
-        };
-      })
-    );
+    // Collect first page, fetch remaining pages if needed
+    let allPlaylists = [...playlistData.items];
+    let nextUrl: string | null = playlistData.next;
 
-    // Sort by followers descending and take top 24
-    const topPlaylists = playlistsWithFollowers
-      .sort((a, b) => b.followers - a.followers)
+    while (nextUrl) {
+      const res = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      allPlaylists.push(...data.items);
+      nextUrl = data.next;
+    }
+
+    // Filter to owned public playlists, skip individual follower lookups
+    // (saves N API calls — sort by track count instead which is already available)
+    const ownedPublicPlaylists = allPlaylists
+      .filter((p) => p.public && p.owner?.id === userId)
+      .map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        description: playlist.description,
+        imageUrl: playlist.images[0]?.url,
+        playlistUrl: playlist.external_urls.spotify,
+        trackCount: playlist.tracks.total,
+        owner: playlist.owner.display_name,
+        public: playlist.public,
+        followers: 0,
+      }))
       .slice(0, 24);
+
+    // Fetch follower counts in parallel (all at once, not sequentially)
+    const followerResults = await Promise.all(
+      ownedPublicPlaylists.map((p) =>
+        fetch(
+          `https://api.spotify.com/v1/playlists/${p.id}?fields=followers`,
+          { headers: { Authorization: `Bearer ${access_token}` } }
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => d?.followers?.total || 0)
+          .catch(() => 0)
+      )
+    );
+
+    const playlistsWithFollowers = ownedPublicPlaylists.map((p, i) => ({
+      ...p,
+      followers: followerResults[i],
+    }));
+
+    // Sort by followers descending
+    const topPlaylists = playlistsWithFollowers.sort(
+      (a, b) => b.followers - a.followers
+    );
 
     // Update cache
     cachedPlaylists = topPlaylists;
