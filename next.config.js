@@ -53,6 +53,11 @@ const nextConfig = {
       "date-fns",
       "react-markdown",
       "swr",
+      "rehype-katex",
+      "rehype-highlight",
+      "rehype-raw",
+      "remark-gfm",
+      "remark-math",
     ],
   },
 

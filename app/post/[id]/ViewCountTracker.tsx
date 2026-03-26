@@ -34,10 +34,14 @@ export default function ViewCountTracker({
       }
     };
 
-    // Small delay to ensure the page has rendered before making the API call
-    const timer = setTimeout(incrementViewCount, 100);
-
-    return () => clearTimeout(timer);
+    // Use requestIdleCallback to fire when browser is idle, with setTimeout fallback
+    if ("requestIdleCallback" in window) {
+      const id = requestIdleCallback(incrementViewCount);
+      return () => cancelIdleCallback(id);
+    } else {
+      const timer = setTimeout(incrementViewCount, 200);
+      return () => clearTimeout(timer);
+    }
   }, [postId, hasIncremented]);
 
   return <span className="text-sm text-gray-500">{viewCount || 0} views</span>;

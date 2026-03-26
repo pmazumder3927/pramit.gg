@@ -6,7 +6,11 @@ import NowPlaying from "./components/NowPlaying";
 import Navigation from "./components/Navigation";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["200", "300", "400", "500", "600", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -64,6 +68,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <link rel="dns-prefetch" href="https://i.scdn.co" />
+        <link rel="dns-prefetch" href="https://mosaic.scdn.co" />
+        <link rel="dns-prefetch" href="https://img.youtube.com" />
+        <link rel="preconnect" href="https://i.scdn.co" crossOrigin="anonymous" />
+      </head>
       <body className="grain min-h-screen">
         <NowPlayingProvider>
           <div className="relative z-10">{children}</div>

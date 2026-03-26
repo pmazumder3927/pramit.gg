@@ -2,9 +2,16 @@ import { motion } from "motion/react";
 import { Post, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
-import ReactPlayer from "react-player";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
+
+const ReactPlayer = dynamic(() => import("react-player/lazy"), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 bg-charcoal-black animate-pulse" />
+  ),
+});
 
 interface PostCardProps {
   post: Post;

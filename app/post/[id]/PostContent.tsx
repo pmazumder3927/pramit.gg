@@ -19,7 +19,7 @@ import "katex/dist/katex.min.css";
 import "highlight.js/styles/github-dark.css";
 
 // Lazy load ReactPlayer - only loads when actually needed
-const ReactPlayer = dynamic(() => import("react-player"), {
+const ReactPlayer = dynamic(() => import("react-player/lazy"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-40 bg-charcoal-black/50 rounded-2xl animate-pulse flex items-center justify-center">

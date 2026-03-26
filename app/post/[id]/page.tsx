@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
@@ -14,7 +15,8 @@ interface PostPageProps {
 // Enable ISR with 5 minute revalidation for posts
 export const revalidate = 300;
 
-async function fetchPost(identifier: string, preview = false): Promise<Post | null> {
+// Deduplicate fetchPost calls within the same request (metadata + page)
+const fetchPost = cache(async (identifier: string, preview = false): Promise<Post | null> => {
   try {
     if (preview) {
       // Use cookie-aware auth, then fetch via admin client so drafts stay private but viewable in the dashboard.
@@ -60,6 +62,17 @@ async function fetchPost(identifier: string, preview = false): Promise<Post | nu
     console.error("Error fetching post:", error);
     return null;
   }
+});
+
+// Pre-render all published posts at build time
+export async function generateStaticParams() {
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("posts")
+    .select("slug")
+    .eq("is_draft", false);
+
+  return (data || []).map((post) => ({ id: post.slug }));
 }
 
 // Helper function to generate excerpt from content

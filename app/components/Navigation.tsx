@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
+import Image from "next/image";
 import { useNowPlayingContext } from "./NowPlayingContext";
 import { AlbumArt, TrackInfo } from "./NowPlayingWidget";
 
@@ -174,11 +175,13 @@ export default function Navigation() {
                   }}
                 >
                   {track.albumImageUrl && (
-                    <div className="w-8 h-8 rounded-full overflow-hidden">
-                      <img
+                    <div className="relative w-8 h-8 rounded-full overflow-hidden">
+                      <Image
                         src={track.albumImageUrl}
                         alt=""
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="32px"
                       />
                     </div>
                   )}

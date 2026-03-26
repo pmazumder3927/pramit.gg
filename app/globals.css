@@ -15,11 +15,17 @@
 
   .page-reveal {
     animation: page-reveal 0.6s ease-out forwards;
+    will-change: filter;
   }
 
   html {
     @apply antialiased bg-void-black;
-    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   body {

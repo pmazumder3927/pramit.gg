@@ -49,6 +49,7 @@ export function NowPlayingProvider({ children }: { children: ReactNode }) {
     {
       refreshInterval: 30000,
       revalidateOnFocus: false,
+      revalidateOnReconnect: false,
       dedupingInterval: 30000, // Prevent duplicate requests within 30s
     }
   );
