@@ -70,14 +70,9 @@ export function ChaoticPlaylistCard({
         x: style.offsetX * 0.3,
         y: style.offsetY * 0.3,
       }}
-      exit={{
-        opacity: 0,
-        scale: 0.5,
-        rotate: style.rotation * 2,
-      }}
       transition={{
-        delay: index * 0.08,
-        duration: 0.6,
+        delay: Math.min(index * 0.03, 0.3),
+        duration: 0.4,
         ease: [0.34, 1.56, 0.64, 1],
       }}
       style={{

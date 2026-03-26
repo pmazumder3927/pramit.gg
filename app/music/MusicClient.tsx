@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence, useMotionValue } from "motion/react";
+import { motion, useMotionValue } from "motion/react";
 import useSWR, { preload } from "swr";
 import { useAlbumColor, preloadColors } from "@/app/lib/use-album-color";
 import {
@@ -64,6 +64,18 @@ export default function MusicClient() {
   const [selectedTab, setSelectedTab] = useState<
     "recent" | "top" | "playlists"
   >("recent");
+  // Track which tabs have been opened so we mount them once and keep them alive
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(["recent"]));
+
+  const handleTabSelect = (id: string) => {
+    setSelectedTab(id as "recent" | "top" | "playlists");
+    setVisitedTabs((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
 
   const { data: nowPlaying } = useSWR<NowPlayingTrack>(
     "/api/spotify/now-playing",
@@ -243,26 +255,17 @@ export default function MusicClient() {
             <ChaoticTabs
               tabs={tabs}
               selectedTab={selectedTab}
-              onSelect={(id) =>
-                setSelectedTab(id as "recent" | "top" | "playlists")
-              }
+              onSelect={handleTabSelect}
               accentColor={nowPlayingColor}
             />
           </div>
         </motion.section>
 
-        {/* Content */}
+        {/* Content — mount on first visit, keep alive after, toggle with CSS */}
         <div className="max-w-7xl mx-auto px-4 md:px-8 pb-24">
-          <AnimatePresence mode="wait">
-            {selectedTab === "recent" && (
-              <motion.div
-                key="recent"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-3 md:space-y-4"
-              >
+          {visitedTabs.has("recent") && (
+            <div className={selectedTab === "recent" ? "" : "hidden"}>
+              <div className="space-y-3 md:space-y-4">
                 {recentlyPlayed?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id + index}
@@ -278,18 +281,13 @@ export default function MusicClient() {
                     message="No recently played tracks found."
                   />
                 )}
-              </motion.div>
-            )}
+              </div>
+            </div>
+          )}
 
-            {selectedTab === "top" && (
-              <motion.div
-                key="top"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-3 md:space-y-4"
-              >
+          {visitedTabs.has("top") && (
+            <div className={selectedTab === "top" ? "" : "hidden"}>
+              <div className="space-y-3 md:space-y-4">
                 {topTracks?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id}
@@ -303,18 +301,13 @@ export default function MusicClient() {
                 {(!topTracks || topTracks.tracks.length === 0) && (
                   <EmptyState emoji="🏆" message="No top tracks found." />
                 )}
-              </motion.div>
-            )}
+              </div>
+            </div>
+          )}
 
-            {selectedTab === "playlists" && (
-              <motion.div
-                key="playlists"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
-              >
+          {visitedTabs.has("playlists") && (
+            <div className={selectedTab === "playlists" ? "" : "hidden"}>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]">
                 {playlists?.playlists.map((playlist, index) => (
                   <ChaoticPlaylistCard
                     key={playlist.id}
@@ -329,9 +322,9 @@ export default function MusicClient() {
                     <EmptyState emoji="📀" message="No playlists found." />
                   </div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

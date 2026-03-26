@@ -78,14 +78,9 @@ export function ChaoticTrackCard({
         rotate: style.rotation * 0.3,
         x: style.offsetX * 0.2,
       }}
-      exit={{
-        opacity: 0,
-        scale: 0.8,
-        rotate: style.rotation * 2,
-      }}
       transition={{
-        delay: index * 0.05,
-        duration: 0.6,
+        delay: Math.min(index * 0.03, 0.3),
+        duration: 0.4,
         ease: [0.34, 1.56, 0.64, 1],
       }}
       style={{
