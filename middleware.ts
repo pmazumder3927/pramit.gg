@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   const needsAuth = AUTH_ROUTES.some((route) => pathname.startsWith(route));
 
   // Draft preview also needs auth
-  const isPreview = pathname.startsWith("/post/") && request.nextUrl.searchParams.get("preview") === "true";
+  const isPreview = pathname.includes("/preview");
 
   if (needsAuth || isPreview) {
     return await updateSession(request);

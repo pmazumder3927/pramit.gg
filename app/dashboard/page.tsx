@@ -540,7 +540,7 @@ function DashboardContent() {
                 </div>
                 <div className="flex gap-2 ml-4">
                   <button
-                    onClick={() => router.push(`/post/${post.slug}${post.is_draft ? '?preview=true' : ''}`)}
+                    onClick={() => router.push(`/post/${post.slug}${post.is_draft ? '/preview' : ''}`)}
                     className="text-gray-400 hover:text-white transition-colors"
                     title="View post"
                   >

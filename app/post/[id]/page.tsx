@@ -2,43 +2,20 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "./PostContent";
-import { createPublicClient, createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/utils/supabase/server";
 import { createMetadata } from "@/app/lib/metadata";
-import { createAdminClient } from "@/utils/supabase/admin";
 import { Metadata } from "next";
 
 interface PostPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // Enable ISR with 5 minute revalidation for posts
 export const revalidate = 300;
 
 // Deduplicate fetchPost calls within the same request (metadata + page)
-const fetchPost = cache(async (identifier: string, preview = false): Promise<Post | null> => {
+const fetchPost = cache(async (identifier: string): Promise<Post | null> => {
   try {
-    if (preview) {
-      // Use cookie-aware auth, then fetch via admin client so drafts stay private but viewable in the dashboard.
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const admin = createAdminClient();
-      const { data, error } = await admin
-        .from("posts")
-        .select("*")
-        .eq("slug", identifier)
-        .single();
-
-      if (error) {
-        console.error("Supabase error:", error);
-        return null;
-      }
-      return data;
-    }
-
-    // Use public client (no cookies) to enable static generation/ISR
     const supabase = createPublicClient();
 
     const { data, error } = await supabase
@@ -48,16 +25,8 @@ const fetchPost = cache(async (identifier: string, preview = false): Promise<Pos
       .eq("is_draft", false)
       .single();
 
-    if (error) {
-      console.error("Supabase error:", error);
-      return null;
-    }
-
-    if (data) {
-      return data;
-    }
-
-    return null;
+    if (error) return null;
+    return data;
   } catch (error) {
     console.error("Error fetching post:", error);
     return null;
@@ -78,10 +47,10 @@ export async function generateStaticParams() {
 // Helper function to generate excerpt from content
 function generateExcerpt(content: string): string {
   const cleanText = content
-    .replace(/!\[.*?\]\(.*?\)/g, "") // Remove images
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Convert links to text
-    .replace(/[#*`_~]/g, "") // Remove markdown formatting
-    .replace(/\n+/g, " ") // Replace newlines with spaces
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[#*`_~]/g, "")
+    .replace(/\n+/g, " ")
     .trim();
 
   return cleanText.length > 160
@@ -91,12 +60,9 @@ function generateExcerpt(content: string): string {
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: PostPageProps): Promise<Metadata> {
   const { id } = await params;
-  const resolvedSearchParams = await searchParams;
-  const preview = resolvedSearchParams.preview === "true";
-  const post = await fetchPost(id, preview);
+  const post = await fetchPost(id);
 
   if (!post) {
     return createMetadata({
@@ -110,7 +76,6 @@ export async function generateMetadata({
     title: post.title,
     description: post.description || generateExcerpt(post.content),
     image: post.meta_image || post.media_url,
-    noIndex: preview,
     openGraph: {
       type: "article",
       publishedTime: post.created_at,
@@ -120,11 +85,9 @@ export async function generateMetadata({
   });
 }
 
-export default async function PostPage({ params, searchParams }: PostPageProps) {
+export default async function PostPage({ params }: PostPageProps) {
   const { id } = await params;
-  const resolvedSearchParams = await searchParams;
-  const preview = resolvedSearchParams.preview === "true";
-  const post = await fetchPost(id, preview);
+  const post = await fetchPost(id);
 
   if (!post) {
     notFound();
