@@ -51,18 +51,13 @@ export function ChaoticNowPlaying({
       style={{ x: springX, y: springY }}
       className="mb-12 md:mb-16"
     >
-      <div className="relative bg-gradient-to-br from-charcoal-black/95 via-void-black/90 to-charcoal-black/95 border border-white/10 rounded-3xl p-6 md:p-10 overflow-hidden group">
-        {/* Animated background gradient */}
-        <motion.div
-          className="absolute inset-0 opacity-50"
-          animate={{
-            background: [
-              `radial-gradient(circle at 20% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15), transparent 50%)`,
-              `radial-gradient(circle at 80% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15), transparent 50%)`,
-              `radial-gradient(circle at 20% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15), transparent 50%)`,
-            ],
+      <div className="relative bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 md:p-10 overflow-hidden group">
+        {/* Subtle background gradient */}
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: `radial-gradient(circle at 20% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1), transparent 60%)`,
           }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
 
         {/* Noise texture */}
@@ -89,67 +84,25 @@ export function ChaoticNowPlaying({
                   className="object-cover"
                   sizes="(max-width: 768px) 128px, 192px"
                 />
-                {/* Vinyl overlay */}
-                <motion.div
-                  className="absolute inset-0"
-                  style={{
-                    background: `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2), transparent, rgba(124, 119, 198, 0.2))`,
-                  }}
-                  animate={
-                    nowPlaying.isPlaying
-                      ? { opacity: [0.3, 0.6, 0.3] }
-                      : { opacity: 0.2 }
-                  }
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
               </motion.div>
             )}
 
-            {/* Animated ring around album */}
-            {nowPlaying.isPlaying && (
-              <motion.div
-                className="absolute -inset-3 rounded-3xl border-2"
-                style={{ borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` }}
-                animate={{
-                  scale: [1, 1.05, 1],
-                  opacity: [0.3, 0.6, 0.3],
-                }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            )}
           </div>
 
           {/* Track Info */}
           <div className="flex-1 text-center md:text-left">
-            <motion.div
-              className="flex items-center justify-center md:justify-start gap-3 mb-4"
-              animate={nowPlaying.isPlaying ? { x: [0, 2, 0] } : {}}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              <motion.div
-                className="w-3 h-3 rounded-full"
+            <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+              <div
+                className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: nowPlaying.isPlaying ? accentColor : "#6b7280" }}
-                animate={
-                  nowPlaying.isPlaying
-                    ? {
-                        scale: [1, 1.3, 1],
-                        boxShadow: [
-                          `0 0 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
-                          `0 0 0 10px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`,
-                          `0 0 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
-                        ],
-                      }
-                    : {}
-                }
-                transition={{ duration: 1.5, repeat: Infinity }}
               />
-              <span className="text-sm text-gray-400 font-light uppercase tracking-wider">
+              <span className="text-sm text-white/40 font-light uppercase tracking-wider">
                 {nowPlaying.isPlaying ? "now playing" : "last played"}
               </span>
-            </motion.div>
+            </div>
 
             <motion.h2
-              className="text-2xl md:text-4xl font-bold text-white mb-2 leading-tight"
+              className="text-2xl md:text-4xl font-light text-white mb-2 leading-tight"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -192,14 +145,6 @@ export function ChaoticNowPlaying({
                       }}
                       transition={{ duration: 0.5 }}
                     />
-                    {/* Glow effect on progress */}
-                    <motion.div
-                      className="absolute top-0 h-full w-4 blur-md rounded-full"
-                      style={{
-                        backgroundColor: accentColor,
-                        left: `calc(${(nowPlaying.progress / nowPlaying.duration) * 100}% - 8px)`,
-                      }}
-                    />
                   </div>
                   <div className="flex justify-between text-sm text-gray-500 font-mono">
                     <span>{formatTime(nowPlaying.progress)}</span>
@@ -241,14 +186,6 @@ export function ChaoticNowPlaying({
           )}
         </div>
 
-        {/* Corner accents */}
-        <motion.div
-          className="absolute top-0 right-0 w-32 h-32 rounded-bl-full opacity-10"
-          style={{ backgroundColor: accentColor }}
-          animate={{ backgroundColor: accentColor }}
-          transition={{ duration: 1 }}
-        />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-accent-purple/10 rounded-tr-full" />
       </div>
     </motion.div>
   );

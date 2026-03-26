@@ -133,17 +133,17 @@ export default function MusicPage() {
   const tabs = [
     {
       id: "recent" as const,
-      label: "Recently Played",
+      label: "recently played",
       count: recentlyPlayed?.tracks.length || 0,
     },
     {
       id: "top" as const,
-      label: "Top Tracks",
+      label: "top tracks",
       count: topTracks?.tracks.length || 0,
     },
     {
       id: "playlists" as const,
-      label: "Playlists",
+      label: "playlists",
       count: playlists?.playlists.length || 0,
     },
   ];
@@ -176,22 +176,17 @@ export default function MusicPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <motion.h1
-                className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight mb-4"
-                animate={{
-                  backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                }}
-                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              <h1
+                className="text-5xl md:text-7xl lg:text-8xl font-extralight tracking-tight mb-4"
                 style={{
-                  backgroundImage: `linear-gradient(90deg, #fff, ${nowPlayingColor}, #7c77c6, #fff)`,
-                  backgroundSize: "200% auto",
+                  backgroundImage: `linear-gradient(90deg, #fff, ${nowPlayingColor}, #7c77c6)`,
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
                 }}
               >
                 music
-              </motion.h1>
+              </h1>
               <motion.p
                 className="text-lg md:text-xl text-gray-400 font-light"
                 initial={{ opacity: 0 }}
