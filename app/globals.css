@@ -31,8 +31,8 @@
   body {
     @apply text-white overflow-x-hidden;
     background:
-      radial-gradient(circle at 50% 16%, rgba(120, 136, 168, 0.08) 0%, rgba(0, 0, 0, 0) 42%),
-      linear-gradient(180deg, #020408 0%, #03060a 56%, #010204 100%);
+      linear-gradient(180deg, #000105 0%, #010207 58%, #010206 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0) 60%, rgba(72, 94, 180, 0.02) 78%, rgba(0, 0, 0, 0.18) 100%);
   }
   
   ::selection {

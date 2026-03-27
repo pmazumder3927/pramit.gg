@@ -3,7 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useNowPlayingContext } from "./NowPlayingContext";
 
+type Rgb = [number, number, number];
 type Noise2D = (x: number, y: number) => number;
+type WeatherKind = "rain" | "comet";
+type ShipDirection = -1 | 1;
 
 interface TerrainLayer {
   amplitude: number;
@@ -11,7 +14,7 @@ interface TerrainLayer {
   frequency: number;
   detail: number;
   opacity: number;
-  haze: number;
+  lineOpacity: number;
 }
 
 interface WeatherParticle {
@@ -19,26 +22,84 @@ interface WeatherParticle {
   y: number;
   speed: number;
   length: number;
-  width: number;
+  size: number;
   alpha: number;
-  glow: number;
+  phase: number;
+  angleOffset: number;
+  paletteMix: number;
+  kind: WeatherKind;
+}
+
+interface Star {
+  x: number;
+  y: number;
+  size: number;
+  alpha: number;
+  twinkle: number;
+  phase: number;
+  paletteMix: number;
+}
+
+interface Ship {
+  x: number;
+  y: number;
+  speed: number;
+  size: number;
+  alpha: number;
+  phase: number;
+  paletteMix: number;
+  direction: ShipDirection;
+}
+
+interface Beacon {
+  x: number;
+  alpha: number;
+  phase: number;
+  paletteMix: number;
+}
+
+interface SceneAssets {
+  pixelSize: number;
+  stars: Star[];
+  weather: WeatherParticle[];
+  ships: Ship[];
+  beacons: Beacon[];
 }
 
 interface SceneConfig {
   seed: number;
   intensity: number;
-  angle: number;
   skyDrift: number;
-  terrainRoughness: number;
-  weatherDensity: number;
-  weatherSpeed: number;
+  pulseSpeed: number;
+  weatherAngle: number;
+  weatherCount: number;
+  cometBias: number;
+  starCount: number;
+  shipCount: number;
+  beaconCount: number;
   terrainLayers: TerrainLayer[];
 }
 
-const FALLBACK_COLOR: [number, number, number] = [128, 144, 176];
-const BASE_SKY_TOP: [number, number, number] = [2, 4, 8];
-const BASE_SKY_BOTTOM: [number, number, number] = [5, 8, 12];
-const LANDSCAPE_FLOOR: [number, number, number] = [2, 3, 5];
+interface Palette {
+  accent: Rgb;
+  cyan: Rgb;
+  magenta: Rgb;
+  warm: Rgb;
+  haze: Rgb;
+  star: Rgb;
+  terrain: Rgb;
+}
+
+const FALLBACK_COLOR: Rgb = [130, 144, 176];
+const SPACE_TOP: Rgb = [0, 1, 5];
+const SPACE_BOTTOM: Rgb = [1, 2, 8];
+const TERRAIN_FLOOR: Rgb = [2, 3, 7];
+const SHIP_SPRITE = [
+  "..2.2..",
+  ".21112.",
+  "2111112",
+  "..3.3..",
+];
 
 function createNoise(): Noise2D {
   const perm = new Uint8Array(512);
@@ -78,15 +139,15 @@ function createNoise(): Noise2D {
   };
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function mix(a: number, b: number, amount: number) {
   return a + (b - a) * amount;
 }
 
-function mixColor(
-  a: [number, number, number],
-  b: [number, number, number],
-  amount: number
-): [number, number, number] {
+function mixColor(a: Rgb, b: Rgb, amount: number): Rgb {
   return [
     mix(a[0], b[0], amount),
     mix(a[1], b[1], amount),
@@ -94,11 +155,11 @@ function mixColor(
   ];
 }
 
-function rgba(color: [number, number, number], alpha: number) {
+function rgba(color: Rgb, alpha: number) {
   return `rgba(${Math.round(color[0])}, ${Math.round(color[1])}, ${Math.round(color[2])}, ${alpha})`;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+function hexToRgb(hex: string): Rgb {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!result) return FALLBACK_COLOR;
 
@@ -140,121 +201,235 @@ function fbm(noise: Noise2D, x: number, y: number, octaves: number, gain: number
   return sum / totalAmplitude;
 }
 
-function makeSceneConfig(seed: number, isPlaying: boolean): SceneConfig {
-  const terrainRoughness = mix(0.75, 1.25, seeded(seed + 1));
-  const intensity = isPlaying ? 1 : 0.65;
+function makePalette(base: Rgb): Palette {
+  return {
+    accent: mixColor(base, [255, 111, 61], 0.26),
+    cyan: mixColor(base, [88, 228, 255], 0.78),
+    magenta: mixColor(base, [255, 72, 156], 0.82),
+    warm: mixColor(base, [255, 202, 92], 0.76),
+    haze: mixColor(base, [72, 94, 180], 0.42),
+    star: mixColor(base, [236, 244, 255], 0.88),
+    terrain: mixColor(base, [20, 26, 48], 0.24),
+  };
+}
+
+function featureColor(palette: Palette, amount: number): Rgb {
+  if (amount < 0.2) return palette.star;
+  if (amount < 0.45) return palette.cyan;
+  if (amount < 0.7) return palette.magenta;
+  if (amount < 0.88) return palette.accent;
+  return palette.warm;
+}
+
+function makeSceneConfig(seed: number, isPlaying: boolean, variant: string): SceneConfig {
+  const variantBoost =
+    variant === "neon" ? 1.18 :
+    variant === "accent" ? 1.04 :
+    variant === "glassy" ? 0.96 :
+    0.84;
+  const motion = isPlaying ? 1 : 0.72;
+  const intensity = variantBoost * motion;
 
   return {
     seed,
     intensity,
-    angle: mix(Math.PI * 0.18, Math.PI * 0.31, seeded(seed + 2)),
-    skyDrift: mix(0.05, 0.11, seeded(seed + 3)),
-    terrainRoughness,
-    weatherDensity: Math.round(mix(22, 42, seeded(seed + 4)) * intensity),
-    weatherSpeed: mix(260, 460, seeded(seed + 5)) * intensity,
+    skyDrift: mix(0.05, 0.1, seeded(seed + 1)),
+    pulseSpeed: mix(1.15, 2.15, seeded(seed + 2)),
+    weatherAngle: mix(Math.PI * 0.22, Math.PI * 0.33, seeded(seed + 3)),
+    weatherCount: Math.round(mix(18, 34, seeded(seed + 4)) * intensity),
+    cometBias: clamp(mix(0.16, 0.32, seeded(seed + 5)) + (variant === "neon" ? 0.08 : 0), 0.16, 0.42),
+    starCount: Math.round(mix(54, 98, seeded(seed + 6)) * variantBoost),
+    shipCount: variant === "minimal" ? 1 : variant === "neon" ? 3 : 2,
+    beaconCount: Math.round(mix(8, 14, seeded(seed + 7))),
     terrainLayers: [
       {
-        amplitude: 0.045 * terrainRoughness,
-        baseY: 0.63,
-        frequency: mix(0.8, 1.2, seeded(seed + 6)),
-        detail: 0.35,
-        opacity: 0.1,
-        haze: 0.08,
+        amplitude: 0.04,
+        baseY: 0.64,
+        frequency: mix(0.82, 1.08, seeded(seed + 8)),
+        detail: 0.32,
+        opacity: 0.09,
+        lineOpacity: 0.08,
       },
       {
-        amplitude: 0.075 * terrainRoughness,
-        baseY: 0.74,
-        frequency: mix(1.1, 1.5, seeded(seed + 7)),
-        detail: 0.48,
-        opacity: 0.16,
-        haze: 0.11,
+        amplitude: 0.07,
+        baseY: 0.76,
+        frequency: mix(1.08, 1.4, seeded(seed + 9)),
+        detail: 0.46,
+        opacity: 0.15,
+        lineOpacity: 0.12,
       },
       {
-        amplitude: 0.11 * terrainRoughness,
-        baseY: 0.86,
-        frequency: mix(1.4, 2, seeded(seed + 8)),
+        amplitude: 0.11,
+        baseY: 0.88,
+        frequency: mix(1.42, 1.86, seeded(seed + 10)),
         detail: 0.62,
         opacity: 0.22,
-        haze: 0.14,
+        lineOpacity: 0.18,
       },
     ],
   };
 }
 
-function createParticles(
-  width: number,
-  height: number,
-  config: SceneConfig
-): WeatherParticle[] {
-  const particles: WeatherParticle[] = [];
-  const travel = Math.max(width, height) * 0.45;
-  const spreadX = width + Math.cos(config.angle) * travel;
-  const spreadY = height * 0.58;
+function createSceneAssets(width: number, height: number, config: SceneConfig): SceneAssets {
+  const pixelSize = width < 768 ? 2 : 3;
+  const stars: Star[] = [];
+  const weather: WeatherParticle[] = [];
+  const ships: Ship[] = [];
+  const beacons: Beacon[] = [];
+  const weatherSpread = Math.max(width, height) * 0.65;
 
-  for (let i = 0; i < config.weatherDensity; i++) {
-    const seed = config.seed + i * 17.17;
-    const x = seeded(seed) * spreadX - travel * 0.1;
-    const y = seeded(seed + 3) * spreadY - height * 0.55;
-    const cometBias = seeded(seed + 9) > 0.8 ? 1.45 : 1;
-
-    particles.push({
-      x,
-      y,
-      speed: config.weatherSpeed * mix(0.65, 1.25, seeded(seed + 5)) * cometBias,
-      length: mix(55, 180, seeded(seed + 7)) * cometBias,
-      width: mix(0.6, 1.6, seeded(seed + 11)),
-      alpha: mix(0.07, 0.18, seeded(seed + 13)) * config.intensity,
-      glow: seeded(seed + 15) > 0.82 ? 0.55 : 0.22,
+  for (let i = 0; i < config.starCount; i++) {
+    const seed = config.seed + i * 17.3;
+    stars.push({
+      x: seeded(seed) * width,
+      y: Math.pow(seeded(seed + 1), 1.35) * height * 0.62,
+      size: pixelSize * (seeded(seed + 2) > 0.82 ? 2 : 1),
+      alpha: mix(0.18, 0.72, seeded(seed + 3)),
+      twinkle: mix(0.7, 2.1, seeded(seed + 4)),
+      phase: seeded(seed + 5) * Math.PI * 2,
+      paletteMix: seeded(seed + 6),
     });
   }
 
-  return particles;
+  for (let i = 0; i < config.weatherCount; i++) {
+    const seed = config.seed + i * 23.7;
+    const kind: WeatherKind = seeded(seed + 1) > 1 - config.cometBias ? "comet" : "rain";
+    const size = pixelSize * (kind === "comet" ? mix(1, 1.7, seeded(seed + 2)) : mix(0.8, 1.1, seeded(seed + 2)));
+
+    weather.push({
+      x: seeded(seed + 3) * (width + weatherSpread) - weatherSpread * 0.3,
+      y: seeded(seed + 4) * height * 0.72 - height * 0.66,
+      speed: kind === "comet"
+        ? mix(220, 420, seeded(seed + 5)) * config.intensity
+        : mix(140, 260, seeded(seed + 5)) * config.intensity,
+      length: kind === "comet"
+        ? mix(42, 112, seeded(seed + 6)) * pixelSize
+        : mix(18, 42, seeded(seed + 6)) * pixelSize,
+      size,
+      alpha: kind === "comet"
+        ? mix(0.18, 0.32, seeded(seed + 7))
+        : mix(0.12, 0.24, seeded(seed + 7)),
+      phase: seeded(seed + 8) * Math.PI * 2,
+      angleOffset: mix(-0.06, 0.06, seeded(seed + 9)),
+      paletteMix: seeded(seed + 10),
+      kind,
+    });
+  }
+
+  for (let i = 0; i < config.shipCount; i++) {
+    const seed = config.seed + i * 41.9;
+    const direction: ShipDirection = seeded(seed + 1) > 0.5 ? 1 : -1;
+    const size = pixelSize * mix(1.35, 2.1, seeded(seed + 2));
+    const spriteWidth = SHIP_SPRITE[0].length * size;
+
+    ships.push({
+      x: direction === 1 ? -spriteWidth - seeded(seed + 3) * width * 0.2 : width + seeded(seed + 3) * width * 0.2,
+      y: height * mix(0.2, 0.46, seeded(seed + 4)),
+      speed: mix(18, 42, seeded(seed + 5)) * (0.85 + config.intensity * 0.25),
+      size,
+      alpha: mix(0.55, 0.8, seeded(seed + 6)),
+      phase: seeded(seed + 7) * Math.PI * 2,
+      paletteMix: seeded(seed + 8),
+      direction,
+    });
+  }
+
+  for (let i = 0; i < config.beaconCount; i++) {
+    const seed = config.seed + i * 13.4;
+    beacons.push({
+      x: mix(width * 0.06, width * 0.94, seeded(seed)),
+      alpha: mix(0.2, 0.55, seeded(seed + 1)),
+      phase: seeded(seed + 2) * Math.PI * 2,
+      paletteMix: seeded(seed + 3),
+    });
+  }
+
+  return { pixelSize, stars, weather, ships, beacons };
+}
+
+function snap(value: number, size: number) {
+  return Math.round(value / size) * size;
+}
+
+function drawPixel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  color: Rgb,
+  alpha: number
+) {
+  ctx.fillStyle = rgba(color, alpha);
+  ctx.fillRect(snap(x, size), snap(y, size), size, size);
+}
+
+function ridgeHeight(
+  noise: Noise2D,
+  x: number,
+  width: number,
+  height: number,
+  layer: TerrainLayer,
+  seed: number
+) {
+  const nx = (x / width) * layer.frequency * 3.8;
+  const macro = fbm(noise, nx + seed * 0.0008, seed * 0.0028, 4, 0.55);
+  const micro = fbm(noise, nx * 2.6 + seed * 0.0014, seed * 0.0031 + 19, 3, 0.5);
+  const shape = macro * 0.76 + micro * layer.detail * 0.24;
+
+  return height * (layer.baseY + shape * layer.amplitude);
 }
 
 export default function AuroraBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const redrawRef = useRef<(() => void) | null>(null);
-  const sceneRef = useRef<SceneConfig | null>(null);
-  const particlesRef = useRef<WeatherParticle[]>([]);
   const viewportRef = useRef({ width: 0, height: 0 });
   const noiseRef = useRef<Noise2D | null>(null);
-  const currentColorRef = useRef<[number, number, number]>(FALLBACK_COLOR);
-  const targetColorRef = useRef<[number, number, number]>(FALLBACK_COLOR);
+  const sceneRef = useRef<SceneConfig | null>(null);
+  const assetsRef = useRef<SceneAssets>({
+    pixelSize: 2,
+    stars: [],
+    weather: [],
+    ships: [],
+    beacons: [],
+  });
+  const currentColorRef = useRef<Rgb>(FALLBACK_COLOR);
+  const targetColorRef = useRef<Rgb>(FALLBACK_COLOR);
   const reducedMotionRef = useRef(false);
 
-  const { albumColor, track } = useNowPlayingContext();
+  const { albumColor, track, variant } = useNowPlayingContext();
 
   useEffect(() => {
-    if (!noiseRef.current) noiseRef.current = createNoise();
+    if (!noiseRef.current) {
+      noiseRef.current = createNoise();
+    }
   }, []);
 
   useEffect(() => {
     const seedSource = track
-      ? `${track.title}:${track.artist}:${track.album}`
-      : "ambient-landscape";
-    const nextScene = makeSceneConfig(hashString(seedSource), !!track?.isPlaying);
+      ? `${track.title}:${track.artist}:${track.album}:${variant}`
+      : `ambient-space:${variant}`;
+    const nextScene = makeSceneConfig(hashString(seedSource), !!track?.isPlaying, variant);
 
     sceneRef.current = nextScene;
 
     if (viewportRef.current.width && viewportRef.current.height) {
-      particlesRef.current = createParticles(
+      assetsRef.current = createSceneAssets(
         viewportRef.current.width,
         viewportRef.current.height,
         nextScene
       );
     }
 
-    if (albumColor && albumColor !== "#888888") {
-      targetColorRef.current = hexToRgb(albumColor);
-    } else {
-      targetColorRef.current = FALLBACK_COLOR;
-    }
+    targetColorRef.current =
+      albumColor && albumColor !== "#888888"
+        ? hexToRgb(albumColor)
+        : FALLBACK_COLOR;
 
     if (reducedMotionRef.current) {
       redrawRef.current?.();
     }
-  }, [albumColor, track]);
+  }, [albumColor, track, variant]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -265,6 +440,9 @@ export default function AuroraBackground() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
+    const mountedCanvas = canvas;
+    const ctx = context;
+    const terrainNoise: Noise2D = noise;
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     reducedMotionRef.current = reducedMotionQuery.matches;
 
@@ -274,198 +452,335 @@ export default function AuroraBackground() {
     let skyTime = 0;
 
     function resize() {
-      const nextScene = sceneRef.current ?? makeSceneConfig(hashString("ambient-landscape"), false);
       const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const scene = sceneRef.current ?? makeSceneConfig(hashString("ambient-space:minimal"), false, "minimal");
 
       width = window.innerWidth;
       height = window.innerHeight;
       viewportRef.current = { width, height };
 
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      mountedCanvas.width = Math.round(width * dpr);
+      mountedCanvas.height = Math.round(height * dpr);
+      mountedCanvas.style.width = `${width}px`;
+      mountedCanvas.style.height = `${height}px`;
 
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      particlesRef.current = createParticles(width, height, nextScene);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      assetsRef.current = createSceneAssets(width, height, scene);
     }
 
-    function drawSkyWash(config: SceneConfig, accent: [number, number, number]) {
-      const accentSoft = mixColor(accent, [148, 171, 205], 0.58);
-      const accentWarm = mixColor(accent, [228, 196, 164], 0.7);
-      const topGradient = context.createLinearGradient(0, 0, 0, height);
+    function resetWeatherParticle(particle: WeatherParticle, scene: SceneConfig) {
+      const weatherSpread = Math.max(width, height) * 0.72;
+      const kind: WeatherKind = Math.random() > 1 - scene.cometBias ? "comet" : "rain";
+      const size = assetsRef.current.pixelSize *
+        (kind === "comet" ? mix(1, 1.7, Math.random()) : mix(0.8, 1.1, Math.random()));
 
-      topGradient.addColorStop(0, rgba(BASE_SKY_TOP, 1));
-      topGradient.addColorStop(0.55, rgba(mixColor(BASE_SKY_BOTTOM, accentSoft, 0.08), 1));
-      topGradient.addColorStop(1, rgba(mixColor(BASE_SKY_BOTTOM, LANDSCAPE_FLOOR, 0.5), 1));
-
-      context.fillStyle = topGradient;
-      context.fillRect(0, 0, width, height);
-
-      const driftX = width * (0.5 + Math.sin(skyTime * config.skyDrift) * 0.08);
-      const driftY = height * (0.18 + Math.cos(skyTime * config.skyDrift * 0.7) * 0.03);
-      const skyGlow = context.createRadialGradient(
-        driftX,
-        driftY,
-        0,
-        driftX,
-        driftY,
-        Math.max(width, height) * 0.7
-      );
-
-      skyGlow.addColorStop(0, rgba(accentSoft, 0.13 * config.intensity));
-      skyGlow.addColorStop(0.45, rgba(accentWarm, 0.05 * config.intensity));
-      skyGlow.addColorStop(1, rgba(accentSoft, 0));
-      context.fillStyle = skyGlow;
-      context.fillRect(0, 0, width, height);
-
-      const horizonGlow = context.createLinearGradient(0, height * 0.45, 0, height);
-      horizonGlow.addColorStop(0, "rgba(0, 0, 0, 0)");
-      horizonGlow.addColorStop(0.58, rgba(mixColor(accentWarm, LANDSCAPE_FLOOR, 0.75), 0.06));
-      horizonGlow.addColorStop(1, rgba(LANDSCAPE_FLOOR, 0.45));
-      context.fillStyle = horizonGlow;
-      context.fillRect(0, height * 0.4, width, height * 0.6);
+      particle.kind = kind;
+      particle.x = Math.random() * (width + weatherSpread) - weatherSpread * 0.35;
+      particle.y = -height * mix(0.08, 0.7, Math.random());
+      particle.speed = kind === "comet"
+        ? mix(220, 420, Math.random()) * scene.intensity
+        : mix(140, 260, Math.random()) * scene.intensity;
+      particle.length = kind === "comet"
+        ? mix(42, 112, Math.random()) * assetsRef.current.pixelSize
+        : mix(18, 42, Math.random()) * assetsRef.current.pixelSize;
+      particle.size = size;
+      particle.alpha = kind === "comet"
+        ? mix(0.18, 0.32, Math.random())
+        : mix(0.12, 0.24, Math.random());
+      particle.angleOffset = mix(-0.07, 0.07, Math.random());
+      particle.paletteMix = Math.random();
+      particle.phase = Math.random() * Math.PI * 2;
     }
 
-    function ridgeHeight(
-      x: number,
-      widthValue: number,
-      heightValue: number,
-      layer: TerrainLayer,
-      seed: number
-    ) {
-      const nx = (x / widthValue) * layer.frequency * 3.6;
-      const macro = fbm(noise, nx + seed * 0.001, seed * 0.003, 4, 0.55);
-      const micro = fbm(noise, nx * 2.4 + seed * 0.002, seed * 0.004 + 18, 3, 0.5);
-      const shape = macro * 0.72 + micro * layer.detail * 0.28;
+    function resetShip(ship: Ship) {
+      const spriteWidth = SHIP_SPRITE[0].length * ship.size;
 
-      return heightValue * (layer.baseY + shape * layer.amplitude);
+      ship.direction = Math.random() > 0.5 ? 1 : -1;
+      ship.size = assetsRef.current.pixelSize * mix(1.35, 2.1, Math.random());
+      ship.x = ship.direction === 1 ? -spriteWidth : width + spriteWidth;
+      ship.y = height * mix(0.18, 0.46, Math.random());
+      ship.speed = mix(18, 42, Math.random());
+      ship.alpha = mix(0.55, 0.82, Math.random());
+      ship.phase = Math.random() * Math.PI * 2;
+      ship.paletteMix = Math.random();
     }
 
-    function drawTerrain(config: SceneConfig, accent: [number, number, number]) {
-      const shadowAccent = mixColor(accent, LANDSCAPE_FLOOR, 0.82);
-      const farAccent = mixColor(accent, [94, 111, 139], 0.7);
+    function drawSky(scene: SceneConfig, palette: Palette) {
+      const baseGradient = ctx.createLinearGradient(0, 0, 0, height);
+      baseGradient.addColorStop(0, rgba(SPACE_TOP, 1));
+      baseGradient.addColorStop(0.45, rgba(mixColor(SPACE_TOP, palette.haze, 0.02), 1));
+      baseGradient.addColorStop(1, rgba(SPACE_BOTTOM, 1));
 
-      for (let i = 0; i < config.terrainLayers.length; i++) {
-        const layer = config.terrainLayers[i];
-        const step = Math.max(8, Math.round(width / 90));
-        const fill = mixColor(LANDSCAPE_FLOOR, i === 0 ? farAccent : shadowAccent, layer.opacity);
-        const line = mixColor(fill, accent, 0.22);
+      ctx.fillStyle = baseGradient;
+      ctx.fillRect(0, 0, width, height);
 
-        context.beginPath();
-        context.moveTo(0, height);
-        context.lineTo(0, ridgeHeight(0, width, height, layer, config.seed + i * 29));
+      const horizon = ctx.createLinearGradient(0, height * 0.58, 0, height);
+      horizon.addColorStop(0, "rgba(0, 0, 0, 0)");
+      horizon.addColorStop(0.5, rgba(palette.haze, 0.012 * scene.intensity));
+      horizon.addColorStop(0.76, rgba(palette.accent, 0.028 * scene.intensity));
+      horizon.addColorStop(1, rgba(TERRAIN_FLOOR, 0.48));
+      ctx.fillStyle = horizon;
+      ctx.fillRect(0, height * 0.5, width, height * 0.5);
+    }
 
-        for (let x = 0; x <= width + step; x += step) {
-          context.lineTo(x, ridgeHeight(x, width, height, layer, config.seed + i * 29));
+    function drawStars(palette: Palette, timeSeconds: number) {
+      const { pixelSize, stars } = assetsRef.current;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for (let i = 0; i < stars.length; i++) {
+        const star = stars[i];
+        const pulse = Math.round((0.35 + 0.65 * (0.5 + 0.5 * Math.sin(timeSeconds * star.twinkle + star.phase))) * 4) / 4;
+        const color = star.paletteMix < 0.72 ? palette.star : featureColor(palette, star.paletteMix);
+        const alpha = star.alpha * pulse * 0.9;
+
+        drawPixel(ctx, star.x, star.y, star.size, color, alpha);
+
+        if (pulse > 0.7) {
+          drawPixel(ctx, star.x - star.size, star.y, pixelSize, color, alpha * 0.6);
+          drawPixel(ctx, star.x + star.size, star.y, pixelSize, color, alpha * 0.6);
+          drawPixel(ctx, star.x, star.y - star.size, pixelSize, color, alpha * 0.55);
+          drawPixel(ctx, star.x, star.y + star.size, pixelSize, color, alpha * 0.55);
         }
-
-        context.lineTo(width, height);
-        context.closePath();
-
-        const layerGradient = context.createLinearGradient(0, height * layer.baseY, 0, height);
-        layerGradient.addColorStop(0, rgba(fill, 0.78));
-        layerGradient.addColorStop(1, rgba(LANDSCAPE_FLOOR, 0.98));
-        context.fillStyle = layerGradient;
-        context.fill();
-
-        context.strokeStyle = rgba(line, 0.24);
-        context.lineWidth = i === config.terrainLayers.length - 1 ? 1.25 : 0.8;
-        context.stroke();
-
-        const haze = context.createLinearGradient(0, height * (layer.baseY - 0.03), 0, height);
-        haze.addColorStop(0, rgba(accent, layer.haze * 0.22));
-        haze.addColorStop(1, "rgba(0, 0, 0, 0)");
-        context.fillStyle = haze;
-        context.fillRect(0, height * (layer.baseY - 0.08), width, height * 0.22);
       }
+
+      ctx.restore();
     }
 
-    function drawWeather(config: SceneConfig, accent: [number, number, number], deltaSeconds: number) {
-      const directionX = Math.cos(config.angle);
-      const directionY = Math.sin(config.angle);
-      const weatherColor = mixColor(accent, [220, 232, 245], 0.62);
-      const maxTravel = Math.max(width, height) * 0.75;
+    function drawWeather(scene: SceneConfig, palette: Palette, deltaSeconds: number, timeSeconds: number) {
+      const weather = assetsRef.current.weather;
 
-      context.save();
-      context.globalCompositeOperation = "screen";
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
 
-      for (let i = 0; i < particlesRef.current.length; i++) {
-        const particle = particlesRef.current[i];
+      for (let i = 0; i < weather.length; i++) {
+        const particle = weather[i];
+        const angle = scene.weatherAngle + particle.angleOffset;
+        const directionX = Math.cos(angle);
+        const directionY = Math.sin(angle);
+
         particle.x += directionX * particle.speed * deltaSeconds;
         particle.y += directionY * particle.speed * deltaSeconds;
 
-        if (particle.y - particle.length > height * 0.92 || particle.x - particle.length > width + maxTravel * 0.15) {
-          particle.x = -maxTravel * seeded(config.seed + i * 33.1);
-          particle.y = -height * mix(0.15, 0.6, seeded(config.seed + i * 11.4));
+        if (
+          particle.y - particle.length > height * 0.98 ||
+          particle.x - particle.length > width + Math.max(width, height) * 0.2
+        ) {
+          resetWeatherParticle(particle, scene);
         }
 
-        const tailX = particle.x - directionX * particle.length;
-        const tailY = particle.y - directionY * particle.length;
-        const trail = context.createLinearGradient(particle.x, particle.y, tailX, tailY);
+        const pulseBase = 0.5 + 0.5 * Math.sin(timeSeconds * scene.pulseSpeed + particle.phase);
+        const pulse = particle.kind === "comet"
+          ? 0.75 + pulseBase * 0.25
+          : Math.round((0.4 + pulseBase * 0.6) * 3) / 3;
+        const color = particle.kind === "comet"
+          ? featureColor(palette, particle.paletteMix)
+          : particle.paletteMix > 0.52 ? palette.cyan : palette.magenta;
+        const segments = Math.max(4, Math.floor(particle.length / Math.max(particle.size * 1.35, 1)));
 
-        trail.addColorStop(0, rgba(weatherColor, particle.alpha + particle.glow * 0.14));
-        trail.addColorStop(0.3, rgba(weatherColor, particle.alpha * 0.6));
-        trail.addColorStop(1, "rgba(255, 255, 255, 0)");
-
-        context.strokeStyle = trail;
-        context.lineWidth = particle.width;
-        context.beginPath();
-        context.moveTo(tailX, tailY);
-        context.lineTo(particle.x, particle.y);
-        context.stroke();
-
-        if (particle.glow > 0.3) {
-          const headGlow = context.createRadialGradient(
+        if (particle.kind === "comet") {
+          const halo = ctx.createRadialGradient(
             particle.x,
             particle.y,
             0,
             particle.x,
             particle.y,
-            particle.length * 0.12
+            particle.length * 0.16
           );
 
-          headGlow.addColorStop(0, rgba(weatherColor, particle.alpha * 1.6));
-          headGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
-          context.fillStyle = headGlow;
-          context.fillRect(
-            particle.x - particle.length * 0.12,
-            particle.y - particle.length * 0.12,
-            particle.length * 0.24,
-            particle.length * 0.24
+          halo.addColorStop(0, rgba(color, particle.alpha * 0.32));
+          halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+          ctx.fillStyle = halo;
+          ctx.fillRect(
+            particle.x - particle.length * 0.16,
+            particle.y - particle.length * 0.16,
+            particle.length * 0.32,
+            particle.length * 0.32
+          );
+        }
+
+        for (let segment = 0; segment < segments; segment++) {
+          const progress = segment / segments;
+          const alpha = particle.alpha * (1 - progress) * pulse;
+
+          if (particle.kind === "rain" && (segment + Math.floor(timeSeconds * 10 + particle.phase * 5)) % 4 === 0) {
+            continue;
+          }
+
+          drawPixel(
+            ctx,
+            particle.x - directionX * progress * particle.length,
+            particle.y - directionY * progress * particle.length,
+            particle.size,
+            color,
+            alpha
           );
         }
       }
 
-      context.restore();
+      ctx.restore();
+    }
+
+    function drawShips(palette: Palette, deltaSeconds: number, timeSeconds: number) {
+      const ships = assetsRef.current.ships;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for (let i = 0; i < ships.length; i++) {
+        const ship = ships[i];
+        const spriteWidth = SHIP_SPRITE[0].length * ship.size;
+
+        ship.x += ship.speed * ship.direction * deltaSeconds;
+
+        if (
+          (ship.direction === 1 && ship.x > width + spriteWidth) ||
+          (ship.direction === -1 && ship.x < -spriteWidth * 2)
+        ) {
+          resetShip(ship);
+        }
+
+        const bob = Math.sin(timeSeconds * 0.8 + ship.phase) * ship.size * 1.5;
+        const thrusterPulse = Math.round((0.45 + 0.55 * (0.5 + 0.5 * Math.sin(timeSeconds * 6 + ship.phase))) * 3) / 3;
+        const canopy = featureColor(palette, ship.paletteMix);
+        const hull = mixColor(TERRAIN_FLOOR, palette.terrain, 0.4);
+        const thruster = ship.paletteMix > 0.5 ? palette.warm : palette.accent;
+        const halo = ctx.createRadialGradient(
+          ship.x + spriteWidth * 0.5,
+          ship.y + bob,
+          0,
+          ship.x + spriteWidth * 0.5,
+          ship.y + bob,
+          spriteWidth
+        );
+
+        halo.addColorStop(0, rgba(canopy, 0.035 * ship.alpha));
+        halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = halo;
+        ctx.fillRect(ship.x - spriteWidth, ship.y - spriteWidth, spriteWidth * 3, spriteWidth * 2);
+
+        for (let row = 0; row < SHIP_SPRITE.length; row++) {
+          const line = SHIP_SPRITE[row];
+
+          for (let col = 0; col < line.length; col++) {
+            const cell = line[col];
+
+            if (cell === ".") continue;
+
+            const mappedCol = ship.direction === 1 ? col : line.length - 1 - col;
+            const px = ship.x + mappedCol * ship.size;
+            const py = ship.y + bob + row * ship.size;
+
+            if (cell === "1") {
+              drawPixel(ctx, px, py, ship.size, hull, ship.alpha * 0.75);
+            }
+
+            if (cell === "2") {
+              drawPixel(ctx, px, py, ship.size, canopy, ship.alpha);
+            }
+
+            if (cell === "3") {
+              drawPixel(ctx, px, py, ship.size, thruster, ship.alpha * thrusterPulse);
+            }
+          }
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawTerrain(scene: SceneConfig, palette: Palette, timeSeconds: number) {
+      const { pixelSize, beacons } = assetsRef.current;
+
+      for (let i = 0; i < scene.terrainLayers.length; i++) {
+        const layer = scene.terrainLayers[i];
+        const seed = scene.seed + i * 31;
+        const fill = mixColor(TERRAIN_FLOOR, palette.terrain, layer.opacity);
+        const line = featureColor(palette, 0.26 + i * 0.18);
+        const step = Math.max(8, Math.round(width / 92));
+
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        ctx.lineTo(0, ridgeHeight(terrainNoise, 0, width, height, layer, seed));
+
+        for (let x = 0; x <= width + step; x += step) {
+          ctx.lineTo(x, ridgeHeight(terrainNoise, x, width, height, layer, seed));
+        }
+
+        ctx.lineTo(width, height);
+        ctx.closePath();
+
+        const gradient = ctx.createLinearGradient(0, height * layer.baseY, 0, height);
+        gradient.addColorStop(0, rgba(fill, 0.86));
+        gradient.addColorStop(1, rgba(TERRAIN_FLOOR, 1));
+
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.strokeStyle = rgba(line, layer.lineOpacity);
+        ctx.lineWidth = i === scene.terrainLayers.length - 1 ? 1.25 : 0.9;
+        ctx.stroke();
+
+        const haze = ctx.createLinearGradient(0, height * (layer.baseY - 0.05), 0, height);
+        haze.addColorStop(0, rgba(line, 0.022));
+        haze.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, height * (layer.baseY - 0.08), width, height * 0.22);
+      }
+
+      const frontLayer = scene.terrainLayers[scene.terrainLayers.length - 1];
+      const frontSeed = scene.seed + (scene.terrainLayers.length - 1) * 31;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for (let i = 0; i < beacons.length; i++) {
+        const beacon = beacons[i];
+        const pop = Math.round((0.45 + 0.55 * (0.5 + 0.5 * Math.sin(timeSeconds * scene.pulseSpeed * 1.7 + beacon.phase))) * 3) / 3;
+        const color = featureColor(palette, beacon.paletteMix);
+        const y = ridgeHeight(terrainNoise, beacon.x, width, height, frontLayer, frontSeed) - pixelSize * 1.5;
+
+        drawPixel(ctx, beacon.x, y, pixelSize, color, beacon.alpha * pop);
+
+        if (pop > 0.66) {
+          drawPixel(ctx, beacon.x + pixelSize, y, pixelSize, color, beacon.alpha * pop * 0.45);
+        }
+      }
+
+      ctx.restore();
     }
 
     function drawFrame(time: number) {
-      const config = sceneRef.current ?? makeSceneConfig(hashString("ambient-landscape"), false);
+      const scene = sceneRef.current ?? makeSceneConfig(hashString("ambient-space:minimal"), false, "minimal");
       const deltaSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.032) : 0.016;
+      const timeSeconds = time / 1000;
+
       previousTime = time;
       skyTime += deltaSeconds;
+      currentColorRef.current = mixColor(currentColorRef.current, targetColorRef.current, 0.03);
 
-      currentColorRef.current = mixColor(currentColorRef.current, targetColorRef.current, 0.02);
-      const accent = currentColorRef.current;
+      const palette = makePalette(currentColorRef.current);
 
-      context.clearRect(0, 0, width, height);
-      drawSkyWash(config, accent);
-      drawWeather(config, accent, reducedMotionRef.current ? 0 : deltaSeconds);
-      drawTerrain(config, accent);
+      ctx.clearRect(0, 0, width, height);
+      drawSky(scene, palette);
+      drawStars(palette, timeSeconds);
+      drawWeather(scene, palette, reducedMotionRef.current ? 0 : deltaSeconds, timeSeconds);
+      drawShips(palette, reducedMotionRef.current ? 0 : deltaSeconds, timeSeconds);
+      drawTerrain(scene, palette, timeSeconds);
 
-      const vignette = context.createRadialGradient(
+      const vignette = ctx.createRadialGradient(
         width * 0.5,
-        height * 0.35,
-        height * 0.2,
+        height * 0.3,
+        height * 0.18,
         width * 0.5,
-        height * 0.55,
-        Math.max(width, height) * 0.8
+        height * 0.58,
+        Math.max(width, height) * 0.82
       );
+
       vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, "rgba(0, 0, 0, 0.42)");
-      context.fillStyle = vignette;
-      context.fillRect(0, 0, width, height);
+      vignette.addColorStop(1, "rgba(0, 0, 0, 0.56)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
 
       if (!reducedMotionRef.current) {
         animationRef.current = window.requestAnimationFrame(drawFrame);
@@ -480,11 +795,9 @@ export default function AuroraBackground() {
 
     function handleReducedMotionChange(event: MediaQueryListEvent) {
       reducedMotionRef.current = event.matches;
-      previousTime = 0;
 
       if (event.matches) {
-        window.cancelAnimationFrame(animationRef.current);
-        drawFrame(0);
+        redrawRef.current?.();
         return;
       }
 
@@ -505,10 +818,8 @@ export default function AuroraBackground() {
     };
   }, []);
 
-  const fallbackAccent = mixColor(
-    albumColor && albumColor !== "#888888" ? hexToRgb(albumColor) : FALLBACK_COLOR,
-    [168, 186, 216],
-    0.6
+  const fallbackAccent = makePalette(
+    albumColor && albumColor !== "#888888" ? hexToRgb(albumColor) : FALLBACK_COLOR
   );
 
   return (
@@ -516,10 +827,10 @@ export default function AuroraBackground() {
       <div
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(180deg, rgba(2,4,8,1) 0%, rgba(3,6,10,1) 54%, rgba(1,2,4,1) 100%), radial-gradient(circle at 50% 18%, ${rgba(fallbackAccent, 0.12)} 0%, rgba(0,0,0,0) 56%)`,
+          background: `linear-gradient(180deg, rgba(0,1,5,1) 0%, rgba(1,2,7,1) 58%, rgba(1,2,6,1) 100%), linear-gradient(180deg, rgba(0,0,0,0) 58%, ${rgba(fallbackAccent.haze, 0.02)} 78%, rgba(0,0,0,0.2) 100%)`,
         }}
       />
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-95" />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-100" />
     </div>
   );
 }
