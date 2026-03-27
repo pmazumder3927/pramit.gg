@@ -170,7 +170,7 @@ export default function MusicClient() {
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black page-reveal overflow-hidden"
+      className="min-h-screen page-reveal overflow-hidden"
     >
       {/* Dynamic background elements - colors change based on now playing */}
       <div className="fixed inset-0 pointer-events-none">

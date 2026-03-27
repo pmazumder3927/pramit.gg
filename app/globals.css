@@ -29,7 +29,10 @@
   }
 
   body {
-    @apply bg-void-black text-white overflow-x-hidden;
+    @apply text-white overflow-x-hidden;
+    background:
+      radial-gradient(circle at 50% 16%, rgba(120, 136, 168, 0.08) 0%, rgba(0, 0, 0, 0) 42%),
+      linear-gradient(180deg, #020408 0%, #03060a 56%, #010204 100%);
   }
   
   ::selection {

@@ -99,7 +99,7 @@ END:VCARD`;
   const secondarySocials = socialLinks.filter((link) => !link.isPrimary);
 
   return (
-    <div className="min-h-screen bg-void-black">
+    <div className="min-h-screen">
       {/* Noise texture */}
       <div
         className="fixed inset-0 opacity-[0.015] pointer-events-none"

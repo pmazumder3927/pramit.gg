@@ -25,7 +25,7 @@ export function MusicManagerShell({
   const isSequencer = pathname.includes("/music/manage/sequencer/");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-void-black via-charcoal-black to-void-black page-reveal">
+    <div className="min-h-screen page-reveal">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(255,107,61,0.06),transparent_30%)]" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_88%_14%,rgba(124,119,198,0.06),transparent_34%)]" />
 

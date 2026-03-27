@@ -5,6 +5,7 @@ import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
 import Navigation from "./components/Navigation";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
+import AuroraBackground from "./components/AuroraBackground";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -76,6 +77,7 @@ export default function RootLayout({
       </head>
       <body className="grain min-h-screen">
         <NowPlayingProvider>
+          <AuroraBackground />
           <div className="relative z-10">{children}</div>
           <Navigation />
           <NowPlaying />
