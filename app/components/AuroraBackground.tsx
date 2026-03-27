@@ -236,8 +236,8 @@ function makeSceneConfig(seed: number, isPlaying: boolean, variant: string): Sce
     skyDrift: mix(0.05, 0.1, seeded(seed + 1)),
     pulseSpeed: mix(1.15, 2.15, seeded(seed + 2)),
     weatherAngle: mix(Math.PI * 0.22, Math.PI * 0.33, seeded(seed + 3)),
-    weatherCount: Math.round(mix(18, 34, seeded(seed + 4)) * intensity),
-    cometBias: clamp(mix(0.16, 0.32, seeded(seed + 5)) + (variant === "neon" ? 0.08 : 0), 0.16, 0.42),
+    weatherCount: Math.round(mix(7, 12, seeded(seed + 4)) * (0.82 + intensity * 0.28)),
+    cometBias: clamp(mix(0.26, 0.42, seeded(seed + 5)) + (variant === "neon" ? 0.06 : 0), 0.24, 0.5),
     starCount: Math.round(mix(54, 98, seeded(seed + 6)) * variantBoost),
     shipCount: variant === "minimal" ? 1 : variant === "neon" ? 3 : 2,
     beaconCount: Math.round(mix(8, 14, seeded(seed + 7))),
@@ -270,13 +270,48 @@ function makeSceneConfig(seed: number, isPlaying: boolean, variant: string): Sce
   };
 }
 
+function makeWeatherParticle(
+  randomValue: () => number,
+  width: number,
+  height: number,
+  pixelSize: number,
+  scene: SceneConfig
+): WeatherParticle {
+  const weatherSpread = Math.max(width, height) * 0.72;
+  const kind: WeatherKind = randomValue() > 1 - scene.cometBias ? "comet" : "rain";
+
+  return {
+    kind,
+    x: randomValue() * (width + weatherSpread) - weatherSpread * 0.35,
+    y: -height * mix(0.08, 0.7, randomValue()),
+    speed: kind === "comet"
+      ? mix(180, 320, randomValue()) * scene.intensity
+      : mix(110, 190, randomValue()) * scene.intensity,
+    length: kind === "comet"
+      ? mix(72, 156, randomValue()) * pixelSize
+      : mix(12, 26, randomValue()) * pixelSize,
+    size: pixelSize * (
+      kind === "comet"
+        ? mix(1.15, 2.2, randomValue())
+        : mix(0.65, 0.9, randomValue())
+    ),
+    alpha: kind === "comet"
+      ? mix(0.24, 0.42, randomValue())
+      : mix(0.07, 0.14, randomValue()),
+    phase: randomValue() * Math.PI * 2,
+    angleOffset: kind === "comet"
+      ? mix(-0.035, 0.035, randomValue())
+      : mix(-0.05, 0.05, randomValue()),
+    paletteMix: randomValue(),
+  };
+}
+
 function createSceneAssets(width: number, height: number, config: SceneConfig): SceneAssets {
   const pixelSize = width < 768 ? 2 : 3;
   const stars: Star[] = [];
   const weather: WeatherParticle[] = [];
   const ships: Ship[] = [];
   const beacons: Beacon[] = [];
-  const weatherSpread = Math.max(width, height) * 0.65;
 
   for (let i = 0; i < config.starCount; i++) {
     const seed = config.seed + i * 17.3;
@@ -293,27 +328,17 @@ function createSceneAssets(width: number, height: number, config: SceneConfig): 
 
   for (let i = 0; i < config.weatherCount; i++) {
     const seed = config.seed + i * 23.7;
-    const kind: WeatherKind = seeded(seed + 1) > 1 - config.cometBias ? "comet" : "rain";
-    const size = pixelSize * (kind === "comet" ? mix(1, 1.7, seeded(seed + 2)) : mix(0.8, 1.1, seeded(seed + 2)));
+    let cursor = 1;
 
-    weather.push({
-      x: seeded(seed + 3) * (width + weatherSpread) - weatherSpread * 0.3,
-      y: seeded(seed + 4) * height * 0.72 - height * 0.66,
-      speed: kind === "comet"
-        ? mix(220, 420, seeded(seed + 5)) * config.intensity
-        : mix(140, 260, seeded(seed + 5)) * config.intensity,
-      length: kind === "comet"
-        ? mix(42, 112, seeded(seed + 6)) * pixelSize
-        : mix(18, 42, seeded(seed + 6)) * pixelSize,
-      size,
-      alpha: kind === "comet"
-        ? mix(0.18, 0.32, seeded(seed + 7))
-        : mix(0.12, 0.24, seeded(seed + 7)),
-      phase: seeded(seed + 8) * Math.PI * 2,
-      angleOffset: mix(-0.06, 0.06, seeded(seed + 9)),
-      paletteMix: seeded(seed + 10),
-      kind,
-    });
+    weather.push(
+      makeWeatherParticle(
+        () => seeded(seed + cursor++),
+        width,
+        height,
+        pixelSize,
+        config
+      )
+    );
   }
 
   for (let i = 0; i < config.shipCount; i++) {
@@ -469,27 +494,10 @@ export default function AuroraBackground() {
     }
 
     function resetWeatherParticle(particle: WeatherParticle, scene: SceneConfig) {
-      const weatherSpread = Math.max(width, height) * 0.72;
-      const kind: WeatherKind = Math.random() > 1 - scene.cometBias ? "comet" : "rain";
-      const size = assetsRef.current.pixelSize *
-        (kind === "comet" ? mix(1, 1.7, Math.random()) : mix(0.8, 1.1, Math.random()));
-
-      particle.kind = kind;
-      particle.x = Math.random() * (width + weatherSpread) - weatherSpread * 0.35;
-      particle.y = -height * mix(0.08, 0.7, Math.random());
-      particle.speed = kind === "comet"
-        ? mix(220, 420, Math.random()) * scene.intensity
-        : mix(140, 260, Math.random()) * scene.intensity;
-      particle.length = kind === "comet"
-        ? mix(42, 112, Math.random()) * assetsRef.current.pixelSize
-        : mix(18, 42, Math.random()) * assetsRef.current.pixelSize;
-      particle.size = size;
-      particle.alpha = kind === "comet"
-        ? mix(0.18, 0.32, Math.random())
-        : mix(0.12, 0.24, Math.random());
-      particle.angleOffset = mix(-0.07, 0.07, Math.random());
-      particle.paletteMix = Math.random();
-      particle.phase = Math.random() * Math.PI * 2;
+      Object.assign(
+        particle,
+        makeWeatherParticle(Math.random, width, height, assetsRef.current.pixelSize, scene)
+      );
     }
 
     function resetShip(ship: Ship) {
@@ -572,8 +580,8 @@ export default function AuroraBackground() {
 
         const pulseBase = 0.5 + 0.5 * Math.sin(timeSeconds * scene.pulseSpeed + particle.phase);
         const pulse = particle.kind === "comet"
-          ? 0.75 + pulseBase * 0.25
-          : Math.round((0.4 + pulseBase * 0.6) * 3) / 3;
+          ? 0.82 + pulseBase * 0.18
+          : Math.round((0.28 + pulseBase * 0.34) * 3) / 3;
         const color = particle.kind === "comet"
           ? featureColor(palette, particle.paletteMix)
           : particle.paletteMix > 0.52 ? palette.cyan : palette.magenta;
@@ -589,7 +597,7 @@ export default function AuroraBackground() {
             particle.length * 0.16
           );
 
-          halo.addColorStop(0, rgba(color, particle.alpha * 0.32));
+          halo.addColorStop(0, rgba(color, particle.alpha * 0.38));
           halo.addColorStop(1, "rgba(0, 0, 0, 0)");
           ctx.fillStyle = halo;
           ctx.fillRect(
@@ -604,7 +612,7 @@ export default function AuroraBackground() {
           const progress = segment / segments;
           const alpha = particle.alpha * (1 - progress) * pulse;
 
-          if (particle.kind === "rain" && (segment + Math.floor(timeSeconds * 10 + particle.phase * 5)) % 4 === 0) {
+          if (particle.kind === "rain" && (segment + Math.floor(timeSeconds * 10 + particle.phase * 5)) % 2 === 0) {
             continue;
           }
 
