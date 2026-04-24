@@ -217,40 +217,35 @@ function generateCardStyle(
 ): CardStyle {
   const seed = index * 7919;
 
-  // Use manual override if provided, otherwise use random sizing
+  // Use manual override if provided, otherwise weighted random sizing.
+  // Distribution is skewed toward 1x1 fillers so grid-auto-flow: dense has
+  // plenty of pieces to plug holes left by the larger anchors.
   let size: CardSize;
   if (displaySizeOverride) {
     size = displaySizeOverride;
+  } else if (index === 0) {
+    size = "massive";
   } else {
     const sizeRoll = seededRandom(seed + 1);
-    if (index === 0) {
-      size = "massive";
-    } else if (sizeRoll > 0.92) {
-      size = "massive";
-    } else if (sizeRoll > 0.8) {
-      size = "hero";
-    } else if (sizeRoll > 0.6) {
-      size = "large";
-    } else if (sizeRoll > 0.4) {
-      size = "medium";
-    } else if (sizeRoll > 0.2) {
-      size = "small";
-    } else if (sizeRoll > 0.08) {
-      size = "tiny";
-    } else {
-      size = "micro";
-    }
+    if (sizeRoll > 0.97) size = "massive";      // ~3% showpieces
+    else if (sizeRoll > 0.88) size = "hero";    // ~9% big anchors
+    else if (sizeRoll > 0.76) size = "large";   // ~12% anchors
+    else if (sizeRoll > 0.58) size = "medium";  // ~18% tall verticals
+    else if (sizeRoll > 0.35) size = "small";   // ~23% fillers
+    else if (sizeRoll > 0.15) size = "tiny";    // ~20% fillers
+    else size = "micro";                         // ~15% fillers
   }
 
-  // MORE EXTREME rotations (-12 to 12 degrees)
-  const rotationIntensity = size === "micro" || size === "tiny" ? 2 : 1;
-  const rotation = (seededRandom(seed + 2) * 24 - 12) * rotationIntensity;
+  // Rotation: big anchors rotate gently (they define the grid), small
+  // fillers can rotate more freely since they visually read as confetti.
+  const isSmall = size === "micro" || size === "tiny" || size === "small";
+  const rotationRange = isSmall ? 14 : 7;
+  const rotation = seededRandom(seed + 2) * rotationRange * 2 - rotationRange;
 
-  // BIGGER offsets for breaking grid
-  const offsetMultiplier =
-    size === "small" || size === "tiny" || size === "micro" ? 2.5 : 1.5;
-  const offsetX = (seededRandom(seed + 3) * 60 - 30) * offsetMultiplier;
-  const offsetY = (seededRandom(seed + 4) * 50 - 25) * offsetMultiplier;
+  // Gentler offsets — rotation + skew already carry the chaos
+  const offsetMultiplier = isSmall ? 1.6 : 1;
+  const offsetX = (seededRandom(seed + 3) * 40 - 20) * offsetMultiplier;
+  const offsetY = (seededRandom(seed + 4) * 32 - 16) * offsetMultiplier;
 
   // More dramatic z-index spread
   const zIndex = Math.floor(seededRandom(seed + 5) * 15) + 1;
@@ -421,23 +416,25 @@ function ChaoticCard({
 
   const primaryImage = contentAnalysis.images[0];
 
-  // Height classes - varied on mobile for visual interest
+  // Heights are sized to the grid's fixed rows so spans tile exactly.
+  // Mobile: 120px rows + 12px gap. Desktop: 140px rows + 16px gap.
+  //   1 row  = 120 / 140
+  //   2 rows = 252 / 296
+  //   3 rows = 384 / 452
   const getHeightClass = () => {
     switch (style.size) {
       case "massive":
-        return "min-h-[220px] md:min-h-[450px]";
+        return "min-h-[252px] md:min-h-[452px]"; // 2x2 mobile, 3x3 md+
       case "hero":
-        return "min-h-[140px] md:min-h-[380px]";
+        return "min-h-[252px] md:min-h-[296px]"; // 1x2 mobile, 2x2 md+
       case "large":
-        return "min-h-[180px] md:min-h-[320px]";
+        return "min-h-[252px] md:min-h-[296px]"; // 1x2 mobile, 2x2 md+
       case "medium":
-        return "min-h-[120px] md:min-h-[260px]";
+        return "min-h-[120px] md:min-h-[296px]"; // 1x1 mobile, 1x2 md+
       case "small":
-        return "min-h-[100px] md:min-h-[180px]";
       case "tiny":
-        return "min-h-[85px] md:min-h-[140px]";
       case "micro":
-        return "min-h-[70px] md:min-h-[100px]";
+        return "min-h-[120px] md:min-h-[140px]"; // 1x1 everywhere
     }
   };
 
@@ -1013,7 +1010,7 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="relative grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 auto-rows-[minmax(80px,auto)] md:auto-rows-[minmax(80px,auto)]"
+        className="relative grid grid-flow-dense grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 auto-rows-[120px] md:auto-rows-[140px]"
         style={{ perspective: "1000px" }}
       >
         <AnimatePresence mode="popLayout">
