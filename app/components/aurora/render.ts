@@ -1,7 +1,7 @@
-import { fbm, mix, mixColor, rgba, snap } from "./math";
+import { mix, mixColor, rgba, snap } from "./math";
 import { HORIZON_SPRITES, SATELLITE_SPRITES, SHIP_SPRITES } from "./sprites";
 import { FALLBACK_COLOR, SPACE_BOTTOM, SPACE_TOP, TERRAIN_FLOOR, featureColor, makeSatellite, makeShip, makeWeatherParticle } from "./scene";
-import type { DrawState, Noise2D, Rgb, TerrainLayer } from "./types";
+import type { DrawState, Rgb } from "./types";
 
 function drawPixel(
   ctx: CanvasRenderingContext2D,
@@ -61,35 +61,6 @@ function drawSprite(
       drawPixel(ctx, x + mappedCol * size, y + row * size, size, color, alpha);
     }
   }
-}
-
-function ridgeHeight(
-  noise: Noise2D,
-  x: number,
-  width: number,
-  height: number,
-  layer: TerrainLayer,
-  seed: number,
-  style: DrawState["scene"]["terrainStyle"]
-) {
-  const nx = (x / width) * layer.frequency * 3.8;
-  const macro = fbm(noise, nx + seed * 0.0008, seed * 0.0028, 4, 0.55);
-  const micro = fbm(noise, nx * 2.6 + seed * 0.0014, seed * 0.0031 + 19, 3, 0.5);
-  let shape = macro * 0.76 + micro * layer.detail * 0.24;
-
-  if (style === "mesas") {
-    shape = Math.round(shape * 6) / 6 + micro * 0.08;
-  }
-
-  if (style === "dunes") {
-    shape = Math.sin(shape * Math.PI * 0.72) * 0.58 + macro * 0.28;
-  }
-
-  if (style === "crags") {
-    shape = shape * 0.62 + Math.sign(micro) * Math.pow(Math.abs(micro), 0.7) * 0.38;
-  }
-
-  return height * (layer.baseY + Math.max(-1, Math.min(1, shape)) * layer.amplitude);
 }
 
 function drawSky({ ctx, width, height, scene, palette, skyTime }: DrawState) {
@@ -492,35 +463,25 @@ function drawShips(state: DrawState) {
 }
 
 function drawTerrain(state: DrawState) {
-  const { ctx, width, height, scene, palette, terrainNoise } = state;
+  const { ctx, width, height, scene, assets, palette } = state;
+  const paths = assets.terrainPaths;
+  if (paths.length === 0) return;
 
   for (let i = 0; i < scene.terrainLayers.length; i++) {
     const layer = scene.terrainLayers[i];
-    const seed = scene.seed + i * 31;
     const fill = mixColor(TERRAIN_FLOOR, palette.terrain, layer.opacity);
     const line = featureColor(palette, 0.24 + i * 0.18);
-    const step = Math.max(8, Math.round(width / 92));
-
-    ctx.beginPath();
-    ctx.moveTo(0, height);
-    ctx.lineTo(0, ridgeHeight(terrainNoise, 0, width, height, layer, seed, scene.terrainStyle));
-
-    for (let x = 0; x <= width + step; x += step) {
-      ctx.lineTo(x, ridgeHeight(terrainNoise, x, width, height, layer, seed, scene.terrainStyle));
-    }
-
-    ctx.lineTo(width, height);
-    ctx.closePath();
+    const path = paths[i];
 
     const gradient = ctx.createLinearGradient(0, height * layer.baseY, 0, height);
     gradient.addColorStop(0, rgba(fill, 0.86));
     gradient.addColorStop(1, rgba(TERRAIN_FLOOR, 1));
 
     ctx.fillStyle = gradient;
-    ctx.fill();
+    ctx.fill(path);
     ctx.strokeStyle = rgba(line, layer.lineOpacity);
     ctx.lineWidth = i === scene.terrainLayers.length - 1 ? 1.25 : 0.9;
-    ctx.stroke();
+    ctx.stroke(path);
 
     const haze = ctx.createLinearGradient(0, height * (layer.baseY - 0.05), 0, height);
     haze.addColorStop(0, rgba(line, 0.018));
@@ -531,12 +492,11 @@ function drawTerrain(state: DrawState) {
 }
 
 function drawHorizonProps(state: DrawState) {
-  const { ctx, width, height, scene, assets, palette, terrainNoise, timeSeconds } = state;
+  const { ctx, scene, assets, palette, timeSeconds } = state;
 
-  for (const prop of assets.horizonProps) {
-    const layer = scene.terrainLayers[prop.layerIndex];
-    const seed = scene.seed + prop.layerIndex * 31;
-    const groundY = ridgeHeight(terrainNoise, prop.x, width, height, layer, seed, scene.terrainStyle) - assets.pixelSize;
+  for (let i = 0; i < assets.horizonProps.length; i++) {
+    const prop = assets.horizonProps[i];
+    const groundY = assets.horizonGroundY[i];
     const structureColor = mixColor(TERRAIN_FLOOR, palette.terrain, 0.18 + prop.layerIndex * 0.08);
     const accentColor = featureColor(palette, prop.paletteMix);
     const pulse = Math.round((0.4 + 0.6 * (0.5 + 0.5 * Math.sin(timeSeconds * scene.pulseSpeed + prop.phase))) * 3) / 3;

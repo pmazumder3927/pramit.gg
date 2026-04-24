@@ -8,10 +8,12 @@ import {
   pick,
   pickMany,
 } from "./math";
+import { fbm } from "./math";
 import type {
   CelestialBody,
   Constellation,
   HorizonProp,
+  Noise2D,
   Palette,
   Rgb,
   Satellite,
@@ -543,7 +545,70 @@ export function makeHorizonProps(
   return props;
 }
 
-export function createSceneAssets(width: number, height: number, config: SceneConfig): SceneAssets {
+function ridgeHeightFor(
+  noise: Noise2D,
+  x: number,
+  width: number,
+  height: number,
+  layer: TerrainLayer,
+  seed: number,
+  style: SceneConfig["terrainStyle"]
+) {
+  const nx = (x / width) * layer.frequency * 3.8;
+  const macro = fbm(noise, nx + seed * 0.0008, seed * 0.0028, 4, 0.55);
+  const micro = fbm(noise, nx * 2.6 + seed * 0.0014, seed * 0.0031 + 19, 3, 0.5);
+  let shape = macro * 0.76 + micro * layer.detail * 0.24;
+
+  if (style === "mesas") {
+    shape = Math.round(shape * 6) / 6 + micro * 0.08;
+  }
+
+  if (style === "dunes") {
+    shape = Math.sin(shape * Math.PI * 0.72) * 0.58 + macro * 0.28;
+  }
+
+  if (style === "crags") {
+    shape = shape * 0.62 + Math.sign(micro) * Math.pow(Math.abs(micro), 0.7) * 0.38;
+  }
+
+  return height * (layer.baseY + Math.max(-1, Math.min(1, shape)) * layer.amplitude);
+}
+
+function buildTerrainPaths(
+  noise: Noise2D,
+  width: number,
+  height: number,
+  config: SceneConfig
+): Path2D[] {
+  const paths: Path2D[] = [];
+  const step = Math.max(8, Math.round(width / 92));
+
+  for (let i = 0; i < config.terrainLayers.length; i++) {
+    const layer = config.terrainLayers[i];
+    const seed = config.seed + i * 31;
+    const path = new Path2D();
+
+    path.moveTo(0, height);
+    path.lineTo(0, ridgeHeightFor(noise, 0, width, height, layer, seed, config.terrainStyle));
+
+    for (let x = 0; x <= width + step; x += step) {
+      path.lineTo(x, ridgeHeightFor(noise, x, width, height, layer, seed, config.terrainStyle));
+    }
+
+    path.lineTo(width, height);
+    path.closePath();
+    paths.push(path);
+  }
+
+  return paths;
+}
+
+export function createSceneAssets(
+  width: number,
+  height: number,
+  config: SceneConfig,
+  terrainNoise?: Noise2D
+): SceneAssets {
   const pixelSize = width < 768 ? 2 : 3;
   const randomValue = createRng(config.seed ^ 0x9e3779b9);
   const stars: Star[] = [];
@@ -570,6 +635,16 @@ export function createSceneAssets(width: number, height: number, config: SceneCo
     ships.push(makeShip(randomValue, width, height, pixelSize, config));
   }
 
+  const horizonProps = makeHorizonProps(randomValue, width, config);
+  const terrainPaths = terrainNoise ? buildTerrainPaths(terrainNoise, width, height, config) : [];
+  const horizonGroundY = terrainNoise
+    ? horizonProps.map((prop) => {
+        const layer = config.terrainLayers[prop.layerIndex];
+        const seed = config.seed + prop.layerIndex * 31;
+        return ridgeHeightFor(terrainNoise, prop.x, width, height, layer, seed, config.terrainStyle) - pixelSize;
+      })
+    : new Array(horizonProps.length).fill(0);
+
   return {
     pixelSize,
     stars,
@@ -585,6 +660,8 @@ export function createSceneAssets(width: number, height: number, config: SceneCo
         )
       : [],
     skyTrails: makeSkyTrails(randomValue, width, height, config),
-    horizonProps: makeHorizonProps(randomValue, width, config),
+    horizonProps,
+    terrainPaths,
+    horizonGroundY,
   };
 }

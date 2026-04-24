@@ -176,6 +176,8 @@ export interface SceneAssets {
   satellites: Satellite[];
   skyTrails: SkyTrail[];
   horizonProps: HorizonProp[];
+  terrainPaths: Path2D[];
+  horizonGroundY: number[];
 }
 
 export interface SceneConfig {

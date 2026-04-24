@@ -65,17 +65,7 @@ export function AlbumArt({ track, accentColor, size = "md" }: AlbumArtProps) {
   return (
     <div className="relative flex-shrink-0">
       {track.albumImageUrl ? (
-        <motion.div
-          className={`relative ${sizeClasses} rounded-xl overflow-hidden`}
-          animate={track.isPlaying ? {
-            boxShadow: [
-              `0 0 0 0 ${accentColor}00`,
-              `0 0 12px 2px ${accentColor}40`,
-              `0 0 0 0 ${accentColor}00`
-            ]
-          } : {}}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
+        <div className={`relative ${sizeClasses} rounded-xl overflow-hidden`}>
           <Image
             src={track.albumImageUrl}
             alt={track.album}
@@ -84,6 +74,16 @@ export function AlbumArt({ track, accentColor, size = "md" }: AlbumArtProps) {
             sizes="44px"
             priority
           />
+          {/* Pulsing glow — animates opacity only (GPU-composited) instead of
+              box-shadow (which forces paint every frame). */}
+          {track.isPlaying && (
+            <motion.div
+              className="pointer-events-none absolute -inset-px rounded-xl"
+              style={{ boxShadow: `0 0 12px 2px ${accentColor}40` }}
+              animate={{ opacity: [0, 1, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            />
+          )}
           {/* Vinyl spin effect when playing */}
           {track.isPlaying && (
             <motion.div
@@ -92,7 +92,7 @@ export function AlbumArt({ track, accentColor, size = "md" }: AlbumArtProps) {
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
             />
           )}
-        </motion.div>
+        </div>
       ) : (
         <div
           className={`${sizeClasses} rounded-xl flex items-center justify-center`}

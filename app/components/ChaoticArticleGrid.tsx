@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   motion,
   useMotionValue,
   useSpring,
   useTransform,
   AnimatePresence,
+  type MotionValue,
 } from "motion/react";
 import { Post, CardSize, analyzeContent } from "@/app/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
@@ -297,15 +298,15 @@ function ChaoticCard({
   post,
   index,
   style,
-  mouseX,
-  mouseY,
+  springX,
+  springY,
   isFiltered,
 }: {
   post: Post;
   index: number;
   style: CardStyle;
-  mouseX: ReturnType<typeof useMotionValue<number>>;
-  mouseY: ReturnType<typeof useMotionValue<number>>;
+  springX: MotionValue<number>;
+  springY: MotionValue<number>;
   isFiltered?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -327,7 +328,8 @@ function ChaoticCard({
     [index]
   );
 
-  // Parallax based on mouse position - more intense
+  // Parallax scaled off the parent's single spring pair — avoids creating
+  // two fresh springs per card (which each tick on every animation frame).
   const parallaxStrength =
     style.size === "massive"
       ? 25
@@ -336,10 +338,10 @@ function ChaoticCard({
       : style.size === "large"
       ? 15
       : 10;
-  const x = useTransform(mouseX, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const y = useTransform(mouseY, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const springX = useSpring(x, { stiffness: 100, damping: 15 });
-  const springY = useSpring(y, { stiffness: 100, damping: 15 });
+  const baseX = style.offsetX * 0.2;
+  const baseY = style.offsetY * 0.25;
+  const x = useTransform(springX, (value) => baseX + value * parallaxStrength);
+  const y = useTransform(springY, (value) => baseY + value * parallaxStrength);
 
   // Mobile: 2 cols, Tablet: 4 cols, Desktop: 5-6 cols
   // Only massive spans full width on mobile to avoid tower stacking
@@ -441,11 +443,10 @@ function ChaoticCard({
   return (
     <motion.div
       ref={cardRef}
-      layoutId={`card-${post.id}`}
       className={`${sizeClasses[style.size]} relative will-change-transform`}
       style={{
-        x: springX,
-        y: springY,
+        x,
+        y,
         zIndex: isHovered ? 100 : style.zIndex,
       }}
       initial={{
@@ -457,8 +458,6 @@ function ChaoticCard({
         opacity: 1,
         scale: 1,
         rotate: style.rotation * 0.5,
-        x: style.offsetX * 0.2,
-        y: style.offsetY * 0.25,
         skewX: style.skewX * 0.4,
         skewY: style.skewY * 0.4,
       }}
@@ -477,7 +476,6 @@ function ChaoticCard({
         delay: isFiltered ? 0 : 0.03 + index * 0.04,
         duration: 0.6,
         ease: [0.34, 1.56, 0.64, 1],
-        layout: { duration: 0.3, ease: [0.34, 1.56, 0.64, 1] },
       }}
       whileHover={{
         scale: 1.08,
@@ -857,6 +855,13 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
+  // One spring pair drives parallax for every card (they each read these via
+  // useTransform). Previously every card created its own pair — 2N springs
+  // ticking per frame — so this scales linearly with post count.
+  const parallaxX = useTransform(mouseX, [0, 1], [-1, 1]);
+  const parallaxY = useTransform(mouseY, [0, 1], [-1, 1]);
+  const springX = useSpring(parallaxX, { stiffness: 100, damping: 15 });
+  const springY = useSpring(parallaxY, { stiffness: 100, damping: 15 });
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -1023,8 +1028,8 @@ export default function ChaoticArticleGrid({ posts }: ChaoticArticleGridProps) {
                 cardStylesMap.get(post.id) ||
                 generateCardStyle(index, posts.length)
               }
-              mouseX={mouseX}
-              mouseY={mouseY}
+              springX={springX}
+              springY={springY}
               isFiltered={!!debouncedQuery}
             />
           ))}

@@ -15,7 +15,6 @@
 
   .page-reveal {
     animation: page-reveal 0.6s ease-out forwards;
-    will-change: filter;
   }
 
   html {

@@ -5,11 +5,12 @@ import { useNowPlayingContext } from "./NowPlayingContext";
 import { createNoise, createRng, hashString, hexToRgb, mixColor, rgba } from "./aurora/math";
 import { createSceneAssets, FALLBACK_COLOR, makePalette, makeSceneConfig } from "./aurora/scene";
 import { drawSceneFrame } from "./aurora/render";
-import type { Noise2D, Rgb, SceneAssets, SceneConfig, VisualVariant } from "./aurora/types";
+import type { Noise2D, Palette, Rgb, SceneAssets, SceneConfig, VisualVariant } from "./aurora/types";
 
 const FALLBACK_VARIANT: VisualVariant = "minimal";
 const INITIAL_SEED = hashString("ambient-space:minimal");
 const INITIAL_SCENE = makeSceneConfig(INITIAL_SEED, false, FALLBACK_VARIANT);
+const TARGET_FRAME_MS = 1000 / 30; // cap at ~30fps — imperceptible for this subtle ambient scene
 
 function createEmptyAssets(): SceneAssets {
   return {
@@ -22,6 +23,8 @@ function createEmptyAssets(): SceneAssets {
     satellites: [],
     skyTrails: [],
     horizonProps: [],
+    terrainPaths: [],
+    horizonGroundY: [],
   };
 }
 
@@ -59,9 +62,10 @@ export default function AuroraBackground() {
     const nextColor = resolveAlbumColor(albumColor);
     const seed = hashString(getSceneSeedSource(track, variant));
     const nextScene = makeSceneConfig(seed, !!track?.isPlaying, variant);
+    const nextNoise = createNoise(seed ^ 0x85ebca6b);
 
     sceneRef.current = nextScene;
-    terrainNoiseRef.current = createNoise(seed ^ 0x85ebca6b);
+    terrainNoiseRef.current = nextNoise;
     spawnRandomRef.current = createRng(seed ^ 0xc2b2ae35);
     targetColorRef.current = nextColor;
 
@@ -69,7 +73,8 @@ export default function AuroraBackground() {
       assetsRef.current = createSceneAssets(
         viewportRef.current.width,
         viewportRef.current.height,
-        nextScene
+        nextScene,
+        nextNoise
       );
     }
 
@@ -96,8 +101,27 @@ export default function AuroraBackground() {
     let height = 0;
     let previousTime = 0;
     let skyTime = 0;
+    let lastRenderTime = 0;
+    let cachedPalette: Palette | null = null;
+    let cachedPaletteKey: Rgb = [-1, -1, -1];
 
-    function drawFrame(time: number) {
+    function getPalette(color: Rgb): Palette {
+      // Rebuild the palette only when the underlying color has drifted enough
+      // to be perceptible. Saves 9 color allocations and 9 mixColor calls per frame
+      // while the palette is settled.
+      if (
+        !cachedPalette ||
+        Math.abs(color[0] - cachedPaletteKey[0]) > 0.5 ||
+        Math.abs(color[1] - cachedPaletteKey[1]) > 0.5 ||
+        Math.abs(color[2] - cachedPaletteKey[2]) > 0.5
+      ) {
+        cachedPalette = makePalette(color);
+        cachedPaletteKey = [color[0], color[1], color[2]];
+      }
+      return cachedPalette;
+    }
+
+    function renderFrame(time: number) {
       if (!width || !height) return;
 
       const deltaSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.032) : 0.016;
@@ -115,17 +139,34 @@ export default function AuroraBackground() {
         height,
         scene: sceneRef.current,
         assets: assetsRef.current,
-        palette: makePalette(currentColorRef.current),
+        palette: getPalette(currentColorRef.current),
         terrainNoise: terrainNoiseRef.current,
         spawnRandom: spawnRandomRef.current,
         timeSeconds: time / 1000,
         deltaSeconds: reducedMotionRef.current ? 0 : deltaSeconds,
         skyTime,
       });
+    }
 
-      if (!reducedMotionRef.current) {
-        animationRef.current = window.requestAnimationFrame(drawFrame);
+    function drawFrame(time: number) {
+      if (reducedMotionRef.current) {
+        renderFrame(time);
+        return;
       }
+
+      if (document.hidden) {
+        // Pause entirely; visibility listener re-schedules on return.
+        return;
+      }
+
+      // Throttle to ~30fps to halve per-frame CPU and GPU work without
+      // visible stutter for this slow-moving ambient scene.
+      if (time - lastRenderTime >= TARGET_FRAME_MS) {
+        lastRenderTime = time;
+        renderFrame(time);
+      }
+
+      animationRef.current = window.requestAnimationFrame(drawFrame);
     }
 
     function resize() {
@@ -141,45 +182,61 @@ export default function AuroraBackground() {
       mountedCanvas.style.height = `${height}px`;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      assetsRef.current = createSceneAssets(width, height, sceneRef.current);
+      assetsRef.current = createSceneAssets(width, height, sceneRef.current, terrainNoiseRef.current);
 
       if (reducedMotionRef.current) {
         previousTime = 0;
-        drawFrame(0);
+        renderFrame(0);
       }
     }
 
     redrawRef.current = () => {
       previousTime = 0;
-      window.cancelAnimationFrame(animationRef.current);
-      drawFrame(0);
+      lastRenderTime = 0;
+      renderFrame(0);
     };
 
     function handleReducedMotionChange(event: MediaQueryListEvent) {
       reducedMotionRef.current = event.matches;
       previousTime = 0;
+      lastRenderTime = 0;
       window.cancelAnimationFrame(animationRef.current);
 
       if (event.matches) {
         currentColorRef.current = targetColorRef.current;
-        drawFrame(0);
+        renderFrame(0);
         return;
       }
 
       animationRef.current = window.requestAnimationFrame(drawFrame);
     }
 
+    function handleVisibilityChange() {
+      if (document.hidden || reducedMotionRef.current) return;
+      // Reset timing so we don't burst several frames on wake.
+      previousTime = 0;
+      lastRenderTime = 0;
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = window.requestAnimationFrame(drawFrame);
+    }
+
     resize();
-    drawFrame(0);
+    if (reducedMotionRef.current) {
+      renderFrame(0);
+    } else {
+      animationRef.current = window.requestAnimationFrame(drawFrame);
+    }
 
     window.addEventListener("resize", resize);
     reducedMotionQuery.addEventListener("change", handleReducedMotionChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.cancelAnimationFrame(animationRef.current);
       redrawRef.current = null;
       window.removeEventListener("resize", resize);
       reducedMotionQuery.removeEventListener("change", handleReducedMotionChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
