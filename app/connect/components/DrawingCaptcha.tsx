@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
+  DRAWING_MAX_LEVEL,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
   type DrawingPoint,
@@ -297,9 +298,17 @@ export default function DrawingCaptcha({
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 md:p-6">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-white/30">
-            the council asks
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/30">
+              the council asks
+            </p>
+            <span
+              className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-white/40"
+              title={`global trial #${challenge.globalIndex + 1} · the prompts get harder as more drawings are submitted`}
+            >
+              tier {challenge.level}/{DRAWING_MAX_LEVEL} · {challenge.levelLabel}
+            </span>
+          </div>
           <h3 className="mt-1 text-xl md:text-2xl font-extralight text-white/90">
             draw{" "}
             <span className="text-white">
@@ -307,7 +316,9 @@ export default function DrawingCaptcha({
             </span>
           </h3>
           <p className="mt-1 text-xs font-light text-white/40">
-            the council will judge whether your drawing is good enough.
+            {challenge.level >= 4
+              ? "the council expects ambition. capture the spirit — every detail need not be perfect."
+              : "the council will judge whether your drawing is good enough."}
           </p>
         </div>
 

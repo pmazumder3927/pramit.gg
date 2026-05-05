@@ -1,10 +1,11 @@
-export const CAPTCHA_VERSION = 3 as const;
+export const CAPTCHA_VERSION = 4 as const;
 export const CAPTCHA_TTL_MS = 10 * 60 * 1000;
 export const CAPTCHA_MIN_SOLVE_MS = 6_000;
 export const DRAWING_CANVAS_WIDTH = 480;
 export const DRAWING_CANVAS_HEIGHT = 320;
 export const DRAWING_MIN_STROKES = 1;
 export const DRAWING_MIN_TOTAL_LENGTH = 120;
+export const DRAWING_MAX_LEVEL = 5;
 
 export type DrawingPoint = {
   x: number;
@@ -24,6 +25,9 @@ export type ConfessionalCaptchaChallenge = {
   expiresAt: number;
   minSolveMs: number;
   drawingPrompt: string;
+  level: number;
+  levelLabel: string;
+  globalIndex: number;
 };
 
 export type ConfessionalCaptchaSubmission = {

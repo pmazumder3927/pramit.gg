@@ -7,6 +7,7 @@ import { supabase, Post } from "@/app/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import EnhancedMarkdownEditor from "@/app/components/EnhancedMarkdownEditor";
 import SpotifyConnection from "@/app/components/SpotifyConnection";
+import BannerControl from "@/app/dashboard/BannerControl";
 
 const ACCENT_COLORS = ["#ff6b3d", "#9c5aff", "#1a1b22"];
 
@@ -243,6 +244,8 @@ function DashboardContent() {
             initialError={searchParams.get("spotify_error") || undefined}
           />
         </div>
+
+        <BannerControl />
 
         <motion.div
           initial={{ opacity: 0, y: 10 }}

@@ -7,7 +7,8 @@ import {
 import { createPublicClient } from "@/utils/supabase/server";
 
 export async function GET() {
-  return NextResponse.json(createConfessionalCaptchaChallenge(), { status: 200 });
+  const payload = await createConfessionalCaptchaChallenge();
+  return NextResponse.json(payload, { status: 200 });
 }
 
 export async function POST(request: NextRequest) {

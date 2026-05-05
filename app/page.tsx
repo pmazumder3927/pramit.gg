@@ -1,6 +1,7 @@
 import { Post } from "@/app/lib/supabase";
 import AnimatedHomePage from "@/app/components/AnimatedHomePage";
 import AnimatedHero from "@/app/components/AnimatedHero";
+import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
 import { createPublicClient } from "@/utils/supabase/server";
 import Link from "next/link";
 
@@ -28,11 +29,20 @@ async function fetchPosts() {
   }
 }
 
+async function fetchBanner() {
+  try {
+    return await fetchLatestHomepageBanner(createPublicClient());
+  } catch (error) {
+    console.error("Error fetching banner server-side:", error);
+    return null;
+  }
+}
+
 // Enable ISR with 60 second revalidation
 export const revalidate = 60;
 
 export default async function Home() {
-  const allPosts = await fetchPosts();
+  const [allPosts, banner] = await Promise.all([fetchPosts(), fetchBanner()]);
 
   // Set first 3 posts as featured for horizontal scroll
   const featuredPosts = allPosts.slice(0, 3);
@@ -46,7 +56,7 @@ export default async function Home() {
       <main className="relative z-10 min-h-screen">
 
         {/* Hero Section */}
-        <AnimatedHero />
+        <AnimatedHero banner={banner} />
 
         {/* Animated Posts Content */}
         <AnimatedHomePage posts={posts} featuredPosts={featuredPosts} />

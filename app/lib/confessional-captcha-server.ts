@@ -14,48 +14,161 @@ import {
   type DrawingStroke,
   evaluateDrawing,
 } from "@/app/lib/confessional-captcha";
+import { createPublicClient } from "@/utils/supabase/server";
 
-const DRAWING_SUBJECTS = [
-  "a turtle",
-  "a fish",
-  "a cat",
-  "a dog",
-  "a bird",
-  "a snail",
-  "a butterfly",
-  "a tree",
-  "a flower",
-  "a mushroom",
-  "a leaf",
-  "a sun",
-  "a moon",
-  "a star",
-  "a cloud",
-  "a house",
-  "a chair",
-  "a teapot",
-  "a mug",
-  "an umbrella",
-  "a key",
-  "a book",
-  "a balloon",
-  "a kite",
-  "a sailboat",
-  "a hot air balloon",
-  "a slice of pizza",
-  "an ice cream cone",
-  "a banana",
-  "a strawberry",
-  "a heart",
-  "a smiley face",
-  "an eye",
-  "a hand",
-  "a pair of glasses",
-  "a hat",
-  "a guitar",
-  "a piano",
-  "a paper airplane",
-  "a snowman",
+type PromptTier = {
+  level: number;
+  label: string;
+  // Lower bound on the global submission count required to unlock this tier.
+  // The hardest tier whose threshold is <= count is chosen.
+  minIndex: number;
+  prompts: string[];
+};
+
+// Five tiers, picked by the running count of accepted drawings (stored in
+// turtle_drawings). Tier 1 is gentle, tier 5 is intentionally cruel — things
+// that humans can still attempt with a stick figure but that an LLM image
+// generator would mangle (specific text, exact counts, recursion, mirrored
+// halves, negative space, etc.).
+const PROMPT_TIERS: PromptTier[] = [
+  {
+    level: 1,
+    label: "initiation",
+    minIndex: 0,
+    prompts: [
+      "a circle",
+      "a triangle",
+      "a square",
+      "a star",
+      "a heart",
+      "a smiley face",
+      "a sun",
+      "a moon",
+      "a cloud",
+      "a tree",
+      "a flower",
+      "a leaf",
+      "a fish",
+      "an arrow",
+      "a lightning bolt",
+      "a balloon",
+      "a key",
+      "a banana",
+      "a spiral",
+      "a diamond",
+    ],
+  },
+  {
+    level: 2,
+    label: "apprentice",
+    minIndex: 5,
+    prompts: [
+      "a turtle",
+      "a cat",
+      "a dog",
+      "a bird",
+      "a butterfly",
+      "a snail",
+      "a mushroom",
+      "a teapot",
+      "a mug",
+      "an umbrella",
+      "a sailboat",
+      "an ice cream cone",
+      "a slice of pizza",
+      "a snowman",
+      "a hat",
+      "a pair of glasses",
+      "a paper airplane",
+      "a guitar",
+      "a strawberry",
+      "an eye",
+      "a hand",
+      "a hot air balloon",
+      "a kite",
+    ],
+  },
+  {
+    level: 3,
+    label: "acolyte",
+    minIndex: 18,
+    prompts: [
+      "a ball of yarn",
+      "a saucer of milk",
+      "a fishbone",
+      "a scratching post",
+      "a cardboard box with a cat inside",
+      "a tuna can",
+      "a kibble bowl",
+      "a fish skeleton",
+      "a catnip mouse toy",
+      "a tiny throne for a cat",
+      "a paw print",
+      "a cat tower",
+      "a litter box",
+      "a fish in a fishbowl",
+      "a cat curled up sleeping",
+      "a feather on a string",
+      "a windowsill with a sunbeam on it",
+      "a yarn ball with two knitting needles",
+      "a cat-sized crown",
+      "a saucer of cream and a fishbone, side by side",
+      "a cat silhouette in a doorway",
+    ],
+  },
+  {
+    level: 4,
+    label: "tribunal",
+    minIndex: 50,
+    prompts: [
+      "a cat napping in a sunbeam on a wooden floor",
+      "three kittens stacked on top of each other",
+      "a cat reading an open book",
+      "a cat wearing a wizard hat",
+      "two cats sharing a single ball of yarn",
+      "a cat sitting on a laptop keyboard",
+      "a cat batting at a fish in a fishbowl",
+      "a cat staring out a window at falling rain",
+      "a cat about to knock a glass off a table",
+      "a cat hiding inside a paper bag with only its tail showing",
+      "a cat-shaped loaf of bread on a cutting board",
+      "a cat with its tail curled into a question mark",
+      "a kitten chasing its own shadow",
+      "a cat on a tiny throne holding a scepter",
+      "a cat playing chess against a small mouse",
+      "a cat halfway out of a portal in the floor",
+      "a cat conducting an orchestra of three smaller cats",
+      "a cat tea ceremony with two cats and a teapot",
+      "a cat dressed as a judge banging a gavel",
+    ],
+  },
+  {
+    level: 5,
+    label: "the council's whim",
+    minIndex: 130,
+    prompts: [
+      'a cat holding a sign that clearly reads "MEOW"',
+      "a clock face showing exactly 4:17, with a cat asleep beneath it",
+      "a cat-shaped hole cut into a wooden fence (just the negative space)",
+      "exactly seven kittens in a single horizontal row, each a different color",
+      "a cat seen from above looking down at a fish seen from below, with a sheet of glass between them",
+      "a cat reflected in a mirror, but the reflection is a fish",
+      "a cat balancing on its left front paw only, with its tail curled into the letter S",
+      "a stack of three cats where the middle cat is upside down",
+      'a cat juggling four labeled fish: "salmon", "tuna", "sardine", "koi"',
+      "a cat painting a portrait of a cat painting a portrait of a cat",
+      "a cat whose four whiskers spell the letters M, E, O, W (one letter per whisker)",
+      "a cat split exactly down the middle: left half black with white yarn, right half white with black yarn",
+      "two cats playing tug-of-war over a fish, while a third cat hangs upside down from a tree branch holding the same fish by its tail",
+      "a fishbowl balanced on a cat's head, with a fish inside wearing a tiny bowler hat",
+      'a cat doing a handstand on a teapot, which is itself stacked on three books labeled "ONE", "TWO", "THREE"',
+      "a clock face where every numeral 1 through 12 has been replaced by a tiny cat in a different pose",
+      "a Möbius strip made of yarn with a single cat walking along its only side",
+      "a chessboard's four corner squares, each holding a different cat-king",
+      "a cat looking at its own paw prints leading away from itself in a circle",
+      "a cat-shaped constellation in the night sky, with the stars connected and labeled",
+    ],
+  },
 ];
 
 const DEFAULT_VISION_MODEL = "gpt-4o-mini";
@@ -66,9 +179,11 @@ type CaptchaVerificationResult =
 
 let cachedClient: OpenAI | null = null;
 
-export function createConfessionalCaptchaChallenge() {
+export async function createConfessionalCaptchaChallenge() {
   const issuedAt = Date.now();
-  const drawingPrompt = pick(DRAWING_SUBJECTS);
+  const globalIndex = await getGlobalDrawingIndex();
+  const tier = pickTier(globalIndex);
+  const drawingPrompt = pick(tier.prompts);
 
   const challenge: ConfessionalCaptchaChallenge = {
     version: CAPTCHA_VERSION,
@@ -77,12 +192,44 @@ export function createConfessionalCaptchaChallenge() {
     expiresAt: issuedAt + CAPTCHA_TTL_MS,
     minSolveMs: CAPTCHA_MIN_SOLVE_MS,
     drawingPrompt,
+    level: tier.level,
+    levelLabel: tier.label,
+    globalIndex,
   };
 
   return {
     token: signChallenge(challenge),
     challenge,
   };
+}
+
+function pickTier(globalIndex: number): PromptTier {
+  // Walk from the hardest tier down; pick the first whose threshold we've met.
+  for (let i = PROMPT_TIERS.length - 1; i >= 0; i -= 1) {
+    if (globalIndex >= PROMPT_TIERS[i].minIndex) {
+      return PROMPT_TIERS[i];
+    }
+  }
+  return PROMPT_TIERS[0];
+}
+
+async function getGlobalDrawingIndex(): Promise<number> {
+  try {
+    const supabase = createPublicClient();
+    const { count, error } = await supabase
+      .from("turtle_drawings")
+      .select("*", { count: "exact", head: true });
+
+    if (error) {
+      console.error("Drawing count error:", error);
+      return 0;
+    }
+
+    return typeof count === "number" && count >= 0 ? count : 0;
+  } catch (error) {
+    console.error("Drawing count error:", error);
+    return 0;
+  }
 }
 
 export async function verifyConfessionalCaptchaSubmission(
@@ -128,6 +275,7 @@ export async function verifyConfessionalCaptchaSubmission(
 
   const verdict = await classifyDrawing({
     prompt: challenge.drawingPrompt,
+    level: challenge.level,
     imageDataUrl,
   });
 
@@ -204,9 +352,11 @@ type DrawingVerdict =
 
 async function classifyDrawing({
   prompt,
+  level,
   imageDataUrl,
 }: {
   prompt: string;
+  level: number;
   imageDataUrl: string;
 }): Promise<DrawingVerdict> {
   const client = getOpenAIClient();
@@ -219,6 +369,18 @@ async function classifyDrawing({
 
   const model = process.env.OPENAI_VISION_MODEL?.trim() || DEFAULT_VISION_MODEL;
 
+  // Higher tiers (multi-element scenes, specific text/counts, recursive
+  // composition) deserve credit for capturing the *spirit* — humans cannot
+  // realistically nail every constraint with a finger on a phone canvas.
+  const grading =
+    level >= 4
+      ? "This prompt is intentionally elaborate. Accept the drawing if it makes a sincere attempt at the major elements (the subject + at least one or two of the specific qualifiers). Do not require every detail — labels, exact counts, or perfect spatial relationships can be approximated."
+      : "Accept any sincere, recognizable attempt at the target subject, even if crude or stylized. Reject only if the canvas is essentially empty or shows an unrelated subject.";
+  const targetLine =
+    level >= 4
+      ? `Target prompt (level ${level}): ${prompt}. Did the human capture the spirit of this prompt — the subject and at least one specific qualifier?`
+      : `Target subject (level ${level}): ${prompt}. Does this sketch reasonably depict that subject?`;
+
   try {
     const response = await client.chat.completions.create(
       {
@@ -230,15 +392,12 @@ async function classifyDrawing({
             role: "system",
             content:
               "You verify captcha sketches. The user was asked to draw a specific subject and you must decide if the sketch depicts that subject.\n\n" +
-              "Accept (matches: true) when:\n" +
-              "- The sketch is a sincere, recognizable attempt at the target subject, even if crude or stylized.\n" +
-              "- Key identifying features of the subject are present.\n\n" +
-              "Reject (matches: false) when ANY of these apply:\n" +
+              grading +
+              "\n\nReject (matches: false) when ANY of these apply:\n" +
               "- The drawing is blank or near-blank (a single dot, a tiny mark, almost nothing on the canvas).\n" +
               "- The drawing is just random scribbles, lines, or noise with no recognizable subject.\n" +
-              "- The drawing depicts a different subject than the target.\n" +
-              "- You cannot identify any subject in the drawing.\n\n" +
-              "Be generous about artistic skill — these are rough finger sketches — but strict about whether the target subject is actually depicted. " +
+              "- The drawing depicts an entirely different subject than the target.\n\n" +
+              "Be generous about artistic skill — these are rough finger sketches — but strict about whether the right *kind* of thing was attempted. " +
               'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.',
           },
           {
@@ -246,7 +405,7 @@ async function classifyDrawing({
             content: [
               {
                 type: "text",
-                text: `Target subject: ${prompt}. Does this sketch reasonably depict that subject?`,
+                text: targetLine,
               },
               {
                 type: "image_url",
