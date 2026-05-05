@@ -8,6 +8,17 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Cormorant_Garamond } from "next/font/google";
+
+// Distinctive italic serif for the council's voice. Self-contained so the
+// rest of the site keeps the Inter rhythm.
+const councilSerif = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  style: ["italic", "normal"],
+  display: "swap",
+  variable: "--font-council",
+});
 
 import {
   DRAWING_CANVAS_HEIGHT,
@@ -600,7 +611,9 @@ export default function DrawingCaptcha({
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-        <p className="text-sm font-light italic text-white/40">
+        <p
+          className={`${councilSerif.className} text-base italic text-white/40`}
+        >
           summoning the council...
         </p>
       </div>
@@ -633,40 +646,79 @@ export default function DrawingCaptcha({
       <div
         className={
           isFullscreen
-            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
-            : "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]"
+            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
+            : "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]"
         }
       >
-        {/* Header — the council's request */}
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 flex-col leading-snug">
-            <span className="text-[11px] font-light italic text-white/35">
-              the council implores you to draw
-            </span>
-            <span className="truncate text-base font-light text-white/90 sm:text-lg">
-              {challenge.drawingPrompt}
-            </span>
+        {/* Header — the council's request, in mystical voice */}
+        <header className="relative flex shrink-0 items-start justify-between gap-4 px-5 pb-2.5 pt-4 sm:px-6 sm:pt-5">
+          <div className="flex min-w-0 flex-col gap-1">
+            <p
+              className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-white/45 sm:text-base`}
+              style={{ fontWeight: 300 }}
+            >
+              <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-white/25">
+                edict {romanize(challenge.level)}
+              </span>
+              <span aria-hidden className="text-white/15">
+                ·
+              </span>
+              <span className="truncate">the council implores you to draw</span>
+            </p>
+            <h3
+              className={`${councilSerif.className} flex items-baseline gap-2.5 truncate text-white/95`}
+              style={{ fontWeight: 400 }}
+            >
+              <span
+                aria-hidden
+                className="text-base leading-none text-accent-orange/80"
+              >
+                ✦
+              </span>
+              <span className="truncate text-2xl italic tracking-tight sm:text-3xl">
+                {challenge.drawingPrompt}
+              </span>
+            </h3>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 pt-0.5">
-            <ReadyPill ready={ready} />
-            <HeaderIcon
-              label={isFullscreen ? "exit fullscreen" : "enter fullscreen"}
-              onClick={toggleFullscreen}
-            >
-              {isFullscreen ? <ShrinkIcon /> : <ExpandIcon />}
-            </HeaderIcon>
-            <HeaderIcon label="new prompt" onClick={reload} disabled={disabled}>
-              <RefreshIcon />
-            </HeaderIcon>
+          <div className="flex shrink-0 items-center gap-2 pt-0.5">
+            <div className="hidden sm:block">
+              <StatusSigil ready={ready} />
+            </div>
+            <div className="flex items-center gap-1">
+              <HeaderIcon
+                label={isFullscreen ? "exit fullscreen" : "enter fullscreen"}
+                onClick={toggleFullscreen}
+              >
+                {isFullscreen ? <ShrinkIcon /> : <ExpandIcon />}
+              </HeaderIcon>
+              <HeaderIcon
+                label="new prompt"
+                onClick={reload}
+                disabled={disabled}
+              >
+                <RefreshIcon />
+              </HeaderIcon>
+            </div>
           </div>
         </header>
 
-        {/* Canvas stage — the offering tablet */}
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* Ornamental rule with center sigil — separates the council's voice
+            from the offering tablet below */}
+        <div
+          aria-hidden
+          className="relative mx-5 mb-2 flex items-center gap-2 sm:mx-6"
+        >
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
+          <span className="text-[10px] tracking-[0.4em] text-white/25">◆</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
+        </div>
+
+        {/* Canvas — the offering tablet */}
+        <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
           <div
             ref={wrapperRef}
-            className="relative w-full select-none overflow-hidden"
+            className="relative w-full select-none overflow-hidden rounded-xl border border-white/[0.06]"
             style={{
               aspectRatio: isFullscreen
                 ? undefined
@@ -674,19 +726,59 @@ export default function DrawingCaptcha({
               flex: isFullscreen ? "1 1 auto" : undefined,
               backgroundColor: CANVAS_BACKGROUND,
               backgroundImage:
-                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0)",
+                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0)",
               backgroundSize: "22px 22px",
             }}
           >
-            {/* Subtle inner vignette so the dot grid feels like a surface */}
+            {/* Vignette so the dot grid feels like a surface */}
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  "radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%)",
+                  "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%)",
               }}
             />
+
+            {/* Ember glow — appears when the offering meets the council's
+                requirement. Soft, slow pulse. */}
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-0 rounded-xl transition-opacity duration-700 ${
+                ready ? "opacity-100" : "opacity-0"
+              }`}
+              style={{
+                boxShadow:
+                  "inset 0 0 60px rgba(255,107,61,0.18), inset 0 0 120px rgba(255,107,61,0.08)",
+              }}
+            />
+            {ready ? (
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-xl"
+                style={{
+                  boxShadow:
+                    "inset 0 0 80px rgba(255,107,61,0.22)",
+                }}
+                animate={{ opacity: [0.6, 0.95, 0.6] }}
+                transition={{
+                  duration: 3.4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+            ) : null}
+
+            {/* Corner sigils — mark the sacred space */}
+            <CornerGlyph position="tl" />
+            <CornerGlyph position="tr" />
+            <CornerGlyph position="bl" />
+            <CornerGlyph position="br" />
+
+            {/* Mobile status sigil — header version is hidden below sm */}
+            <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:hidden">
+              <StatusSigil ready={ready} />
+            </div>
 
             <canvas
               ref={committedRef}
@@ -709,46 +801,125 @@ export default function DrawingCaptcha({
             />
 
             {strokes.length === 0 ? (
-              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-light italic tracking-wide text-white/25">
-                make your offering
-              </div>
+              <motion.div
+                className="pointer-events-none absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0.55, 0.95, 0.55] }}
+                transition={{
+                  duration: 4.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              >
+                <div
+                  className={`${councilSerif.className} text-base italic tracking-wide text-white/35 sm:text-lg`}
+                >
+                  make your offering
+                </div>
+              </motion.div>
             ) : null}
+
+            {/* Floating toolbar — overlays the canvas at the bottom-center,
+                like a brass instrument case resting on the altar */}
+            <Toolbar
+              tool={tool}
+              brushId={brushId}
+              color={color}
+              width={width}
+              opacity={opacity}
+              disabled={disabled}
+              canUndo={past.length > 0}
+              canRedo={future.length > 0}
+              canClear={strokes.length > 0}
+              popover={popover}
+              onPopover={setPopover}
+              onTool={(next) => {
+                setTool(next);
+                if (next !== "brush" && brushId === "eraser") {
+                  setBrushId(DEFAULT_BRUSH);
+                }
+              }}
+              onBrush={(id) => {
+                setBrushId(id);
+                if (tool !== "brush") setTool("brush");
+              }}
+              onColor={setColor}
+              onWidth={setWidth}
+              onOpacity={setOpacity}
+              onUndo={undo}
+              onRedo={redo}
+              onClear={clearAll}
+            />
           </div>
         </div>
-
-        {/* Toolbar */}
-        <Toolbar
-          tool={tool}
-          brushId={brushId}
-          color={color}
-          width={width}
-          opacity={opacity}
-          disabled={disabled}
-          canUndo={past.length > 0}
-          canRedo={future.length > 0}
-          canClear={strokes.length > 0}
-          popover={popover}
-          onPopover={setPopover}
-          onTool={(next) => {
-            setTool(next);
-            if (next !== "brush" && brushId === "eraser") {
-              setBrushId(DEFAULT_BRUSH);
-            }
-          }}
-          onBrush={(id) => {
-            setBrushId(id);
-            if (tool !== "brush") setTool("brush");
-          }}
-          onColor={setColor}
-          onWidth={setWidth}
-          onOpacity={setOpacity}
-          onUndo={undo}
-          onRedo={redo}
-          onClear={clearAll}
-        />
       </div>
     </div>
   );
+}
+
+function CornerGlyph({
+  position,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+}) {
+  const placement: Record<typeof position, string> = {
+    tl: "left-2 top-2",
+    tr: "right-2 top-2",
+    bl: "left-2 bottom-2",
+    br: "right-2 bottom-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute z-20 select-none text-[10px] leading-none text-white/20 ${placement[position]}`}
+    >
+      ✦
+    </span>
+  );
+}
+
+function StatusSigil({ ready }: { ready: boolean }) {
+  return (
+    <div
+      className={`${councilSerif.className} flex items-center gap-2 rounded-full border px-3 py-1 text-xs italic backdrop-blur-md transition-colors duration-500 ${
+        ready
+          ? "border-accent-orange/30 bg-accent-orange/10 text-orange-100/90"
+          : "border-white/[0.08] bg-black/45 text-white/50"
+      }`}
+      style={{ fontWeight: 400 }}
+    >
+      <span className="relative flex h-1.5 w-1.5">
+        {ready ? (
+          <span className="absolute inset-0 animate-ping rounded-full bg-accent-orange/60" />
+        ) : null}
+        <span
+          className={`relative inline-block h-1.5 w-1.5 rounded-full ${
+            ready ? "bg-accent-orange" : "bg-white/35"
+          }`}
+        />
+      </span>
+      <span>{ready ? "ready to be judged" : "awaiting offering"}</span>
+    </div>
+  );
+}
+
+function romanize(value: number): string {
+  const numerals: [number, string][] = [
+    [10, "x"],
+    [9, "ix"],
+    [5, "v"],
+    [4, "iv"],
+    [1, "i"],
+  ];
+  let result = "";
+  let remaining = value;
+  for (const [n, glyph] of numerals) {
+    while (remaining >= n) {
+      result += glyph;
+      remaining -= n;
+    }
+  }
+  return result || "i";
 }
 
 // ── Toolbar ─────────────────────────────────────────────────────────────────
@@ -801,19 +972,20 @@ function Toolbar({
   };
 
   return (
-    <div className="relative shrink-0 border-t border-white/[0.06] bg-black/40 px-2 py-2 backdrop-blur-md sm:px-3">
-      {/* Click-catcher: closes popover when tapping the toolbar background */}
-      {popover ? (
-        <button
-          type="button"
-          aria-label="close panel"
-          onClick={() => onPopover(null)}
-          className="absolute inset-0 z-0 cursor-default"
-          tabIndex={-1}
-        />
-      ) : null}
+    <div className="absolute inset-x-2 bottom-2 z-30 flex justify-center sm:bottom-3">
+      <div className="relative max-w-full overflow-visible rounded-full border border-white/[0.08] bg-black/65 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        {/* Click-catcher: closes popover when tapping the toolbar background */}
+        {popover ? (
+          <button
+            type="button"
+            aria-label="close panel"
+            onClick={() => onPopover(null)}
+            className="absolute inset-0 z-0 cursor-default rounded-full"
+            tabIndex={-1}
+          />
+        ) : null}
 
-      <div className="relative z-10 flex items-center gap-1.5 overflow-x-auto sm:justify-center sm:gap-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative z-10 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
         <ToolGroup>
           {TOOL_MODES.map((mode) => (
             <IconBtn
@@ -910,49 +1082,48 @@ function Toolbar({
             <TrashIcon />
           </IconBtn>
         </ToolGroup>
-      </div>
+        </div>
 
-      {/* Popovers — rendered above the toolbar, anchored to the relevant button */}
-      <AnimatePresence>
-        {popover === "brush" ? (
-          <PopoverShell key="brush-pop" align="center">
-            <BrushPanel
-              brushId={brushId}
-              color={color}
-              width={width}
-              onSelect={(id) => {
-                onBrush(id);
-              }}
-            />
-          </PopoverShell>
-        ) : null}
-        {popover === "color" ? (
-          <PopoverShell key="color-pop" align="center">
-            <ColorPanel color={color} onSelect={onColor} />
-          </PopoverShell>
-        ) : null}
-        {popover === "size" ? (
-          <PopoverShell key="size-pop" align="center">
-            <SizePanel
-              width={width}
-              opacity={opacity}
-              brushId={brushId}
-              color={color}
-              onWidth={onWidth}
-              onOpacity={onOpacity}
-            />
-          </PopoverShell>
-        ) : null}
-      </AnimatePresence>
+        {/* Popovers — rendered above the pill, anchored to its center */}
+        <AnimatePresence>
+          {popover === "brush" ? (
+            <PopoverShell key="brush-pop">
+              <BrushPanel
+                brushId={brushId}
+                color={color}
+                width={width}
+                onSelect={(id) => {
+                  onBrush(id);
+                }}
+              />
+            </PopoverShell>
+          ) : null}
+          {popover === "color" ? (
+            <PopoverShell key="color-pop">
+              <ColorPanel color={color} onSelect={onColor} />
+            </PopoverShell>
+          ) : null}
+          {popover === "size" ? (
+            <PopoverShell key="size-pop">
+              <SizePanel
+                width={width}
+                opacity={opacity}
+                brushId={brushId}
+                color={color}
+                onWidth={onWidth}
+                onOpacity={onOpacity}
+              />
+            </PopoverShell>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
 
 function ToolGroup({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-white/[0.05] bg-white/[0.015] p-1">
-      {children}
-    </div>
+    <div className="flex shrink-0 items-center gap-0.5">{children}</div>
   );
 }
 
@@ -960,7 +1131,7 @@ function Divider() {
   return (
     <span
       aria-hidden
-      className="hidden h-6 w-px shrink-0 bg-white/[0.06] sm:block"
+      className="mx-0.5 h-5 w-px shrink-0 bg-white/[0.08] sm:mx-1"
     />
   );
 }
@@ -983,24 +1154,24 @@ function Caret() {
   );
 }
 
-function PopoverShell({
-  align,
-  children,
-}: {
-  align: "center" | "left";
-  children: React.ReactNode;
-}) {
+function PopoverShell({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 6, scale: 0.97 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className={`absolute bottom-[calc(100%+8px)] z-30 ${
-        align === "center" ? "left-1/2 -translate-x-1/2" : "left-3"
-      }`}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      className="absolute bottom-[calc(100%+10px)] left-1/2 z-30 -translate-x-1/2"
     >
-      <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/85 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-black/80 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-2xl">
+        {/* Inner ember ring — ties popovers to the editor's accent */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-2xl"
+          style={{
+            boxShadow: "inset 0 0 0 1px rgba(255,107,61,0.06)",
+          }}
+        />
         {children}
       </div>
     </motion.div>
@@ -1230,12 +1401,12 @@ function IconBtn({
       title={shortcut ? `${label} (${shortcut})` : label}
       aria-label={label}
       aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150 active:scale-90 disabled:opacity-30 ${
+      className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 active:scale-90 disabled:opacity-30 ${
         active
-          ? "bg-accent-orange/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,107,61,0.35)]"
+          ? "bg-accent-orange/[0.14] text-white shadow-[inset_0_0_0_1px_rgba(255,107,61,0.4),0_0_12px_rgba(255,107,61,0.2)]"
           : danger
             ? "text-white/55 hover:bg-rose-400/10 hover:text-rose-100/90"
-            : "text-white/55 hover:bg-white/[0.06] hover:text-white/90"
+            : "text-white/60 hover:bg-white/[0.08] hover:text-white/95"
       }`}
     >
       {children}
@@ -1264,10 +1435,10 @@ function PopoverButton({
       title={label}
       aria-label={label}
       aria-pressed={open}
-      className={`flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors duration-150 active:scale-95 disabled:opacity-30 ${
+      className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors duration-150 active:scale-95 disabled:opacity-30 ${
         open
-          ? "bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
-          : "text-white/65 hover:bg-white/[0.06] hover:text-white/95"
+          ? "bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+          : "text-white/70 hover:bg-white/[0.08] hover:text-white/95"
       }`}
     >
       {children}
@@ -1297,25 +1468,6 @@ function HeaderIcon({
     >
       {children}
     </button>
-  );
-}
-
-function ReadyPill({ ready }: { ready: boolean }) {
-  return (
-    <span
-      className={`mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-light italic tracking-wide transition-colors sm:inline-flex ${
-        ready
-          ? "border-emerald-300/25 bg-emerald-300/[0.06] text-emerald-100/85"
-          : "border-white/[0.06] bg-white/[0.02] text-white/40"
-      }`}
-    >
-      <span
-        className={`block h-1.5 w-1.5 rounded-full ${
-          ready ? "bg-emerald-300" : "bg-white/30"
-        }`}
-      />
-      {ready ? "ready to be judged" : "awaiting offering"}
-    </span>
   );
 }
 

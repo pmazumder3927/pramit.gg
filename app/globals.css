@@ -268,13 +268,29 @@
   .float {
     animation: float 6s ease-in-out infinite;
   }
-  
+
   @keyframes float {
     0%, 100% {
       transform: translateY(0px);
     }
     50% {
       transform: translateY(-10px);
+    }
+  }
+
+  /* Collage marquee — seamless infinite scroll for the contributor river */
+  @keyframes collage-marquee {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-50%, 0, 0); }
+  }
+
+  .animate-collage-marquee {
+    animation: collage-marquee 140s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-collage-marquee {
+      animation: none;
     }
   }
   
