@@ -1,6 +1,12 @@
 import OpenAI from "openai";
+import { toFile } from "openai/uploads";
+import sharp from "sharp";
 
-import { type DrawingStroke } from "@/app/lib/confessional-captcha";
+import {
+  DRAWING_CANVAS_HEIGHT,
+  DRAWING_CANVAS_WIDTH,
+  type DrawingStroke,
+} from "@/app/lib/confessional-captcha";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BANNER_BUCKET = "images";
@@ -8,6 +14,10 @@ const BANNER_PATH_PREFIX = "banners";
 const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 const DEFAULT_BANNER_SIZE = "1536x1024";
 const DEFAULT_BANNER_QUALITY = "medium";
+
+// Cap how many sketches we feed into the reference grid; gpt-image-2 doesn't
+// need every last one, and the input image gets large fast.
+const MAX_REFERENCE_SKETCHES = 36;
 
 export type SketchRecord = {
   id: string;
@@ -38,16 +48,24 @@ export async function generateHomepageBanner(
     throw new Error("No sketches available to build a banner from.");
   }
 
+  const referencePng = await composeReferenceGrid(sketches);
   const promptText = buildBannerPrompt(sketches);
 
   const client = new OpenAI({ apiKey });
 
-  // Text-only generation: passing the sketches as a reference image biased the
-  // model toward retracing the input strokes. Without a reference, gpt-image-2
-  // has to actually reinterpret each named subject as a celestial element.
-  const response = await client.images.generate(
+  const referenceFile = await toFile(referencePng, "sketches.png", {
+    type: "image/png",
+  });
+
+  // images.edit gives us per-stroke fidelity — the model can attend to each
+  // contributor's actual wobble. The prompt locks the transformation to a
+  // single move (strokes → glowing constellation lines + star-points) so the
+  // result remains tied to the originals rather than drifting into generic
+  // celestial scenery.
+  const response = await client.images.edit(
     {
       model: process.env.OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL,
+      image: referenceFile,
       prompt: promptText,
       size: (process.env.OPENAI_IMAGE_SIZE?.trim() ||
         DEFAULT_BANNER_SIZE) as "1536x1024",
@@ -134,40 +152,118 @@ async function fetchSketches(
   return (data ?? []) as SketchRecord[];
 }
 
-function buildBannerPrompt(sketches: SketchRecord[]) {
-  const subjects = Array.from(
-    new Set(
-      sketches
-        .map((s) => s.prompt?.trim())
-        .filter((p): p is string => Boolean(p && p.length > 0)),
-    ),
-  ).slice(0, 18);
-
-  const subjectLine =
-    subjects.length > 0
-      ? `Subjects to reinterpret (one per visitor, list may include duplicates of category): ${subjects.join("; ")}.`
-      : "A small set of arbitrary subjects drawn by site visitors.";
-
-  // This image is screen-blended at low opacity into a procedural pixel-art
-  // starfield (the existing AuroraBackground canvas — stars, constellations,
-  // distant terrain silhouettes, drifting satellites). Pure black goes
-  // transparent under "screen", so only the bright pixels survive. The model's
-  // real job is to TRANSLATE each rough sketch into the visual language of
-  // that sky: a constellation of stars+lines, a tiny silhouette on the
-  // horizon, or a faint orbital drifter. Don't return the line drawings.
+function buildBannerPrompt(_sketches: SketchRecord[]) {
+  // The reference image carries every contributor's actual hand. The model's
+  // job is ONE thing: convert each scribble into a glowing constellation by
+  // (1) replacing stroke endpoints and curve corners with bright star-points
+  // and (2) running a thin glowing hairline along the path of the stroke
+  // itself — so the contributor's wobble, gesture, and composition survive
+  // intact. The point is to honor the originals, not to "fix" them or replace
+  // them with generic celestial scenery.
   return [
-    "Generate a wide cinematic star chart for a late-night personal website's procedural sky background.",
-    subjectLine,
-    "Each subject is something a different visitor was prompted to draw. Reinterpret each one as a polished celestial element — do NOT render any of them as doodles, sketches, hand-drawings, or wobbly lines.",
-    "For each subject, choose ONE of these treatments and execute it cleanly:",
-    "(a) Constellation: place 4–10 small bright star-points (1–2px white dots, occasionally warm orange #ff6b3d or indigo #7c77c6) in a configuration whose connecting hairline (extremely faint, around 8–15% opacity) traces the silhouette of the subject. The stars are the focus; the connecting line is barely visible.",
-    "(b) Horizon silhouette: for grounded or architectural subjects, render a tiny crisp pixel-edge silhouette sitting on the very bottom edge of the frame, in deep slate (#1a1b22) backlit by a single accent pixel.",
-    "(c) Drifter: a small pixel-art sprite (12–24px) of the subject — flat single-color, no shading, anchored mid-sky.",
-    "Mix the three treatments across the subjects so the scene reads as a coherent night sky, not as a single repeated motif. Most subjects should be (a). Reserve (b) for the bottom 10% of the canvas only.",
-    "Background: pure #000000 across the entire canvas. No gradients, no haze, no atmosphere, no textures.",
-    "Density: SPARSE. Vast negative space between elements. The subjects are small relative to the frame; the chart breathes. No clusters, no overlaps, no grid arrangement — scatter them organically across a wide horizontal panorama.",
-    "Palette: predominantly soft off-white (#e8e8ea) star-points and hairlines, with selective accents in muted warm orange (#ff6b3d) and indigo (#7c77c6). No other colors.",
-    "Style reference: think NASA-style star chart crossed with a minimalist pixel-art space sim. Quiet, precise, intentional. Apple-restrained.",
-    "Hard rules: background MUST be pure #000000 (will be screen-blended away). No text, no letters, no numerals, no labels, no signatures, no watermark, no frame, no border, no panel grid, no caption. No watercolor, no painterly brushwork, no glow halos, no lens flares, no anime, no 3D rendering, no photo-real elements, no full color illustrations. The output must read as scattered tiny luminous marks on a void, NOT as a doodle, NOT as a re-drawing of the input sketches.",
+    "TASK: Transform the reference grid of finger-drawn sketches into a single wide cinematic star chart.",
+    "Each cell of the reference contains one rough sketch by a different site visitor. Treat the SET of sketches as the source material for a unified constellation map.",
+    "TRANSFORMATION (apply consistently to every sketch):",
+    "1. Trace the EXACT path of every original stroke — every curve, every wobble, every imperfection. Do not smooth, simplify, straighten, regularize, or beautify the lines. The wobble is the soul of the contribution; the contributor's hand must remain visible.",
+    "2. Render each traced stroke as an extremely thin (1px) glowing hairline in soft off-white (#e8e8ea), with the line itself at low brightness (~25% intensity).",
+    "3. Place a small bright star-point (a 2–3px luminous dot) at every stroke endpoint, every sharp corner, and every notable inflection along the curve. The stars are the eye-catching element; the hairline between them is barely visible.",
+    "4. A small minority of star-points (around 1 in 8) may be in muted warm orange (#ff6b3d) or indigo (#7c77c6); the rest are soft off-white. Keep the palette restrained.",
+    "LAYOUT: rearrange the sketches across a wide horizontal panorama as if scattered organically across a night sky. Do NOT preserve the input grid — break the grid, vary the scale of each constellation modestly, leave large negative space between them. The panorama should breathe; subjects must not overlap.",
+    "BACKGROUND: pure #000000 across the entire canvas. No stars beyond the constellation points. No gradients, no haze, no atmosphere, no textures, no nebulae, no Milky Way.",
+    "WHAT THIS IMAGE IS: a star chart whose constellations were drawn by anonymous visitors. The viewer should be able to recognize 'oh, someone drew a cat' and also 'oh, someone drew a fishbone' from the constellation outlines — because those outlines literally are the strokes the contributors made. Do NOT replace the contributor's drawing with a polished or canonical version of the subject.",
+    "HARD RULES: background MUST be pure #000000 (will be screen-blended away). Preserve every original stroke's path. Do not add new strokes the contributor didn't draw. Do not add subjects, decorations, frames, panels, captions, or any text/letters/numerals/labels/watermarks. No watercolor, no painterly brushwork, no glow halos around large areas, no lens flares, no anime, no 3D rendering, no photo-real elements, no shading or fills.",
   ].join(" ");
+}
+
+async function composeReferenceGrid(
+  sketches: SketchRecord[],
+): Promise<Buffer> {
+  const sample = sketches.slice(0, MAX_REFERENCE_SKETCHES);
+  const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(sample.length))));
+  const rows = Math.ceil(sample.length / cols);
+
+  const cellWidth = 320;
+  const cellHeight = Math.round(
+    (cellWidth * DRAWING_CANVAS_HEIGHT) / DRAWING_CANVAS_WIDTH,
+  );
+  const padding = 16;
+
+  const canvasWidth = cols * cellWidth + (cols + 1) * padding;
+  const canvasHeight = rows * cellHeight + (rows + 1) * padding;
+
+  const cellSvgs = await Promise.all(
+    sample.map((sketch) =>
+      sharp(Buffer.from(strokesToSvg(sketch.strokes)))
+        .resize(cellWidth, cellHeight, { fit: "fill" })
+        .png()
+        .toBuffer(),
+    ),
+  );
+
+  const composites = cellSvgs.map((buffer, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      input: buffer,
+      left: padding + col * (cellWidth + padding),
+      top: padding + row * (cellHeight + padding),
+    };
+  });
+
+  return sharp({
+    create: {
+      width: canvasWidth,
+      height: canvasHeight,
+      channels: 3,
+      background: { r: 0, g: 0, b: 0 },
+    },
+  })
+    .composite(composites)
+    .png()
+    .toBuffer();
+}
+
+function strokesToSvg(strokes: DrawingStroke[]) {
+  const paths = strokes
+    .map((stroke) => {
+      const points = Array.isArray(stroke?.points) ? stroke.points : [];
+      if (points.length === 0) {
+        return "";
+      }
+
+      const color = sanitizeColor(stroke.color) ?? "#f5f5f5";
+      const width = sanitizeWidth(stroke.width) ?? 5;
+
+      if (points.length === 1) {
+        const p = points[0];
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}"/>`;
+      }
+
+      const d = points
+        .map((point, index) => {
+          const command = index === 0 ? "M" : "L";
+          return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+        })
+        .join(" ");
+
+      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${DRAWING_CANVAS_WIDTH}" height="${DRAWING_CANVAS_HEIGHT}" viewBox="0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}">
+  <rect width="100%" height="100%" fill="#000000"/>
+  ${paths}
+</svg>`;
+}
+
+function sanitizeColor(value: unknown) {
+  if (typeof value !== "string") return null;
+  return /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : null;
+}
+
+function sanitizeWidth(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.min(20, Math.max(1, value));
 }
