@@ -163,6 +163,7 @@ export default function ConfessionalBooth() {
                       : "judging"
                 }
                 message={verdictMessage ?? undefined}
+                strokes={captchaPayload?.strokes ?? []}
               />
             </motion.div>
           ) : phase === "received" ? (
