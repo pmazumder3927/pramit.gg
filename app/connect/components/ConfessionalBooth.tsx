@@ -208,9 +208,9 @@ export default function ConfessionalBooth() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 md:p-8"
+              className="p-5 md:p-7"
             >
-              <div className="relative mb-4">
+              <div className="relative mx-auto mb-4 max-w-3xl">
                 <textarea
                   value={message}
                   onChange={handleMessageChange}
@@ -222,7 +222,7 @@ export default function ConfessionalBooth() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-white/30 text-xs mb-6">
+              <div className="mx-auto mb-6 flex max-w-3xl items-center gap-2 text-xs text-white/30">
                 <svg
                   className="w-3.5 h-3.5"
                   fill="none"
@@ -252,7 +252,7 @@ export default function ConfessionalBooth() {
               </div>
 
               {submitError ? (
-                <div className="mb-6 rounded-xl border border-rose-400/20 bg-rose-500/5 px-4 py-3 text-sm font-light text-rose-100/80">
+                <div className="mx-auto mb-6 max-w-3xl rounded-xl border border-rose-400/20 bg-rose-500/5 px-4 py-3 text-sm font-light text-rose-100/80">
                   {submitError}
                 </div>
               ) : null}
@@ -260,7 +260,7 @@ export default function ConfessionalBooth() {
               <motion.button
                 onClick={submitMessage}
                 disabled={!message.trim() || isBusy || !captchaReady}
-                className="w-full py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/70 text-sm font-light hover:bg-white/[0.08] hover:text-white/90 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="mx-auto block w-full max-w-3xl py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/70 text-sm font-light hover:bg-white/[0.08] hover:text-white/90 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
                 whileHover={{
                   scale: message.trim() && captchaReady && !isBusy ? 1.01 : 1,
                 }}

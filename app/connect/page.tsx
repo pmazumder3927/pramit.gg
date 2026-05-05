@@ -304,7 +304,7 @@ END:VCARD`;
           transition={{ duration: 0.6, delay: 0.4 }}
           className="pb-16"
         >
-          <div className="max-w-3xl mx-auto px-6 md:px-8">
+          <div className="max-w-5xl mx-auto px-6 md:px-8">
             <ConfessionalBooth />
           </div>
         </motion.section>

@@ -7,11 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { AnimatePresence, motion } from "motion/react";
 
 import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
-  DRAWING_MAX_LEVEL,
+  DRAWING_MIN_TOTAL_LENGTH,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
   evaluateDrawing,
@@ -41,17 +42,18 @@ type CaptchaResponse = {
 };
 
 type ToolMode = "brush" | "line" | "rect" | "ellipse";
+type PopoverId = "brush" | "color" | "size" | null;
 
 const COLOR_PRESETS = [
   "#f5f5f5",
   "#0c0816",
-  "#f8a4c8",
+  "#ff8f6b",
   "#ffd36d",
   "#b7ffca",
   "#b9ddff",
   "#d0c0ff",
   "#9df4f2",
-  "#ff8f6b",
+  "#f8a4c8",
   "#a87bf2",
 ];
 
@@ -68,22 +70,32 @@ const SNAPSHOT_DEBOUNCE_MS = 700;
 
 const BRUSH_LABELS: Record<BrushId, string> = {
   pen: "pen",
-  fineliner: "fine",
+  fineliner: "fineliner",
   pencil: "pencil",
   marker: "marker",
   brush: "brush",
-  charcoal: "char",
+  charcoal: "charcoal",
   watercolor: "wash",
   spray: "spray",
   eraser: "eraser",
 };
+
+const TOOL_MODES: ToolMode[] = ["brush", "line", "rect", "ellipse"];
+const TOOL_LABELS: Record<ToolMode, string> = {
+  brush: "freehand",
+  line: "line",
+  rect: "rectangle",
+  ellipse: "ellipse",
+};
+
+const CANVAS_BACKGROUND = "#0a0a0a";
+const CANVAS_PREVIEW_BG = "#0a0a0a";
 
 export default function DrawingCaptcha({
   disabled = false,
   refreshKey = 0,
   onChange,
 }: DrawingCaptchaProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const liveRef = useRef<HTMLCanvasElement | null>(null);
@@ -98,16 +110,11 @@ export default function DrawingCaptcha({
   const [past, setPast] = useState<DrawingStroke[][]>([]);
   const [future, setFuture] = useState<DrawingStroke[][]>([]);
 
-  // Mirror to a ref so callbacks (resize observer, rAF) read the latest
-  // strokes without rebuilding their closures.
   const strokesRef = useRef<DrawingStroke[]>(strokes);
   useEffect(() => {
     strokesRef.current = strokes;
   }, [strokes]);
 
-  // Stash onChange in a ref so parent-side inline lambdas don't re-fire the
-  // payload effect every render — that loop would tank performance even
-  // before the user touches the canvas.
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -122,9 +129,8 @@ export default function DrawingCaptcha({
 
   // UI state.
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [popover, setPopover] = useState<PopoverId>(null);
 
-  // Imperative drawing state — kept in refs so pointer-moves don't
-  // trigger React re-renders.
   const drawingRef = useRef<{
     pointerId: number;
     startTime: number;
@@ -171,7 +177,6 @@ export default function DrawingCaptcha({
     }
   }, []);
 
-  // Reset on a new challenge / parent-triggered refresh.
   useEffect(() => {
     setStrokes([]);
     setPast([]);
@@ -182,9 +187,6 @@ export default function DrawingCaptcha({
     void loadChallenge();
   }, [loadChallenge, refreshKey]);
 
-  // Resize handler — independent from strokes so committing a new stroke
-  // doesn't cause a full canvas repaint. Only redoes the committed paint
-  // when the DPR-scaled pixel dims actually change.
   useEffect(() => {
     function resize() {
       const wrapper = wrapperRef.current;
@@ -234,30 +236,23 @@ export default function DrawingCaptcha({
     return () => observer.disconnect();
   }, []);
 
-  // When fullscreen toggles or the wrapper resizes, kick the resize routine
-  // by triggering a layout read on next frame.
+  // Bump the resize observer when fullscreen toggles by reading layout
+  // on the next frame.
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
       const wrapper = wrapperRef.current;
       if (!wrapper) return;
-      // Force ResizeObserver to fire by reading then writing a noop style
-      // — simply triggering a new measurement is enough.
       wrapper.getBoundingClientRect();
     });
     return () => window.cancelAnimationFrame(id);
   }, [isFullscreen]);
 
-  // Surface readiness to the parent on every stroke change. The snapshot is
-  // generated lazily AFTER a quiet period, so fast scribbling doesn't pay
-  // the toDataURL cost on every stroke.
   useEffect(() => {
     if (!ready || !challenge) {
       onChangeRef.current(null, false);
       return;
     }
 
-    // Send a quick payload without snapshot so the parent's "ready" gate
-    // updates immediately. Snapshot follows after the debounce.
     onChangeRef.current({ token, strokes }, true);
 
     let cancelled = false;
@@ -276,6 +271,7 @@ export default function DrawingCaptcha({
 
   const beginStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled || !liveRef.current) return;
+    if (popover) setPopover(null);
     const point = canvasPoint(event, liveRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -347,8 +343,6 @@ export default function DrawingCaptcha({
     clearLiveCanvas();
   };
 
-  // rAF-batched live paint. Multiple pointer-move events between frames
-  // collapse into a single redraw.
   function queueLivePaint() {
     const drawing = drawingRef.current;
     if (!drawing || drawing.rafQueued) return;
@@ -471,30 +465,34 @@ export default function DrawingCaptcha({
     if (ctx) renderScene(ctx, nextStrokes);
   }
 
-  const undo = () => {
-    if (past.length === 0) return;
-    const last = past[past.length - 1];
-    setFuture((f) => [...f, strokes]);
-    setStrokes(last);
-    setPast((p) => p.slice(0, -1));
-    repaintCommitted(last);
-  };
+  const undo = useCallback(() => {
+    setPast((prevPast) => {
+      if (prevPast.length === 0) return prevPast;
+      const last = prevPast[prevPast.length - 1];
+      setFuture((f) => [...f, strokesRef.current]);
+      setStrokes(last);
+      repaintCommitted(last);
+      return prevPast.slice(0, -1);
+    });
+  }, []);
 
-  const redo = () => {
-    if (future.length === 0) return;
-    const next = future[future.length - 1];
-    setPast((p) => [...p, strokes]);
-    setStrokes(next);
-    setFuture((f) => f.slice(0, -1));
-    repaintCommitted(next);
-  };
+  const redo = useCallback(() => {
+    setFuture((prevFuture) => {
+      if (prevFuture.length === 0) return prevFuture;
+      const next = prevFuture[prevFuture.length - 1];
+      setPast((p) => [...p, strokesRef.current]);
+      setStrokes(next);
+      repaintCommitted(next);
+      return prevFuture.slice(0, -1);
+    });
+  }, []);
 
-  const clearAll = () => {
-    if (strokes.length === 0) return;
-    pushHistory(strokes);
+  const clearAll = useCallback(() => {
+    if (strokesRef.current.length === 0) return;
+    pushHistory(strokesRef.current);
     setStrokes([]);
     repaintCommitted([]);
-  };
+  }, []);
 
   const reload = () => {
     setStrokes([]);
@@ -509,15 +507,20 @@ export default function DrawingCaptcha({
 
   const toggleFullscreen = () => setIsFullscreen((prev) => !prev);
 
-  // Esc exits fullscreen.
+  // Esc closes popover or exits fullscreen.
   useEffect(() => {
-    if (!isFullscreen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsFullscreen(false);
+      if (event.key === "Escape") {
+        if (popover) {
+          setPopover(null);
+          return;
+        }
+        if (isFullscreen) setIsFullscreen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isFullscreen]);
+  }, [isFullscreen, popover]);
 
   // Lock body scroll while fullscreen.
   useEffect(() => {
@@ -529,6 +532,63 @@ export default function DrawingCaptcha({
     };
   }, [isFullscreen]);
 
+  // Keyboard shortcuts (desktop). Skip if typing in a real input.
+  useEffect(() => {
+    if (disabled) return;
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const meta = event.metaKey || event.ctrlKey;
+      if (meta && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (event.key === "y" && meta) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.altKey || event.metaKey || event.ctrlKey) return;
+      switch (event.key.toLowerCase()) {
+        case "b":
+          setTool("brush");
+          break;
+        case "l":
+          setTool("line");
+          break;
+        case "r":
+          setTool("rect");
+          break;
+        case "o":
+          setTool("ellipse");
+          break;
+        case "e":
+          setBrushId("eraser");
+          setTool("brush");
+          break;
+        case "[":
+          setWidth((w) => Math.max(MIN_WIDTH, w - 1));
+          break;
+        case "]":
+          setWidth((w) => Math.min(MAX_WIDTH, w + 1));
+          break;
+        default:
+          return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [disabled, undo, redo]);
+
   // ── UI ───────────────────────────────────────────────────────────────────
 
   const cursorStyle = useMemo(() => {
@@ -539,8 +599,10 @@ export default function DrawingCaptcha({
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-        <p className="text-sm font-light text-white/40">summoning the council...</p>
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <p className="text-sm font-light italic text-white/40">
+          summoning the council...
+        </p>
       </div>
     );
   }
@@ -563,293 +625,725 @@ export default function DrawingCaptcha({
   }
 
   const containerClass = isFullscreen
-    ? "fixed inset-0 z-[100] flex flex-col bg-[#06030c] p-3 sm:p-4"
-    : "rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 md:p-4";
+    ? "fixed inset-0 z-[100] flex min-h-0 flex-col bg-black/95 p-3 text-white backdrop-blur-xl sm:p-6"
+    : "text-white";
 
   return (
-    <div ref={containerRef} className={containerClass}>
-      {/* Header strip */}
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-white/40"
-              title={`global trial #${challenge.globalIndex + 1}`}
-            >
-              tier {challenge.level}/{DRAWING_MAX_LEVEL}
-            </span>
-            <span className="truncate text-sm font-light text-white/55">
-              draw <span className="text-white/95">{challenge.drawingPrompt}</span>
-            </span>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors duration-150 hover:border-white/25 hover:text-white/90"
-            title={isFullscreen ? "exit fullscreen" : "fullscreen"}
-            aria-label={isFullscreen ? "exit fullscreen" : "enter fullscreen"}
-          >
-            {isFullscreen ? <ShrinkIcon /> : <ExpandIcon />}
-          </button>
-          <button
-            type="button"
-            onClick={reload}
-            disabled={disabled}
-            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-light text-white/55 transition-colors duration-150 hover:border-white/25 hover:text-white/90 disabled:opacity-40"
-          >
-            new prompt
-          </button>
-        </div>
-      </div>
-
-      {/* Canvas */}
+    <div className={containerClass}>
       <div
-        ref={wrapperRef}
-        className={`relative w-full select-none overflow-hidden rounded-xl border border-white/10 shadow-[inset_0_0_60px_rgba(0,0,0,0.4)] ${
-          isFullscreen ? "min-h-0 flex-1" : ""
-        }`}
-        style={{
-          aspectRatio: isFullscreen
-            ? undefined
-            : `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}`,
-          backgroundColor: "#0c0816",
-          backgroundImage:
-            "linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }}
+        className={
+          isFullscreen
+            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
+            : "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]"
+        }
       >
-        <canvas
-          ref={committedRef}
-          className="absolute inset-0 h-full w-full"
-          width={DRAWING_CANVAS_WIDTH}
-          height={DRAWING_CANVAS_HEIGHT}
-        />
-        <canvas
-          ref={liveRef}
-          className="absolute inset-0 h-full w-full touch-none"
-          width={DRAWING_CANVAS_WIDTH}
-          height={DRAWING_CANVAS_HEIGHT}
-          onPointerDown={beginStroke}
-          onPointerMove={continueStroke}
-          onPointerUp={endStroke}
-          onPointerLeave={cancelStroke}
-          onPointerCancel={cancelStroke}
-          onContextMenu={(event) => event.preventDefault()}
-          style={{ cursor: cursorStyle, touchAction: "none" }}
-        />
-      </div>
-
-      {/* Toolbar */}
-      <div className="mt-2 space-y-1.5">
-        {/* Brush strip — horizontal scroll on narrow screens */}
-        <div
-          className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-          style={{ scrollbarWidth: "thin" }}
-        >
-          {BRUSH_ORDER.map((id) => {
-            const selected = id === brushId;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setBrushId(id);
-                  if (tool !== "brush") setTool("brush");
-                }}
-                disabled={disabled}
-                aria-pressed={selected}
-                title={BRUSH_LABELS[id]}
-                className={`group flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 transition-colors duration-150 active:scale-95 disabled:opacity-40 ${
-                  selected
-                    ? "border-white/40 bg-white/[0.08]"
-                    : "border-white/10 hover:border-white/25"
-                }`}
-              >
-                <BrushPreview brush={id} color={color} width={width} />
-                <span
-                  className={`text-[9px] uppercase tracking-[0.18em] ${
-                    selected ? "text-white" : "text-white/55"
-                  }`}
-                >
-                  {BRUSH_LABELS[id]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sliders + shapes + actions */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex min-w-[150px] flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5">
-            <span className="text-[9px] uppercase tracking-[0.18em] text-white/40">
-              size
+        {/* Header — the council's request */}
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 flex-col leading-snug">
+            <span className="text-[11px] font-light italic text-white/35">
+              the council implores you to draw
             </span>
-            <input
-              type="range"
-              min={MIN_WIDTH}
-              max={MAX_WIDTH}
-              step={1}
-              value={width}
-              onChange={(e) => setWidth(Number(e.target.value))}
-              disabled={disabled}
-              className="flex-1 accent-white/80"
-              aria-label="brush size"
-            />
-            <span className="w-7 text-right text-[10px] tabular-nums text-white/55">
-              {width}
+            <span className="truncate text-base font-light text-white/90 sm:text-lg">
+              {challenge.drawingPrompt}
             </span>
           </div>
 
-          <div className="flex min-w-[150px] flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5">
-            <span className="text-[9px] uppercase tracking-[0.18em] text-white/40">
-              flow
-            </span>
-            <input
-              type="range"
-              min={5}
-              max={100}
-              step={1}
-              value={Math.round(opacity * 100)}
-              onChange={(e) =>
-                setOpacity(Math.max(0.05, Number(e.target.value) / 100))
-              }
-              disabled={disabled || brushId === "eraser"}
-              className="flex-1 accent-white/80 disabled:opacity-40"
-              aria-label="opacity"
-            />
-            <span className="w-7 text-right text-[10px] tabular-nums text-white/55">
-              {Math.round(opacity * 100)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
-            {(["brush", "line", "rect", "ellipse"] as ToolMode[]).map((mode) => {
-              const selected = tool === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setTool(mode)}
-                  disabled={disabled}
-                  aria-pressed={selected}
-                  title={mode === "brush" ? "freehand" : mode}
-                  className={`flex h-7 w-7 items-center justify-center rounded transition-colors duration-150 ${
-                    selected
-                      ? "bg-white/[0.12] text-white"
-                      : "text-white/55 hover:text-white/90"
-                  }`}
-                >
-                  <ShapeIcon mode={mode} />
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
-            <button
-              type="button"
-              onClick={undo}
-              disabled={disabled || past.length === 0}
-              title="undo"
-              className="flex h-7 w-7 items-center justify-center rounded text-white/55 transition-colors duration-150 hover:text-white/90 disabled:opacity-30"
+          <div className="flex shrink-0 items-center gap-1 pt-0.5">
+            <ReadyPill ready={ready} />
+            <HeaderIcon
+              label={isFullscreen ? "exit fullscreen" : "enter fullscreen"}
+              onClick={toggleFullscreen}
             >
-              <UndoIcon />
-            </button>
-            <button
-              type="button"
-              onClick={redo}
-              disabled={disabled || future.length === 0}
-              title="redo"
-              className="flex h-7 w-7 items-center justify-center rounded text-white/55 transition-colors duration-150 hover:text-white/90 disabled:opacity-30"
-            >
-              <RedoIcon />
-            </button>
-            <button
-              type="button"
-              onClick={clearAll}
-              disabled={disabled || strokes.length === 0}
-              title="clear canvas"
-              className="flex h-7 w-7 items-center justify-center rounded text-white/55 transition-colors duration-150 hover:text-rose-200/90 disabled:opacity-30"
-            >
-              <TrashIcon />
-            </button>
+              {isFullscreen ? <ShrinkIcon /> : <ExpandIcon />}
+            </HeaderIcon>
+            <HeaderIcon label="new prompt" onClick={reload} disabled={disabled}>
+              <RefreshIcon />
+            </HeaderIcon>
           </div>
-        </div>
+        </header>
 
-        {/* Color row */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2 py-1.5">
-          <span className="text-[9px] uppercase tracking-[0.18em] text-white/40">
-            color
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {COLOR_PRESETS.map((preset) => {
-              const selected =
-                preset.toLowerCase() === color.toLowerCase() &&
-                brushId !== "eraser";
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setColor(preset)}
-                  disabled={disabled || brushId === "eraser"}
-                  aria-label={`color ${preset}`}
-                  className="h-6 w-6 rounded-full border transition-transform duration-150 active:scale-90 disabled:opacity-40 sm:hover:scale-110"
-                  style={{
-                    backgroundColor: preset,
-                    borderColor: selected
-                      ? "rgba(255,255,255,0.95)"
-                      : "rgba(255,255,255,0.15)",
-                    boxShadow: selected
-                      ? `0 0 0 2px rgba(255,255,255,0.15), 0 0 10px ${preset}66`
-                      : undefined,
-                  }}
-                />
-              );
-            })}
-          </div>
-          <label
-            className={`relative inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-white/15 ${
-              disabled || brushId === "eraser" ? "opacity-40" : "cursor-pointer"
-            }`}
-            title="custom color"
+        {/* Canvas stage — the offering tablet */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={wrapperRef}
+            className="relative w-full select-none overflow-hidden"
+            style={{
+              aspectRatio: isFullscreen
+                ? undefined
+                : `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}`,
+              flex: isFullscreen ? "1 1 auto" : undefined,
+              backgroundColor: CANVAS_BACKGROUND,
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0)",
+              backgroundSize: "22px 22px",
+            }}
           >
-            <span
+            {/* Subtle inner vignette so the dot grid feels like a surface */}
+            <div
               aria-hidden
-              className="absolute inset-0"
+              className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  "conic-gradient(from 180deg, #f87171, #fbbf24, #34d399, #38bdf8, #a78bfa, #f472b6, #f87171)",
+                  "radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%)",
               }}
             />
-            <span
-              aria-hidden
-              className="absolute inset-1 rounded-full"
-              style={{ backgroundColor: color }}
-            />
-            <input
-              type="color"
-              value={normalizeHex(color)}
-              onChange={(event) => setColor(event.target.value)}
-              disabled={disabled || brushId === "eraser"}
-              className="absolute inset-0 cursor-pointer opacity-0"
-              aria-label="custom color"
-            />
-          </label>
 
-          <span className="ml-auto text-[10px] font-light text-white/35">
-            {strokes.length === 0
-              ? "blank canvas"
-              : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"}`}
-          </span>
+            <canvas
+              ref={committedRef}
+              className="absolute inset-0 h-full w-full"
+              width={DRAWING_CANVAS_WIDTH}
+              height={DRAWING_CANVAS_HEIGHT}
+            />
+            <canvas
+              ref={liveRef}
+              className="absolute inset-0 h-full w-full touch-none"
+              width={DRAWING_CANVAS_WIDTH}
+              height={DRAWING_CANVAS_HEIGHT}
+              onPointerDown={beginStroke}
+              onPointerMove={continueStroke}
+              onPointerUp={endStroke}
+              onPointerLeave={cancelStroke}
+              onPointerCancel={cancelStroke}
+              onContextMenu={(event) => event.preventDefault()}
+              style={{ cursor: cursorStyle, touchAction: "none" }}
+            />
+
+            {strokes.length === 0 ? (
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-light italic tracking-wide text-white/25">
+                make your offering
+              </div>
+            ) : null}
+          </div>
         </div>
+
+        {/* Toolbar */}
+        <Toolbar
+          tool={tool}
+          brushId={brushId}
+          color={color}
+          width={width}
+          opacity={opacity}
+          disabled={disabled}
+          canUndo={past.length > 0}
+          canRedo={future.length > 0}
+          canClear={strokes.length > 0}
+          popover={popover}
+          onPopover={setPopover}
+          onTool={(next) => {
+            setTool(next);
+            if (next !== "brush" && brushId === "eraser") {
+              setBrushId(DEFAULT_BRUSH);
+            }
+          }}
+          onBrush={(id) => {
+            setBrushId(id);
+            if (tool !== "brush") setTool("brush");
+          }}
+          onColor={setColor}
+          onWidth={setWidth}
+          onOpacity={setOpacity}
+          onUndo={undo}
+          onRedo={redo}
+          onClear={clearAll}
+        />
       </div>
     </div>
   );
 }
 
-// ── Snapshot composition (debounced; called only on idle) ───────────────────
+// ── Toolbar ─────────────────────────────────────────────────────────────────
+
+type ToolbarProps = {
+  tool: ToolMode;
+  brushId: BrushId;
+  color: string;
+  width: number;
+  opacity: number;
+  disabled: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  canClear: boolean;
+  popover: PopoverId;
+  onPopover: (id: PopoverId) => void;
+  onTool: (mode: ToolMode) => void;
+  onBrush: (id: BrushId) => void;
+  onColor: (value: string) => void;
+  onWidth: (value: number) => void;
+  onOpacity: (value: number) => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onClear: () => void;
+};
+
+function Toolbar({
+  tool,
+  brushId,
+  color,
+  width,
+  opacity,
+  disabled,
+  canUndo,
+  canRedo,
+  canClear,
+  popover,
+  onPopover,
+  onTool,
+  onBrush,
+  onColor,
+  onWidth,
+  onOpacity,
+  onUndo,
+  onRedo,
+  onClear,
+}: ToolbarProps) {
+  const togglePopover = (id: Exclude<PopoverId, null>) => {
+    onPopover(popover === id ? null : id);
+  };
+
+  return (
+    <div className="relative shrink-0 border-t border-white/[0.06] bg-black/40 px-2 py-2 backdrop-blur-md sm:px-3">
+      {/* Click-catcher: closes popover when tapping the toolbar background */}
+      {popover ? (
+        <button
+          type="button"
+          aria-label="close panel"
+          onClick={() => onPopover(null)}
+          className="absolute inset-0 z-0 cursor-default"
+          tabIndex={-1}
+        />
+      ) : null}
+
+      <div className="relative z-10 flex items-center gap-1.5 overflow-x-auto sm:justify-center sm:gap-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <ToolGroup>
+          {TOOL_MODES.map((mode) => (
+            <IconBtn
+              key={mode}
+              label={TOOL_LABELS[mode]}
+              active={tool === mode && brushId !== "eraser"}
+              onClick={() => onTool(mode)}
+              disabled={disabled}
+            >
+              <ShapeIcon mode={mode} />
+            </IconBtn>
+          ))}
+        </ToolGroup>
+
+        <Divider />
+
+        <ToolGroup>
+          <PopoverButton
+            label={`brush · ${BRUSH_LABELS[brushId]}`}
+            open={popover === "brush"}
+            onClick={() => togglePopover("brush")}
+            disabled={disabled}
+          >
+            <BrushDot brushId={brushId} color={color} />
+            <span className="hidden text-[11px] font-light text-white/65 sm:inline">
+              {BRUSH_LABELS[brushId]}
+            </span>
+            <Caret />
+          </PopoverButton>
+
+          <PopoverButton
+            label="color"
+            open={popover === "color"}
+            onClick={() => togglePopover("color")}
+            disabled={disabled || brushId === "eraser"}
+          >
+            <span
+              className="block h-3.5 w-3.5 rounded-full ring-1 ring-white/10"
+              style={{
+                background:
+                  brushId === "eraser"
+                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0 2px, transparent 2px 4px)"
+                    : color,
+              }}
+            />
+            <Caret />
+          </PopoverButton>
+
+          <PopoverButton
+            label={`size ${width}px`}
+            open={popover === "size"}
+            onClick={() => togglePopover("size")}
+            disabled={disabled}
+          >
+            <span
+              className="block rounded-full bg-white/85"
+              style={{
+                width: `${Math.max(3, Math.min(width / 2, 14))}px`,
+                height: `${Math.max(3, Math.min(width / 2, 14))}px`,
+              }}
+            />
+            <span className="hidden text-[11px] tabular-nums font-light text-white/65 sm:inline">
+              {width}
+            </span>
+            <Caret />
+          </PopoverButton>
+        </ToolGroup>
+
+        <Divider />
+
+        <ToolGroup>
+          <IconBtn
+            label="undo"
+            onClick={onUndo}
+            disabled={disabled || !canUndo}
+            shortcut="⌘Z"
+          >
+            <UndoIcon />
+          </IconBtn>
+          <IconBtn
+            label="redo"
+            onClick={onRedo}
+            disabled={disabled || !canRedo}
+            shortcut="⇧⌘Z"
+          >
+            <RedoIcon />
+          </IconBtn>
+          <IconBtn
+            label="clear"
+            onClick={onClear}
+            disabled={disabled || !canClear}
+            danger
+          >
+            <TrashIcon />
+          </IconBtn>
+        </ToolGroup>
+      </div>
+
+      {/* Popovers — rendered above the toolbar, anchored to the relevant button */}
+      <AnimatePresence>
+        {popover === "brush" ? (
+          <PopoverShell key="brush-pop" align="center">
+            <BrushPanel
+              brushId={brushId}
+              color={color}
+              width={width}
+              onSelect={(id) => {
+                onBrush(id);
+              }}
+            />
+          </PopoverShell>
+        ) : null}
+        {popover === "color" ? (
+          <PopoverShell key="color-pop" align="center">
+            <ColorPanel color={color} onSelect={onColor} />
+          </PopoverShell>
+        ) : null}
+        {popover === "size" ? (
+          <PopoverShell key="size-pop" align="center">
+            <SizePanel
+              width={width}
+              opacity={opacity}
+              brushId={brushId}
+              color={color}
+              onWidth={onWidth}
+              onOpacity={onOpacity}
+            />
+          </PopoverShell>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ToolGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-white/[0.05] bg-white/[0.015] p-1">
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return (
+    <span
+      aria-hidden
+      className="hidden h-6 w-px shrink-0 bg-white/[0.06] sm:block"
+    />
+  );
+}
+
+function Caret() {
+  return (
+    <svg
+      width={9}
+      height={9}
+      viewBox="0 0 10 10"
+      className="shrink-0 text-white/35"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 4l2.5 2.5L7.5 4" />
+    </svg>
+  );
+}
+
+function PopoverShell({
+  align,
+  children,
+}: {
+  align: "center" | "left";
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 6, scale: 0.97 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      className={`absolute bottom-[calc(100%+8px)] z-30 ${
+        align === "center" ? "left-1/2 -translate-x-1/2" : "left-3"
+      }`}
+    >
+      <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/85 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Brush panel ─────────────────────────────────────────────────────────────
+
+function BrushPanel({
+  brushId,
+  color,
+  width,
+  onSelect,
+}: {
+  brushId: BrushId;
+  color: string;
+  width: number;
+  onSelect: (id: BrushId) => void;
+}) {
+  return (
+    <div className="w-[300px] p-2 sm:w-[340px]">
+      <div className="grid grid-cols-3 gap-1.5">
+        {BRUSH_ORDER.map((id) => {
+          const selected = id === brushId;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelect(id)}
+              aria-pressed={selected}
+              className={`group flex flex-col items-stretch gap-1.5 rounded-xl border px-2 py-2 text-left transition-colors duration-150 ${
+                selected
+                  ? "border-accent-orange/40 bg-accent-orange/[0.06]"
+                  : "border-white/[0.06] bg-white/[0.015] hover:border-white/15 hover:bg-white/[0.04]"
+              }`}
+            >
+              <BrushPreview brush={id} color={color} width={width} />
+              <span
+                className={`text-[10px] font-light leading-none ${
+                  selected ? "text-white/95" : "text-white/55"
+                }`}
+              >
+                {BRUSH_LABELS[id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Color panel ─────────────────────────────────────────────────────────────
+
+function ColorPanel({
+  color,
+  onSelect,
+}: {
+  color: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="w-[260px] p-3">
+      <div className="grid grid-cols-5 gap-1.5">
+        {COLOR_PRESETS.map((preset) => {
+          const selected = preset.toLowerCase() === color.toLowerCase();
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onSelect(preset)}
+              aria-label={`color ${preset}`}
+              className="relative h-9 w-full rounded-lg transition-transform duration-150 hover:scale-105 active:scale-95"
+              style={{
+                backgroundColor: preset,
+                boxShadow: selected
+                  ? `0 0 0 2px rgba(255,255,255,0.95), 0 0 14px ${preset}77`
+                  : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+              }}
+            />
+          );
+        })}
+      </div>
+      <label className="mt-2.5 flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2.5 py-2 transition-colors hover:bg-white/[0.04]">
+        <span
+          aria-hidden
+          className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md ring-1 ring-white/10"
+        >
+          <span
+            className="absolute inset-0"
+            style={{
+              background:
+                "conic-gradient(from 180deg, #f87171, #fbbf24, #34d399, #38bdf8, #a78bfa, #f472b6, #f87171)",
+            }}
+          />
+          <span
+            className="absolute inset-1 rounded"
+            style={{ backgroundColor: color }}
+          />
+        </span>
+        <span className="flex-1 text-xs font-light text-white/65">
+          custom color
+        </span>
+        <span className="text-[11px] tabular-nums text-white/35">
+          {normalizeHex(color)}
+        </span>
+        <input
+          type="color"
+          value={normalizeHex(color)}
+          onChange={(event) => onSelect(event.target.value)}
+          className="absolute h-0 w-0 opacity-0"
+          aria-label="custom color"
+        />
+      </label>
+    </div>
+  );
+}
+
+// ── Size panel ──────────────────────────────────────────────────────────────
+
+function SizePanel({
+  width,
+  opacity,
+  brushId,
+  color,
+  onWidth,
+  onOpacity,
+}: {
+  width: number;
+  opacity: number;
+  brushId: BrushId;
+  color: string;
+  onWidth: (value: number) => void;
+  onOpacity: (value: number) => void;
+}) {
+  return (
+    <div className="w-[260px] p-3">
+      <div className="mb-3 flex justify-center overflow-hidden rounded-lg border border-white/[0.05] bg-black/40 p-1.5">
+        <BrushPreview brush={brushId} color={color} width={width} large />
+      </div>
+      <SliderRow
+        label="size"
+        value={width}
+        min={MIN_WIDTH}
+        max={MAX_WIDTH}
+        unit="px"
+        onChange={onWidth}
+      />
+      <SliderRow
+        label="flow"
+        value={Math.round(opacity * 100)}
+        min={5}
+        max={100}
+        unit="%"
+        disabled={brushId === "eraser"}
+        onChange={(value) => onOpacity(Math.max(0.05, value / 100))}
+      />
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  unit,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="mt-2">
+      <div className="mb-1 flex items-center justify-between text-[11px] font-light text-white/45">
+        <span>{label}</span>
+        <span className="tabular-nums text-white/70">
+          {value}
+          {unit}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        disabled={disabled}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-white disabled:opacity-40"
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
+// ── Buttons / atoms ─────────────────────────────────────────────────────────
+
+function IconBtn({
+  label,
+  shortcut,
+  active,
+  onClick,
+  disabled,
+  danger,
+  children,
+}: {
+  label: string;
+  shortcut?: string;
+  active?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      aria-label={label}
+      aria-pressed={active}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150 active:scale-90 disabled:opacity-30 ${
+        active
+          ? "bg-accent-orange/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,107,61,0.35)]"
+          : danger
+            ? "text-white/55 hover:bg-rose-400/10 hover:text-rose-100/90"
+            : "text-white/55 hover:bg-white/[0.06] hover:text-white/90"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PopoverButton({
+  label,
+  open,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      aria-pressed={open}
+      className={`flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors duration-150 active:scale-95 disabled:opacity-30 ${
+        open
+          ? "bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
+          : "text-white/65 hover:bg-white/[0.06] hover:text-white/95"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeaderIcon({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-white/45 transition-colors duration-150 active:scale-90 hover:bg-white/[0.05] hover:text-white/85 disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ReadyPill({ ready }: { ready: boolean }) {
+  return (
+    <span
+      className={`mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-light italic tracking-wide transition-colors sm:inline-flex ${
+        ready
+          ? "border-emerald-300/25 bg-emerald-300/[0.06] text-emerald-100/85"
+          : "border-white/[0.06] bg-white/[0.02] text-white/40"
+      }`}
+    >
+      <span
+        className={`block h-1.5 w-1.5 rounded-full ${
+          ready ? "bg-emerald-300" : "bg-white/30"
+        }`}
+      />
+      {ready ? "ready to be judged" : "awaiting offering"}
+    </span>
+  );
+}
+
+function BrushDot({ brushId, color }: { brushId: BrushId; color: string }) {
+  if (brushId === "eraser") {
+    return (
+      <span
+        className="block h-3.5 w-3.5 rounded-full"
+        style={{
+          background:
+            "repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 4px)",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.18)",
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      className="block h-3.5 w-3.5 rounded-full"
+      style={{
+        backgroundColor: color,
+        boxShadow: `0 0 8px ${color}66, inset 0 0 0 1px rgba(255,255,255,0.1)`,
+      }}
+    />
+  );
+}
+
+// ── Snapshot composition ────────────────────────────────────────────────────
 
 async function composeSnapshot(
   committed: HTMLCanvasElement | null,
@@ -864,7 +1358,7 @@ async function composeSnapshot(
     out.height = h;
     const ctx = out.getContext("2d");
     if (!ctx) return undefined;
-    ctx.fillStyle = "#0c0816";
+    ctx.fillStyle = CANVAS_BACKGROUND;
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(committed, 0, 0);
     return out.toDataURL("image/png");
@@ -916,38 +1410,48 @@ function shapePoints(
   return [];
 }
 
-// ── Mini brush previews ─────────────────────────────────────────────────────
+// ── Brush preview ───────────────────────────────────────────────────────────
 
 function BrushPreview({
   brush,
   color,
   width,
+  large = false,
 }: {
   brush: BrushId;
   color: string;
   width: number;
+  large?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const W = large ? 220 : 80;
+  const H = large ? 36 : 22;
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = `${W}px`;
+    canvas.style.height = `${H}px`;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const W = canvas.width;
-    const H = canvas.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    const N = 24;
+    const N = 28;
     const points: DrawingPoint[] = [];
     for (let i = 0; i <= N; i += 1) {
       const u = i / N;
-      const x = 5 + (W - 10) * u;
+      const x = 6 + (W - 12) * u;
       const y = H / 2 + Math.sin(u * Math.PI) * (H / 4);
       const pressure = 0.4 + Math.sin(u * Math.PI) * 0.5;
-      points.push({ x, y, p: pressure, t: u * 220 });
+      points.push({ x, y, p: pressure, t: u * 240 });
     }
     const previewColor = brush === "eraser" ? "#bcbcbc" : color;
-    const previewWidth = Math.max(3, Math.min(width, 9));
+    const previewWidth = large
+      ? Math.max(3, Math.min(width, 14))
+      : Math.max(2, Math.min(width, 8));
     renderStroke(ctx, {
       points,
       brush,
@@ -957,14 +1461,13 @@ function BrushPreview({
       seed: 7,
       tool: brush === "spray" ? "spray" : undefined,
     });
-  }, [brush, color, width]);
+  }, [brush, color, width, W, H, large]);
 
   return (
     <canvas
       ref={ref}
-      width={48}
-      height={16}
-      className="block h-4 w-12 rounded bg-[#0c0816]"
+      className="block rounded"
+      style={{ width: W, height: H, backgroundColor: CANVAS_PREVIEW_BG }}
     />
   );
 }
@@ -1086,6 +1589,17 @@ function ShrinkIcon() {
       <path d="M15 4v5h5" />
       <path d="M9 20v-5H4" />
       <path d="M15 20v-5h5" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M20 6v5h-5" />
+      <path d="M4 18v-5h5" />
+      <path d="M18.4 9A7 7 0 006.6 6.6L4 9" />
+      <path d="M5.6 15a7 7 0 0011.8 2.4L20 15" />
     </svg>
   );
 }
