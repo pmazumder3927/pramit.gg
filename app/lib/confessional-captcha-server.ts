@@ -286,7 +286,7 @@ export async function verifyConfessionalCaptchaSubmission(
   if (!verdict.matches) {
     return {
       ok: false,
-      error: `The council is unconvinced — that doesn't quite read as ${challenge.drawingPrompt}.`,
+      error: `The council is unconvinced. this ${challenge.drawingPrompt} sucks`,
     };
   }
 
@@ -476,7 +476,10 @@ function decodeChallenge(token: string) {
   const provided = Buffer.from(signature);
   const expected = Buffer.from(expectedSignature);
 
-  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+  if (
+    provided.length !== expected.length ||
+    !timingSafeEqual(provided, expected)
+  ) {
     return null;
   }
 
@@ -522,8 +525,8 @@ function isSubmission(value: unknown): value is ConfessionalCaptchaSubmission {
 function isStroke(value: unknown): value is DrawingStroke {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      Array.isArray((value as Partial<DrawingStroke>).points),
+    typeof value === "object" &&
+    Array.isArray((value as Partial<DrawingStroke>).points),
   );
 }
 
