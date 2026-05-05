@@ -5,7 +5,6 @@ export const DRAWING_CANVAS_WIDTH = 480;
 export const DRAWING_CANVAS_HEIGHT = 320;
 export const DRAWING_MIN_STROKES = 1;
 export const DRAWING_MIN_TOTAL_LENGTH = 120;
-export const DRAWING_IMAGE_MAX_BYTES = 220_000;
 
 export type CaptchaGlyph = {
   id: string;
@@ -42,7 +41,6 @@ export type ConfessionalCaptchaSubmission = {
   phrase: string;
   glyphOrder: string[];
   strokes: DrawingStroke[];
-  image: string;
 };
 
 export type DrawingChecklistItem = {

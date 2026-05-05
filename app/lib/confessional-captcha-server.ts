@@ -1,12 +1,14 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 
 import OpenAI from "openai";
+import sharp from "sharp";
 
 import {
   CAPTCHA_MIN_SOLVE_MS,
   CAPTCHA_TTL_MS,
   CAPTCHA_VERSION,
-  DRAWING_IMAGE_MAX_BYTES,
+  DRAWING_CANVAS_HEIGHT,
+  DRAWING_CANVAS_WIDTH,
   type CaptchaGlyph,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
@@ -157,14 +159,17 @@ export async function verifyConfessionalCaptchaSubmission(
     };
   }
 
-  const imageCheck = validateImagePayload(submission.image);
-  if (!imageCheck.ok) {
-    return { ok: false, error: imageCheck.error };
+  let imageDataUrl: string;
+  try {
+    imageDataUrl = await renderStrokesToDataUrl(submission.strokes);
+  } catch (renderError) {
+    console.error("Drawing render error:", renderError);
+    return { ok: false, error: "Could not process the drawing. Try again." };
   }
 
   const verdict = await classifyDrawing({
     prompt: challenge.drawingPrompt,
-    imageDataUrl: submission.image,
+    imageDataUrl,
   });
 
   if (!verdict.ok) {
@@ -181,29 +186,57 @@ export async function verifyConfessionalCaptchaSubmission(
   return { ok: true, challenge, matchReason: verdict.reason };
 }
 
-type ImageValidation =
-  | { ok: true; bytes: number }
-  | { ok: false; error: string };
+async function renderStrokesToDataUrl(
+  strokes: DrawingStroke[],
+): Promise<string> {
+  const svg = strokesToSvg(strokes);
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
 
-function validateImagePayload(image: string): ImageValidation {
-  if (typeof image !== "string" || !image.startsWith("data:image/")) {
-    return { ok: false, error: "Drawing image was missing or malformed." };
-  }
+function strokesToSvg(strokes: DrawingStroke[]) {
+  const paths = strokes
+    .map((stroke) => {
+      const points = Array.isArray(stroke?.points) ? stroke.points : [];
+      if (points.length === 0) {
+        return "";
+      }
 
-  const commaIndex = image.indexOf(",");
-  if (commaIndex < 0) {
-    return { ok: false, error: "Drawing image was missing or malformed." };
-  }
+      const color = sanitizeColor(stroke.color) ?? "#f5f5f5";
+      const width = sanitizeWidth(stroke.width) ?? 5;
 
-  // base64 encoded length is ~4/3 of byte length; clamp to byte budget.
-  const base64Length = image.length - commaIndex - 1;
-  const approxBytes = Math.ceil((base64Length * 3) / 4);
+      if (points.length === 1) {
+        const p = points[0];
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}"/>`;
+      }
 
-  if (approxBytes > DRAWING_IMAGE_MAX_BYTES) {
-    return { ok: false, error: "Drawing image is too large." };
-  }
+      const d = points
+        .map((point, index) => {
+          const command = index === 0 ? "M" : "L";
+          return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+        })
+        .join(" ");
 
-  return { ok: true, bytes: approxBytes };
+      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${DRAWING_CANVAS_WIDTH}" height="${DRAWING_CANVAS_HEIGHT}" viewBox="0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}">
+  <rect width="100%" height="100%" fill="#0a0814"/>
+  ${paths}
+</svg>`;
+}
+
+function sanitizeColor(value: unknown) {
+  if (typeof value !== "string") return null;
+  return /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : null;
+}
+
+function sanitizeWidth(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.min(20, Math.max(1, value));
 }
 
 type DrawingVerdict =
@@ -237,10 +270,17 @@ async function classifyDrawing({
           {
             role: "system",
             content:
-              "You are a generous captcha verifier reviewing rough finger sketches. " +
-              "Decide whether a quick, sincere sketch reasonably depicts a target subject. " +
-              "Sketches are crude — be lenient, accept any reasonable attempt, and only reject if it is clearly a different subject, just scribbles, or essentially blank. " +
-              'Always reply with strict JSON of the form {"matches": boolean, "reason": "<one short sentence>"}.',
+              "You verify captcha sketches. The user was asked to draw a specific subject and you must decide if the sketch depicts that subject.\n\n" +
+              "Accept (matches: true) when:\n" +
+              "- The sketch is a sincere, recognizable attempt at the target subject, even if crude or stylized.\n" +
+              "- Key identifying features of the subject are present.\n\n" +
+              "Reject (matches: false) when ANY of these apply:\n" +
+              "- The drawing is blank or near-blank (a single dot, a tiny mark, almost nothing on the canvas).\n" +
+              "- The drawing is just random scribbles, lines, or noise with no recognizable subject.\n" +
+              "- The drawing depicts a different subject than the target.\n" +
+              "- You cannot identify any subject in the drawing.\n\n" +
+              "Be generous about artistic skill — these are rough finger sketches — but strict about whether the target subject is actually depicted. " +
+              'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.',
           },
           {
             role: "user",
@@ -360,8 +400,7 @@ function isSubmission(value: unknown): value is ConfessionalCaptchaSubmission {
     Array.isArray(candidate.glyphOrder) &&
     candidate.glyphOrder.every((glyphId) => typeof glyphId === "string") &&
     Array.isArray(candidate.strokes) &&
-    candidate.strokes.every(isStroke) &&
-    typeof candidate.image === "string"
+    candidate.strokes.every(isStroke)
   );
 }
 

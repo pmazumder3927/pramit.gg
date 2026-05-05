@@ -74,7 +74,6 @@ export default function DrawingCaptcha({
   const [activePointerId, setActivePointerId] = useState<number | null>(null);
   const [activeColor, setActiveColor] = useState<string>(DEFAULT_COLOR);
   const [activeBrush, setActiveBrush] = useState<BrushSize>(DEFAULT_BRUSH);
-  const [image, setImage] = useState<string>("");
 
   const challenge = challengeResponse?.challenge ?? null;
   const token = challengeResponse?.token ?? "";
@@ -98,7 +97,7 @@ export default function DrawingCaptcha({
       (glyphId, index) => glyphId === challenge.glyphOrder[index],
     );
   const ready = Boolean(
-    challenge && phraseSolved && glyphSolved && drawingEvaluation.ok && image,
+    challenge && phraseSolved && glyphSolved && drawingEvaluation.ok,
   );
 
   useEffect(() => {
@@ -132,7 +131,6 @@ export default function DrawingCaptcha({
         setCurrentStroke([]);
         setIsDrawing(false);
         setActivePointerId(null);
-        setImage("");
       } catch (error) {
         if (ignore) {
           return;
@@ -155,32 +153,28 @@ export default function DrawingCaptcha({
   }, [refreshKey]);
 
   useEffect(() => {
-    if (!canvasRef.current) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
       return;
     }
 
-    const context = canvasRef.current.getContext("2d");
+    const context = canvas.getContext("2d");
     if (!context) {
       return;
     }
 
+    // Render at devicePixelRatio for crisp lines on retina + mobile.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const targetWidth = Math.round(DRAWING_CANVAS_WIDTH * dpr);
+    const targetHeight = Math.round(DRAWING_CANVAS_HEIGHT * dpr);
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     drawCanvas(context, strokes, currentStroke, activeColor, activeBrush.width);
   }, [strokes, currentStroke, activeColor, activeBrush.width]);
-
-  // Snapshot the canvas to PNG only when committed strokes change so we don't
-  // burn cycles regenerating during pointer drag.
-  useEffect(() => {
-    if (!canvasRef.current) {
-      return;
-    }
-
-    if (strokes.length === 0) {
-      setImage("");
-      return;
-    }
-
-    setImage(canvasRef.current.toDataURL("image/png"));
-  }, [strokes]);
 
   useEffect(() => {
     if (!ready || !challenge) {
@@ -194,11 +188,10 @@ export default function DrawingCaptcha({
         phrase,
         glyphOrder: selectedGlyphs,
         strokes,
-        image,
       },
       true,
     );
-  }, [challenge, image, onChange, phrase, ready, selectedGlyphs, strokes, token]);
+  }, [challenge, onChange, phrase, ready, selectedGlyphs, strokes, token]);
 
   const beginStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) {
@@ -222,7 +215,7 @@ export default function DrawingCaptcha({
 
     setCurrentStroke((previous) => {
       const lastPoint = previous[previous.length - 1];
-      if (lastPoint && distance(lastPoint, point) < 1.5) {
+      if (lastPoint && distance(lastPoint, point) < 0.75) {
         return previous;
       }
 
@@ -314,7 +307,6 @@ export default function DrawingCaptcha({
     setCurrentStroke([]);
     setIsDrawing(false);
     setActivePointerId(null);
-    setImage("");
     setLoadError(null);
     setIsLoading(true);
 
@@ -507,8 +499,8 @@ export default function DrawingCaptcha({
             </div>
           </div>
 
-          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <div className="flex flex-wrap gap-1.5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <div className="flex flex-wrap gap-2">
               {BRUSH_PALETTE.map((color) => {
                 const selected = color === activeColor;
                 return (
@@ -518,14 +510,14 @@ export default function DrawingCaptcha({
                     onClick={() => setActiveColor(color)}
                     disabled={disabled}
                     aria-label={`color ${color}`}
-                    className="h-6 w-6 rounded-full border transition-transform duration-200 hover:scale-110 disabled:opacity-40"
+                    className="h-9 w-9 rounded-full border transition-transform duration-200 active:scale-95 disabled:opacity-40 sm:h-8 sm:w-8 sm:hover:scale-110"
                     style={{
                       backgroundColor: color,
                       borderColor: selected
-                        ? "rgba(255,255,255,0.85)"
+                        ? "rgba(255,255,255,0.95)"
                         : "rgba(255,255,255,0.15)",
                       boxShadow: selected
-                        ? "0 0 0 2px rgba(255,255,255,0.15)"
+                        ? `0 0 0 2px rgba(255,255,255,0.18), 0 0 12px ${color}66`
                         : undefined,
                     }}
                   />
@@ -533,7 +525,7 @@ export default function DrawingCaptcha({
               })}
             </div>
 
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {BRUSH_SIZES.map((size) => {
                 const selected = size.id === activeBrush.id;
                 return (
@@ -543,7 +535,7 @@ export default function DrawingCaptcha({
                     onClick={() => setActiveBrush(size)}
                     disabled={disabled}
                     aria-label={`brush ${size.label}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border transition-colors duration-200 hover:border-white/30 disabled:opacity-40"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border transition-colors duration-200 active:scale-95 disabled:opacity-40 sm:h-9 sm:w-9 sm:hover:border-white/30"
                     style={{
                       borderColor: selected
                         ? "rgba(255,255,255,0.6)"
@@ -554,11 +546,12 @@ export default function DrawingCaptcha({
                     }}
                   >
                     <span
-                      className="rounded-full"
+                      className="rounded-full transition-all"
                       style={{
-                        width: size.width + 2,
-                        height: size.width + 2,
+                        width: size.width + 4,
+                        height: size.width + 4,
                         backgroundColor: activeColor,
+                        boxShadow: selected ? `0 0 8px ${activeColor}80` : undefined,
                       }}
                     />
                   </button>
@@ -576,8 +569,11 @@ export default function DrawingCaptcha({
             onPointerUp={endStroke}
             onPointerLeave={endStroke}
             onPointerCancel={endStroke}
-            className="w-full rounded-2xl border border-dashed border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)] touch-none"
-            style={{ aspectRatio: `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}` }}
+            className="w-full rounded-2xl border border-white/10 touch-none select-none overscroll-contain shadow-[inset_0_0_60px_rgba(0,0,0,0.4)]"
+            style={{
+              aspectRatio: `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}`,
+              cursor: disabled ? "not-allowed" : "crosshair",
+            }}
           />
 
           <p className="mt-3 text-xs font-light text-white/35">
@@ -643,33 +639,48 @@ function paintStroke(
   context: CanvasRenderingContext2D,
   stroke: DrawingStroke,
 ) {
-  if (stroke.points.length === 0) {
+  const points = stroke.points;
+  if (points.length === 0) {
     return;
   }
 
-  context.strokeStyle = stroke.color ?? "#f5f5f5";
-  context.lineWidth = stroke.width ?? 5;
+  const color = stroke.color ?? "#f5f5f5";
+  const width = stroke.width ?? 5;
+
+  if (points.length === 1) {
+    const only = points[0];
+    context.fillStyle = color;
+    context.shadowColor = color;
+    context.shadowBlur = 6;
+    context.beginPath();
+    context.arc(only.x, only.y, width / 2, 0, Math.PI * 2);
+    context.fill();
+    context.shadowBlur = 0;
+    return;
+  }
+
+  context.strokeStyle = color;
+  context.lineWidth = width;
   context.lineCap = "round";
   context.lineJoin = "round";
+  context.shadowColor = color;
+  context.shadowBlur = 6;
+
   context.beginPath();
+  context.moveTo(points[0].x, points[0].y);
 
-  stroke.points.forEach((point, index) => {
-    if (index === 0) {
-      context.moveTo(point.x, point.y);
-    } else {
-      context.lineTo(point.x, point.y);
-    }
-  });
-
-  if (stroke.points.length === 1) {
-    const only = stroke.points[0];
-    context.fillStyle = stroke.color ?? "#f5f5f5";
-    context.beginPath();
-    context.arc(only.x, only.y, (stroke.width ?? 5) / 2, 0, Math.PI * 2);
-    context.fill();
-  } else {
-    context.stroke();
+  // Quadratic mid-point smoothing: use each point as a control point and curve
+  // toward the midpoint of the next segment.
+  for (let i = 1; i < points.length - 1; i++) {
+    const midX = (points[i].x + points[i + 1].x) / 2;
+    const midY = (points[i].y + points[i + 1].y) / 2;
+    context.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
   }
+
+  const last = points[points.length - 1];
+  context.lineTo(last.x, last.y);
+  context.stroke();
+  context.shadowBlur = 0;
 }
 
 function StatusPill({ label, complete }: { label: string; complete: boolean }) {
