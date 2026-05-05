@@ -5,7 +5,6 @@ import {
   fetchAllHomepageBanners,
   type HomepageBanner,
 } from "@/app/lib/homepage-banner";
-import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { createPublicClient } from "@/utils/supabase/server";
 
 import CollageExperience from "./CollageExperience";
@@ -30,7 +29,6 @@ type SketchPreview = {
   id: string;
   prompt: string | null;
   snapshot_url: string | null;
-  strokes: DrawingStroke[] | null;
   created_at: string;
 };
 
@@ -38,7 +36,8 @@ async function fetchSketchPreviews(): Promise<SketchPreview[]> {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("turtle_drawings")
-    .select("id, prompt, snapshot_url, strokes, created_at")
+    .select("id, prompt, snapshot_url, created_at")
+    .not("snapshot_url", "is", null)
     .order("created_at", { ascending: false })
     .limit(120);
 

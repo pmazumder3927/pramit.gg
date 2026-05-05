@@ -1,10 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { ConfessionalCaptchaSubmission } from "@/app/lib/confessional-captcha";
-import DrawingCaptcha from "@/app/connect/components/DrawingCaptcha";
+import DrawingCaptcha, {
+  type DrawingCaptchaHandle,
+} from "@/app/connect/components/DrawingCaptcha";
 import CatCouncil from "@/app/connect/components/CatCouncil";
 
 type Phase = "form" | "judging" | "approve" | "reject" | "received";
@@ -26,6 +28,7 @@ export default function ConfessionalBooth() {
     useState<ConfessionalCaptchaSubmission | null>(null);
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaRefreshKey, setCaptchaRefreshKey] = useState(0);
+  const drawingRef = useRef<DrawingCaptchaHandle>(null);
 
   const maxLength = 500;
   const isBusy = phase !== "form";
@@ -51,6 +54,19 @@ export default function ConfessionalBooth() {
     setSubmitError(null);
     setVerdictMessage(null);
 
+    // Always rasterize the canvas right before submitting so the gallery
+    // gets a snapshot. The debounced background path was racy and often
+    // ended up sending the captcha payload without one.
+    let captchaToSend: ConfessionalCaptchaSubmission = captchaPayload;
+    try {
+      const snapshot = await drawingRef.current?.getSnapshot();
+      if (snapshot) {
+        captchaToSend = { ...captchaPayload, snapshot };
+      }
+    } catch (snapshotError) {
+      console.error("Snapshot generation failed:", snapshotError);
+    }
+
     const minJudgingDeadline = sleep(MIN_JUDGING_MS);
     let approved = false;
     let approvalNote: string | null = null;
@@ -63,7 +79,7 @@ export default function ConfessionalBooth() {
         body: JSON.stringify({
           message: message.trim(),
           timestamp: new Date().toISOString(),
-          captcha: captchaPayload,
+          captcha: captchaToSend,
         }),
       });
 
@@ -241,6 +257,7 @@ export default function ConfessionalBooth() {
 
               <div className="mb-6">
                 <DrawingCaptcha
+                  ref={drawingRef}
                   disabled={isBusy}
                   refreshKey={captchaRefreshKey}
                   onChange={(payload, ready) => {

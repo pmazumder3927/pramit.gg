@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -47,6 +49,12 @@ type DrawingCaptchaProps = {
   ) => void;
 };
 
+export type DrawingCaptchaHandle = {
+  // Synchronously generate a fresh PNG snapshot of the current canvas state.
+  // Returns undefined if the canvas isn't mounted or the rasterization fails.
+  getSnapshot: () => Promise<string | undefined>;
+};
+
 type CaptchaResponse = {
   token: string;
   challenge: ConfessionalCaptchaChallenge;
@@ -77,7 +85,6 @@ const MAX_WIDTH = 48;
 const HISTORY_LIMIT = 50;
 const SMOOTHING_ALPHA = 0.45;
 const ELLIPSE_SEGMENTS = 48;
-const SNAPSHOT_DEBOUNCE_MS = 700;
 
 const BRUSH_LABELS: Record<BrushId, string> = {
   pen: "pen",
@@ -102,11 +109,11 @@ const TOOL_LABELS: Record<ToolMode, string> = {
 const CANVAS_BACKGROUND = "#0a0a0a";
 const CANVAS_PREVIEW_BG = "#0a0a0a";
 
-export default function DrawingCaptcha({
-  disabled = false,
-  refreshKey = 0,
-  onChange,
-}: DrawingCaptchaProps) {
+const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
+  function DrawingCaptcha(
+    { disabled = false, refreshKey = 0, onChange }: DrawingCaptchaProps,
+    ref,
+  ) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const liveRef = useRef<HTMLCanvasElement | null>(null);
@@ -258,25 +265,24 @@ export default function DrawingCaptcha({
     return () => window.cancelAnimationFrame(id);
   }, [isFullscreen]);
 
+  // Surface readiness to the parent on every stroke change. We do NOT bake
+  // the snapshot into this payload — the parent calls getSnapshot() via the
+  // imperative ref at submit time so it always gets a fresh raster.
   useEffect(() => {
     if (!ready || !challenge) {
       onChangeRef.current(null, false);
       return;
     }
-
     onChangeRef.current({ token, strokes }, true);
-
-    let cancelled = false;
-    const handle = window.setTimeout(async () => {
-      const snapshot = await composeSnapshot(committedRef.current);
-      if (cancelled) return;
-      onChangeRef.current({ token, strokes, snapshot }, true);
-    }, SNAPSHOT_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(handle);
-    };
   }, [challenge, ready, strokes, token]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getSnapshot: async () => composeSnapshot(committedRef.current),
+    }),
+    [],
+  );
 
   // ── Pointer flow ─────────────────────────────────────────────────────────
 
@@ -855,7 +861,10 @@ export default function DrawingCaptcha({
       </div>
     </div>
   );
-}
+  },
+);
+
+export default DrawingCaptcha;
 
 function CornerGlyph({
   position,
