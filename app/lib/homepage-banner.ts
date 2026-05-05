@@ -48,7 +48,16 @@ export async function generateHomepageBanner(
     throw new Error("No sketches available to build a banner from.");
   }
 
-  const referencePng = await composeReferenceGrid(sketches);
+  const [bannerWidth, bannerHeight] = (
+    (process.env.OPENAI_IMAGE_SIZE?.trim() || DEFAULT_BANNER_SIZE)
+      .split("x")
+      .map(Number) as [number, number]
+  );
+  const referencePng = await composeReferenceScattered(
+    sketches,
+    bannerWidth,
+    bannerHeight,
+  );
   const promptText = buildBannerPrompt(sketches);
 
   const client = new OpenAI({ apiKey });
@@ -57,11 +66,11 @@ export async function generateHomepageBanner(
     type: "image/png",
   });
 
-  // images.edit gives us per-stroke fidelity — the model can attend to each
-  // contributor's actual wobble. The prompt locks the transformation to a
-  // single move (strokes → glowing constellation lines + star-points) so the
-  // result remains tied to the originals rather than drifting into generic
-  // celestial scenery.
+  // The reference is a scattered (non-grid) layout of the contributor sketches
+  // on a pure-black canvas matching the output dimensions. The prompt asks the
+  // model to weave the subjects into a single cohesive constellation scene —
+  // pinpoint stars + ultra-thin hairlines on pure black, suitable for the
+  // screen-blend overlay in the procedural sky.
   const response = await client.images.edit(
     {
       model: process.env.OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL,
@@ -152,63 +161,103 @@ async function fetchSketches(
   return (data ?? []) as SketchRecord[];
 }
 
-function buildBannerPrompt(_sketches: SketchRecord[]) {
-  // The reference image carries every contributor's actual hand. The model's
-  // job is ONE thing: convert each scribble into a glowing constellation by
-  // (1) replacing stroke endpoints and curve corners with bright star-points
-  // and (2) running a thin glowing hairline along the path of the stroke
-  // itself — so the contributor's wobble, gesture, and composition survive
-  // intact. The point is to honor the originals, not to "fix" them or replace
-  // them with generic celestial scenery.
+function buildBannerPrompt(sketches: SketchRecord[]) {
+  const subjects = Array.from(
+    new Set(
+      sketches
+        .map((s) => s.prompt?.trim())
+        .filter((p): p is string => Boolean(p && p.length > 0)),
+    ),
+  ).slice(0, 18);
+
+  const subjectLine =
+    subjects.length > 0
+      ? `Subjects (one per contributor): ${subjects.join("; ")}.`
+      : "";
+
+  // The reference shows the contributor sketches scattered (not gridded) on a
+  // black canvas at varied scales. The prompt asks for ONE cohesive
+  // constellation scene rendered entirely as star-points + hairlines on pure
+  // black — suitable for screen-blending into the procedural starfield. Each
+  // subject's silhouette comes from the contributor's sketch, but the model is
+  // free to render it tastefully (no literal stroke tracing).
   return [
-    "TASK: Transform the reference grid of finger-drawn sketches into a single wide cinematic star chart.",
-    "Each cell of the reference contains one rough sketch by a different site visitor. Treat the SET of sketches as the source material for a unified constellation map.",
-    "TRANSFORMATION (apply consistently to every sketch):",
-    "1. Trace the EXACT path of every original stroke — every curve, every wobble, every imperfection. Do not smooth, simplify, straighten, regularize, or beautify the lines. The wobble is the soul of the contribution; the contributor's hand must remain visible.",
-    "2. Render each traced stroke as an extremely thin (1px) glowing hairline in soft off-white (#e8e8ea), with the line itself at low brightness (~25% intensity).",
-    "3. Place a small bright star-point (a 2–3px luminous dot) at every stroke endpoint, every sharp corner, and every notable inflection along the curve. The stars are the eye-catching element; the hairline between them is barely visible.",
-    "4. A small minority of star-points (around 1 in 8) may be in muted warm orange (#ff6b3d) or indigo (#7c77c6); the rest are soft off-white. Keep the palette restrained.",
-    "LAYOUT: rearrange the sketches across a wide horizontal panorama as if scattered organically across a night sky. Do NOT preserve the input grid — break the grid, vary the scale of each constellation modestly, leave large negative space between them. The panorama should breathe; subjects must not overlap.",
-    "BACKGROUND: pure #000000 across the entire canvas. No stars beyond the constellation points. No gradients, no haze, no atmosphere, no textures, no nebulae, no Milky Way.",
-    "WHAT THIS IMAGE IS: a star chart whose constellations were drawn by anonymous visitors. The viewer should be able to recognize 'oh, someone drew a cat' and also 'oh, someone drew a fishbone' from the constellation outlines — because those outlines literally are the strokes the contributors made. Do NOT replace the contributor's drawing with a polished or canonical version of the subject.",
-    "HARD RULES: background MUST be pure #000000 (will be screen-blended away). Preserve every original stroke's path. Do not add new strokes the contributor didn't draw. Do not add subjects, decorations, frames, panels, captions, or any text/letters/numerals/labels/watermarks. No watercolor, no painterly brushwork, no glow halos around large areas, no lens flares, no anime, no 3D rendering, no photo-real elements, no shading or fills.",
+    "A single wide cinematic constellation scene, rendered ENTIRELY as star-points (1–3px) and ultra-thin connecting hairlines on pure #000000. No fills, no painterly elements, no color washes — only stars and faint lines.",
+    subjectLine,
+    "Compose the subjects into one coherent vignette — for example, a house and cat on the ground level (lower portion of frame), an umbrella nearby, a balloon drifting overhead, a celestial eye watching from above — but feel free to choose what makes the scene feel right. Each subject's silhouette must be tied to the contributor's original sketch (recognizable pose). Vary the constellation scales (one or two larger anchors, the rest smaller and quiet). Soft off-white predominates, with occasional warm-orange or indigo accent stars. Tasteful, contemplative, late-night.",
   ].join(" ");
 }
 
-async function composeReferenceGrid(
+async function composeReferenceScattered(
   sketches: SketchRecord[],
+  canvasWidth: number,
+  canvasHeight: number,
 ): Promise<Buffer> {
   const sample = sketches.slice(0, MAX_REFERENCE_SKETCHES);
-  const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(sample.length))));
+  const cols = Math.max(3, Math.ceil(Math.sqrt(sample.length * 1.6)));
   const rows = Math.ceil(sample.length / cols);
+  const cellW = canvasWidth / cols;
+  const cellH = canvasHeight / rows;
 
-  const cellWidth = 320;
-  const cellHeight = Math.round(
-    (cellWidth * DRAWING_CANVAS_HEIGHT) / DRAWING_CANVAS_WIDTH,
-  );
-  const padding = 16;
-
-  const canvasWidth = cols * cellWidth + (cols + 1) * padding;
-  const canvasHeight = rows * cellHeight + (rows + 1) * padding;
-
-  const cellSvgs = await Promise.all(
-    sample.map((sketch) =>
-      sharp(Buffer.from(strokesToSvg(sketch.strokes)))
-        .resize(cellWidth, cellHeight, { fit: "fill" })
-        .png()
-        .toBuffer(),
-    ),
-  );
-
-  const composites = cellSvgs.map((buffer, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    return {
-      input: buffer,
-      left: padding + col * (cellWidth + padding),
-      top: padding + row * (cellHeight + padding),
-    };
+  // Scale weights: one anchor, one mid, rest small with mild variation. Gives
+  // the model a clear hint that the scene mixes large and small subjects.
+  const scales = sample.map((_, i) => {
+    if (i === 0) return 0.95;
+    if (i === 1) return 0.78;
+    return 0.42 + Math.random() * 0.22;
   });
+
+  const usedRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const placements: Array<{
+    buffer: Buffer;
+    left: number;
+    top: number;
+  }> = [];
+
+  for (let i = 0; i < sample.length; i++) {
+    const sketch = sample[i];
+    const targetW = Math.round(cellW * 1.5 * scales[i]);
+    const targetH = Math.round(
+      (targetW * DRAWING_CANVAS_HEIGHT) / DRAWING_CANVAS_WIDTH,
+    );
+
+    const sketchPng = await sharp(Buffer.from(strokesToSvg(sketch.strokes)))
+      .resize(targetW, targetH, { fit: "fill" })
+      .png()
+      .toBuffer();
+
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    let x = Math.round(col * cellW + (cellW - targetW) / 2);
+    let y = Math.round(row * cellH + (cellH - targetH) / 2);
+    const jitterX = Math.round((Math.random() - 0.5) * cellW * 0.6);
+    const jitterY = Math.round((Math.random() - 0.5) * cellH * 0.6);
+    x = clamp(x + jitterX, 8, canvasWidth - targetW - 8);
+    y = clamp(y + jitterY, 8, canvasHeight - targetH - 8);
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const conflict = usedRects.find((r) =>
+        rectsOverlap(
+          { x, y, w: targetW, h: targetH },
+          { x: r.x - 24, y: r.y - 24, w: r.w + 48, h: r.h + 48 },
+        ),
+      );
+      if (!conflict) break;
+      x = clamp(
+        x + Math.round((Math.random() - 0.5) * cellW),
+        8,
+        canvasWidth - targetW - 8,
+      );
+      y = clamp(
+        y + Math.round((Math.random() - 0.5) * cellH),
+        8,
+        canvasHeight - targetH - 8,
+      );
+    }
+
+    usedRects.push({ x, y, w: targetW, h: targetH });
+    placements.push({ buffer: sketchPng, left: x, top: y });
+  }
 
   return sharp({
     create: {
@@ -218,9 +267,27 @@ async function composeReferenceGrid(
       background: { r: 0, g: 0, b: 0 },
     },
   })
-    .composite(composites)
+    .composite(
+      placements.map((p) => ({ input: p.buffer, left: p.left, top: p.top })),
+    )
     .png()
     .toBuffer();
+}
+
+function clamp(value: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+) {
+  return !(
+    a.x + a.w < b.x ||
+    b.x + b.w < a.x ||
+    a.y + a.h < b.y ||
+    b.y + b.h < a.y
+  );
 }
 
 function strokesToSvg(strokes: DrawingStroke[]) {
