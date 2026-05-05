@@ -5,11 +5,13 @@ import {
   createConfessionalCaptchaChallenge,
   verifyConfessionalCaptchaSubmission,
 } from "@/app/lib/confessional-captcha-server";
-import { createPublicClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 const SNAPSHOT_BUCKET = "images";
 const SNAPSHOT_PREFIX = "turtles";
-const SNAPSHOT_MAX_BYTES = 500 * 1024; // 500 KB
+const SNAPSHOT_MAX_BYTES = 4 * 1024 * 1024; // 4 MB — leaves room for dense
+// drawings at high DPR. The Supabase storage default is 50MB so we're well
+// under the platform cap.
 
 export async function GET() {
   const payload = await createConfessionalCaptchaChallenge();
@@ -39,7 +41,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createPublicClient();
+    // Service-role client: bypasses RLS so the storage upload to the
+    // `images` bucket succeeds without needing an anon-write policy.
+    const supabase = createAdminClient();
     const createdAt = timestamp || new Date().toISOString();
 
     const { error } = await supabase
@@ -66,8 +70,22 @@ export async function POST(request: NextRequest) {
     let snapshotUrl: string | null = null;
 
     if (typeof captcha?.snapshot === "string") {
+      console.log(
+        `[confessional] received snapshot (${captcha.snapshot.length} chars)`,
+      );
       const buffer = decodePngDataUrl(captcha.snapshot);
-      if (buffer && buffer.byteLength <= SNAPSHOT_MAX_BYTES) {
+      if (!buffer) {
+        console.warn(
+          `[confessional] snapshot decode failed (prefix: ${captcha.snapshot.slice(
+            0,
+            48,
+          )})`,
+        );
+      } else if (buffer.byteLength > SNAPSHOT_MAX_BYTES) {
+        console.warn(
+          `[confessional] snapshot rejected: ${buffer.byteLength} bytes exceeds ${SNAPSHOT_MAX_BYTES}`,
+        );
+      } else {
         const path = `${SNAPSHOT_PREFIX}/${turtleId}.png`;
         const { error: uploadError } = await supabase.storage
           .from(SNAPSHOT_BUCKET)
@@ -79,18 +97,25 @@ export async function POST(request: NextRequest) {
 
         if (uploadError) {
           // Non-fatal — the strokes still render via the SVG fallback.
-          console.error("Snapshot upload error:", uploadError);
+          console.error("[confessional] snapshot upload error:", uploadError);
         } else {
           const { data: publicUrl } = supabase.storage
             .from(SNAPSHOT_BUCKET)
             .getPublicUrl(path);
           snapshotUrl = publicUrl?.publicUrl ?? null;
+          console.log(
+            `[confessional] snapshot uploaded (${buffer.byteLength} bytes) → ${snapshotUrl}`,
+          );
         }
-      } else if (buffer && buffer.byteLength > SNAPSHOT_MAX_BYTES) {
-        console.warn(
-          `Snapshot rejected: ${buffer.byteLength} bytes exceeds ${SNAPSHOT_MAX_BYTES}`,
-        );
       }
+    } else {
+      console.log(
+        `[confessional] no snapshot in payload (captcha keys: ${
+          captcha && typeof captcha === "object"
+            ? Object.keys(captcha).join(",")
+            : "none"
+        })`,
+      );
     }
 
     // Don't fail the confession if the gallery insert fails.
@@ -121,10 +146,13 @@ export async function POST(request: NextRequest) {
 }
 
 function decodePngDataUrl(value: string): Buffer | null {
-  const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(value);
-  if (!match) return null;
+  const prefix = "data:image/png;base64,";
+  if (!value.startsWith(prefix)) return null;
+  // Strip any whitespace defensively — some environments line-wrap base64.
+  const base64 = value.slice(prefix.length).replace(/\s+/g, "");
+  if (base64.length === 0) return null;
   try {
-    const buffer = Buffer.from(match[1], "base64");
+    const buffer = Buffer.from(base64, "base64");
     // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
     if (
       buffer.length < 8 ||

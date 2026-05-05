@@ -137,9 +137,10 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
   const width = isLegacy ? LEGACY_CANVAS_WIDTH : DRAWING_CANVAS_WIDTH;
   const height = isLegacy ? LEGACY_CANVAS_HEIGHT : DRAWING_CANVAS_HEIGHT;
 
-  // New rows ship a pre-rasterized snapshot that includes the brush textures
-  // and dark canvas background. Use it directly when available; legacy rows
-  // fall back to re-rendering the strokes as SVG paths.
+  // New rows ship a pre-rasterized snapshot. The PNG is transparent — strokes
+  // only — so we paint the editor's canvas color underneath here. That way
+  // semi-transparent strokes (watercolor, pencil, etc.) render against the
+  // exact same shade they were drawn on.
   if (drawing.snapshot_url) {
     return (
       <img
@@ -147,7 +148,7 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
         alt={drawing.prompt ?? "drawing"}
         loading="lazy"
         decoding="async"
-        className="w-full rounded-lg"
+        className="w-full rounded-lg bg-[#0a0a0a]"
         style={{ aspectRatio: `${width} / ${height}` }}
       />
     );

@@ -1511,18 +1511,13 @@ async function composeSnapshot(
 ): Promise<string | undefined> {
   if (!committed) return undefined;
   try {
-    const w = committed.width;
-    const h = committed.height;
-    if (w === 0 || h === 0) return undefined;
-    const out = document.createElement("canvas");
-    out.width = w;
-    out.height = h;
-    const ctx = out.getContext("2d");
-    if (!ctx) return undefined;
-    ctx.fillStyle = CANVAS_BACKGROUND;
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(committed, 0, 0);
-    return out.toDataURL("image/png");
+    if (committed.width === 0 || committed.height === 0) return undefined;
+    // Export with the committed canvas's native alpha. We deliberately do NOT
+    // fill a background — the gallery card and editor share the same page
+    // palette but render on slightly different shades, so a baked-in fill
+    // reads as a mismatched rectangle. Letting the gallery's own bg show
+    // through preserves stroke transparency wherever the snapshot ends up.
+    return committed.toDataURL("image/png");
   } catch (error) {
     console.error("Snapshot error:", error);
     return undefined;

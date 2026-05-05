@@ -59,12 +59,23 @@ export default function ConfessionalBooth() {
     // ended up sending the captcha payload without one.
     let captchaToSend: ConfessionalCaptchaSubmission = captchaPayload;
     try {
-      const snapshot = await drawingRef.current?.getSnapshot();
-      if (snapshot) {
-        captchaToSend = { ...captchaPayload, snapshot };
+      const handle = drawingRef.current;
+      if (!handle) {
+        console.warn("[confessional] drawingRef not attached at submit");
+      } else {
+        const snapshot = await handle.getSnapshot();
+        console.log(
+          "[confessional] snapshot generated",
+          snapshot
+            ? { length: snapshot.length, prefix: snapshot.slice(0, 32) }
+            : "NULL",
+        );
+        if (snapshot) {
+          captchaToSend = { ...captchaPayload, snapshot };
+        }
       }
     } catch (snapshotError) {
-      console.error("Snapshot generation failed:", snapshotError);
+      console.error("[confessional] snapshot generation failed:", snapshotError);
     }
 
     const minJudgingDeadline = sleep(MIN_JUDGING_MS);
