@@ -68,13 +68,13 @@ export default function BannerControl() {
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-xs uppercase tracking-[0.28em] text-gray-500">
-            Homepage Banner
+            Ambient Sky
           </p>
           <h2 className="mt-2 text-xl font-semibold text-white">
             confessional tapestry
           </h2>
           <p className="mt-2 text-sm text-gray-400">
-            re-weave the sketches into a fresh hero banner via gpt-image-2.
+            re-weave the sketches into the procedural background via gpt-image-2. The new layer screen-blends into the starfield site-wide.
           </p>
           {loading ? null : banner ? (
             <p className="mt-3 text-xs text-gray-500">

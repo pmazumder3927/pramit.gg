@@ -158,17 +158,22 @@ function buildBannerPrompt(sketches: SketchRecord[]) {
 
   const subjectLine =
     subjects.length > 0
-      ? `The reference grid contains rough finger sketches drawn by visitors of: ${subjects.join("; ")}.`
-      : "The reference grid contains rough finger sketches drawn by visitors.";
+      ? `The reference grid is rough finger-sketches by site visitors of: ${subjects.join("; ")}.`
+      : "The reference grid is rough finger-sketches by site visitors.";
 
+  // This image is screen-blended at low opacity into a procedural pixel-art
+  // starfield (the existing AuroraBackground canvas). Pure black goes
+  // transparent under "screen", so only the linework brightens the existing
+  // sky. Treat it as an additive overlay, not a hero card.
   return [
-    "Create a single wide cinematic banner image suitable as the hero of a personal website.",
+    "An additive sky overlay for a minimalist late-night personal website.",
     subjectLine,
-    "Reinterpret these scribbled sketches as a unified illustrated tapestry: weave the subjects together into one cohesive dreamlike scene at night.",
-    "Style: hand-drawn ink and watercolor wash, deep midnight purple and indigo background, soft warm orange and cream highlights, glowing edges, painterly imperfection.",
-    "Mood: contemplative, late-night, intimate, slightly mischievous — like a confessional booth painted by ghosts.",
-    "Composition: wide horizontal panorama, balanced negative space across the top half so text could overlay it, no visible writing or letters anywhere in the image.",
-    "Honor the spirit of the contributors' rough drawings — keep the charm of the originals visible in the linework, even as the scene becomes painterly.",
+    "This image will be composited at low opacity using SCREEN blend mode over a dark animated starfield. ONLY the bright pixels will show. The black background MUST be pure #000000 so it disappears under the blend.",
+    "Treat the reference sketches as the linework itself — preserve the original wobble, gesture, and character of each rough sketch. Do NOT repaint or over-render them. Re-draw them as if from the same trembling hand: thin, single-weight, slightly imperfect lines.",
+    "Composition: a sparse constellation of these subjects floating across the frame with vast negative space between them. Most of the canvas is empty pure black. Subjects are small relative to the frame and well-separated. No grid, no panels, no borders — they must read as scattered individual marks against a void, like notes pinned to a night sky.",
+    "Linework: thin (1–2px) strokes in soft off-white (#e8e8ea), with rare accent strokes in muted warm orange (#ff6b3d) or indigo (#7c77c6). No fills, no shading, no painted blocks, no glow, no halos. Single-pen drawing on void black.",
+    "Mood: quiet, contemplative, slightly mischievous. Apple-restrained, not whimsical, not painterly, not fantasy, not children's-book.",
+    "Hard rules: background is pure #000000 with no gradients, no textures, no clouds, no atmosphere. No text, no letters, no numerals, no signatures, no watermark, no frame, no border, no panel grid. No watercolor, no painterly brushwork, no glow, no anime, no 3D, no photo-real elements. Output must be a flat 2D line drawing on a uniform black field.",
   ].join(" ");
 }
 

@@ -535,11 +535,41 @@ function drawHorizonProps(state: DrawState) {
   }
 }
 
+function drawBannerLayer(state: DrawState) {
+  const { ctx, width, height, bannerImage, timeSeconds } = state;
+  if (!bannerImage || !bannerImage.complete || !bannerImage.naturalWidth) {
+    return;
+  }
+
+  // The banner is generated as black-canvas linework via gpt-image-2 (see
+  // app/lib/homepage-banner.ts). With "screen" compositing the deep black
+  // disappears and only the strokes brighten the existing sky, blending the
+  // contributors' marks into the procedural scene.
+  const aspect = bannerImage.naturalWidth / bannerImage.naturalHeight;
+  const drawWidth = Math.max(width, height * aspect);
+  const drawHeight = drawWidth / aspect;
+  const offsetX = (width - drawWidth) / 2;
+  // Anchor near the top of the viewport — the prompt asks the model to leave
+  // the upper two-thirds sparse, so this is where the linework lives.
+  const offsetY = -drawHeight * 0.05;
+
+  // Slow lateral drift so the banner feels like it belongs in the animated
+  // scene rather than a pasted overlay.
+  const drift = Math.sin(timeSeconds * 0.04) * width * 0.012;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.42;
+  ctx.drawImage(bannerImage, offsetX + drift, offsetY, drawWidth, drawHeight);
+  ctx.restore();
+}
+
 export function drawSceneFrame(state: DrawState) {
   const { ctx, width, height } = state;
 
   ctx.clearRect(0, 0, width, height);
   drawSky(state);
+  drawBannerLayer(state);
   drawCelestials(state);
   drawStars(state);
   drawConstellations(state);

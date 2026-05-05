@@ -256,4 +256,5 @@ export interface DrawState {
   timeSeconds: number;
   deltaSeconds: number;
   skyTime: number;
+  bannerImage?: HTMLImageElement | null;
 }
