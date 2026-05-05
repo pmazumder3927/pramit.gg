@@ -5,6 +5,7 @@ import { useState } from "react";
 import Image from "next/image";
 import QRCodeGenerator from "./components/QRCodeGenerator";
 import ConfessionalBooth from "./components/ConfessionalBooth";
+import TurtleGallery from "./components/TurtleGallery";
 
 export default function Connect() {
   const [isDownloading, setIsDownloading] = useState(false);
@@ -282,10 +283,22 @@ END:VCARD`;
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="pb-32"
+          className="pb-16"
         >
           <div className="max-w-3xl mx-auto px-6 md:px-8">
             <ConfessionalBooth />
+          </div>
+        </motion.section>
+
+        {/* Turtle Gallery */}
+        <motion.section
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="pb-32"
+        >
+          <div className="max-w-5xl mx-auto px-6 md:px-8">
+            <TurtleGallery />
           </div>
         </motion.section>
       </main>

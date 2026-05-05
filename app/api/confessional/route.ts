@@ -34,14 +34,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createPublicClient();
+    const createdAt = timestamp || new Date().toISOString();
 
-    // Store the message in Supabase
     const { error } = await supabase
       .from("confessional_messages")
       .insert([
         {
           message: message.trim(),
-          created_at: timestamp || new Date().toISOString(),
+          created_at: createdAt,
           // No IP address or user identification stored for privacy
         },
       ]);
@@ -52,6 +52,20 @@ export async function POST(request: NextRequest) {
         { error: "Failed to store message" },
         { status: 500 }
       );
+    }
+
+    // Don't fail the confession if the gallery insert fails.
+    const { error: turtleError } = await supabase
+      .from("turtle_drawings")
+      .insert([
+        {
+          strokes: captcha.strokes,
+          created_at: createdAt,
+        },
+      ]);
+
+    if (turtleError) {
+      console.error("Turtle save error:", turtleError);
     }
 
     return NextResponse.json(

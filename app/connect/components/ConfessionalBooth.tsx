@@ -59,6 +59,9 @@ export default function ConfessionalBooth() {
         setCaptchaSolved(false);
         setCaptchaRefreshKey((current) => current + 1);
 
+        // TurtleGallery refetches when it sees this.
+        window.dispatchEvent(new CustomEvent("turtle:new"));
+
         setTimeout(() => {
           setIsSubmitted(false);
         }, 3000);
