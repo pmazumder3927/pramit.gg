@@ -21,28 +21,37 @@ type CatCouncilProps = {
 const SCENE_WIDTH = 720;
 const SCENE_HEIGHT = 380;
 
-// ── Adult judge cat (12 wide x 16 tall pixel sprite) ────────────────────────
-// Symbols: T = hat tip · H = hat · v = hat brim · *  = hat star accent
-//          f = fur     · e = eye · n = nose      · m = mouth
-//          .          = transparent
+// ── Adult judge cat (12 wide x 23 tall pixel sprite) ────────────────────────
+// A sitting chibi cat: hat → head → body → paws on the ground.
+// Symbols: T = hat tip   · H = hat   · v = hat brim · *  = hat star accent
+//          f = fur        · b = belly fluff (lighter) · P = paw shadow line
+//          e = eye        · n = nose  · m = mouth     · p = paw pad
+//          .              = transparent
 const ADULT_CELL = 7;
 const ADULT_SPRITE = [
-  "............",
-  ".....TT.....",
-  "....HHHH....",
-  "...HHHHHH...",
-  "..HHHHHHHH.*",
-  ".HHHHHHHHHH.",
-  "vvvvvvvvvvvv",
-  "............",
-  ".ff......ff.",
-  ".ffffffffff.",
-  ".ffeffffeff.",
-  ".ffffnnffff.",
-  ".fffmmmmfff.",
-  "..ffffffff..",
-  "...ffffff...",
-  "............",
+  "............", //  0
+  ".....TT.....", //  1 hat tip
+  "....HHHH....", //  2 hat top
+  "...HHHHHH...", //  3
+  "..HHHHHHHH.*", //  4 with star accent
+  ".HHHHHHHHHH.", //  5
+  "vvvvvvvvvvvv", //  6 hat brim
+  "............", //  7
+  ".ff......ff.", //  8 ear tufts
+  ".ffffffffff.", //  9 top of head
+  ".ffeffffeff.", // 10 eyes
+  ".ffffnnffff.", // 11 nose
+  ".fffmmmmfff.", // 12 mouth
+  "..ffffffff..", // 13 chin
+  "...ffffff...", // 14 chin tip / neck
+  "..ffffffff..", // 15 shoulders
+  ".ffffbbffff.", // 16 chest with belly fluff
+  "ffffbbbbffff", // 17 wide chest
+  "fffbbbbbbfff", // 18 belly
+  "fffPPPPPPfff", // 19 darker line where front paws cross
+  "ff.ffffff.ff", // 20 haunches with leg gaps
+  "pp.pp..pp.pp", // 21 paw pads at the ground
+  "............", // 22 ground breath
 ];
 const ADULT_COLS = ADULT_SPRITE[0].length;
 const ADULT_ROWS = ADULT_SPRITE.length;
@@ -67,19 +76,24 @@ const KITTEN_ROWS = KITTEN_SPRITE.length;
 const KITTEN_W = KITTEN_COLS * KITTEN_CELL; // 36
 const KITTEN_H = KITTEN_ROWS * KITTEN_CELL; // 36
 
-// Curled-up sleeping kitten (10 wide x 6 tall, dome shape).
+// Curled-up sleeping kitten (16 wide x 9 tall) — a comma-shaped curl with
+// ear, closed eye, paw tucked under, tail wrapping the body.
+const SLEEPING_CELL = 5;
 const SLEEPING_SPRITE = [
-  "...kkkk...",
-  "..kkkkkkk.",
-  ".kkkkkkkkk",
-  "kkkkkkkkkk",
-  "kk.kkkkk.k",
-  ".kkkkkkkk.",
+  "...kk...........",
+  "..kkkk..........",
+  ".kkkkkkkkkk.....",
+  "kkkkkkkkkkkkk...",
+  "kkmkkkkkkkkkkkk.",
+  "kkkkkkkkkkkkkkkk",
+  ".kkkkkkkkkkkkkkk",
+  "..kkkkkkkkkkkk..",
+  "...kk......kk...",
 ];
 const SLEEPING_COLS = SLEEPING_SPRITE[0].length;
 const SLEEPING_ROWS = SLEEPING_SPRITE.length;
-const SLEEPING_W = SLEEPING_COLS * KITTEN_CELL; // 40
-const SLEEPING_H = SLEEPING_ROWS * KITTEN_CELL; // 24
+const SLEEPING_W = SLEEPING_COLS * SLEEPING_CELL; // 80
+const SLEEPING_H = SLEEPING_ROWS * SLEEPING_CELL; // 45
 
 // Peeking kitten — head only (7 wide x 6 tall) so it can rise up from behind.
 const PEEK_SPRITE = [
@@ -101,6 +115,9 @@ type AdultPalette = {
   v: string;
   star: string;
   f: string;
+  b: string;
+  P: string;
+  p: string;
   e: string;
   n: string;
   m: string;
@@ -123,6 +140,9 @@ const ADULT_PALETTES: AdultPalette[] = [
     v: "#3d2470",
     star: "#ffec8a",
     f: "#f4a05a",
+    b: "#ffd9aa",
+    P: "#a85d2e",
+    p: "#ff9aa6",
     e: "#15101e",
     n: "#ff9aa6",
     m: "#15101e",
@@ -135,6 +155,9 @@ const ADULT_PALETTES: AdultPalette[] = [
     v: "#15276a",
     star: "#fff7c0",
     f: "#1c1924",
+    b: "#3a3146",
+    P: "#080510",
+    p: "#d49572",
     e: "#ffd86b",
     n: "#d49572",
     m: "#0a0810",
@@ -147,6 +170,9 @@ const ADULT_PALETTES: AdultPalette[] = [
     v: "#7a1f1c",
     star: "#fff0c0",
     f: "#ece9f1",
+    b: "#ffffff",
+    P: "#b3aebd",
+    p: "#ff9aa6",
     e: "#3e6cd0",
     n: "#ff9aa6",
     m: "#5a4046",
@@ -200,15 +226,24 @@ export default function CatCouncil({
           {/* Floor / velvet rug */}
           <Floor verdict={verdict} />
 
-          {/* Ambient candles flanking the easel */}
-          <Candle x={130} y={252} verdict={verdict} flicker={0} />
-          <Candle x={SCENE_WIDTH - 130} y={252} verdict={verdict} flicker={0.4} />
+          {/* Ambient candles in the gaps between judges and easel */}
+          <Candle x={195} y={285} verdict={verdict} flicker={0} />
+          <Candle x={SCENE_WIDTH - 195} y={285} verdict={verdict} flicker={0.4} />
 
-          {/* Sleeping kitten near the left candle */}
+          {/* Sleeping kitten on a tiny cushion at the far left */}
           <SleepingKitten
-            x={70}
-            y={SCENE_HEIGHT - 60}
+            x={28}
+            y={SCENE_HEIGHT - 70}
             palette={KITTEN_PALETTES[2]}
+            verdict={verdict}
+          />
+
+          {/* Tail-chasing kitten in the far-right corner with a yarn ball */}
+          <YarnBall x={SCENE_WIDTH - 32} y={SCENE_HEIGHT - 38} />
+          <TailChaserKitten
+            x={SCENE_WIDTH - 84}
+            y={SCENE_HEIGHT - 64}
+            palette={KITTEN_PALETTES[3]}
             verdict={verdict}
           />
 
@@ -220,10 +255,10 @@ export default function CatCouncil({
             verdict={verdict}
           />
 
-          {/* Kitten peeking around the right side of the easel */}
+          {/* Kitten peeking over the top of the easel canvas */}
           <PeekingKitten
-            x={SCENE_WIDTH / 2 + 110}
-            y={170}
+            x={SCENE_WIDTH / 2 + 60}
+            y={4}
             palette={KITTEN_PALETTES[1]}
             verdict={verdict}
           />
@@ -233,8 +268,8 @@ export default function CatCouncil({
             seat={0}
             palette={ADULT_PALETTES[0]}
             verdict={verdict}
-            x={64}
-            y={208}
+            x={68}
+            y={185}
             facing="right"
           />
           <AdultCat
@@ -242,23 +277,36 @@ export default function CatCouncil({
             palette={ADULT_PALETTES[1]}
             verdict={verdict}
             x={(SCENE_WIDTH - ADULT_W) / 2}
-            y={232}
+            y={205}
             facing="center"
           />
           <AdultCat
             seat={2}
             palette={ADULT_PALETTES[2]}
             verdict={verdict}
-            x={SCENE_WIDTH - ADULT_W - 64}
-            y={208}
+            x={SCENE_WIDTH - ADULT_W - 68}
+            y={185}
             facing="left"
           />
 
-          {/* Kitten that races across the foreground */}
-          <RunningKitten verdict={verdict} palette={KITTEN_PALETTES[0]} />
+          {/* Two kittens racing across the foreground in opposite directions */}
+          <RunningKitten
+            verdict={verdict}
+            palette={KITTEN_PALETTES[0]}
+            direction="right"
+            offset={0}
+            duration={6.4}
+          />
+          <RunningKitten
+            verdict={verdict}
+            palette={KITTEN_PALETTES[1]}
+            direction="left"
+            offset={3.0}
+            duration={7.6}
+          />
 
-          {/* Tiny firefly the orange kitten dreams of */}
-          <Firefly x={108} y={304} verdict={verdict} />
+          {/* Tiny firefly the sleeping kitten is dreaming of */}
+          <Firefly x={92} y={300} verdict={verdict} />
 
           {/* Verdict-specific overlays */}
           <AnimatePresence>
@@ -694,6 +742,46 @@ function AdultCat({
         }}
       >
         <AdultSpriteSvg palette={palette} eyeMode={eyeMode} gaze={gaze} />
+
+        {/* Pink cheek blush — single most impactful cuteness pixel */}
+        <rect
+          x={1 * ADULT_CELL}
+          y={11 * ADULT_CELL}
+          width={ADULT_CELL - 1}
+          height={ADULT_CELL - 1}
+          fill="#ff9aa6"
+          opacity={0.55}
+        />
+        <rect
+          x={9 * ADULT_CELL + 1}
+          y={11 * ADULT_CELL}
+          width={ADULT_CELL - 1}
+          height={ADULT_CELL - 1}
+          fill="#ff9aa6"
+          opacity={0.55}
+        />
+
+        {/* The head judge wears a monocle — a tiny ring around the right eye */}
+        {seat === 1 ? (
+          <g>
+            <circle
+              cx={7 * ADULT_CELL + ADULT_CELL / 2}
+              cy={10 * ADULT_CELL + ADULT_CELL / 2}
+              r={6.5}
+              fill="none"
+              stroke="#ffd86b"
+              strokeWidth={1.5}
+            />
+            <line
+              x1={7 * ADULT_CELL + ADULT_CELL + 5}
+              y1={10 * ADULT_CELL + ADULT_CELL / 2}
+              x2={7 * ADULT_CELL + ADULT_CELL + 14}
+              y2={11 * ADULT_CELL + ADULT_CELL + 4}
+              stroke="#ffd86b"
+              strokeWidth={1}
+            />
+          </g>
+        ) : null}
       </motion.g>
 
       {/* Subtle floor shadow */}
@@ -721,20 +809,26 @@ function Tail({
   facing: Facing;
   seat: number;
 }) {
-  // Tail sits to the side opposite to the gaze.
+  // Tails emerge on the side opposite to where the cat is facing, curling up
+  // and outward like a comma.
   const onRight = facing !== "right";
-  const baseX = onRight ? ADULT_W - 12 : 12;
+  const sweep = onRight ? 1 : -1;
+  const baseX = onRight ? ADULT_W - 8 : 8;
+  const baseY = ADULT_H * 0.66;
+  const tipX = baseX + sweep * 22;
+  const tipY = baseY - 36;
+
   const flicker: Variants = {
     judging: {
-      rotate: [0, 18, 0, -8, 0],
+      rotate: [0, 12, -4, 8, 0],
       transition: {
-        duration: 2.2 + seat * 0.3,
+        duration: 2.4 + seat * 0.3,
         repeat: Infinity,
         ease: "easeInOut",
       },
     },
     approve: {
-      rotate: [0, 30, -10, 30, 0],
+      rotate: [0, 26, -8, 26, 0],
       transition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
     },
     reject: {
@@ -749,20 +843,18 @@ function Tail({
       animate={verdict}
       style={{
         transformBox: "fill-box",
-        transformOrigin: `${baseX}px ${ADULT_H - 14}px`,
+        transformOrigin: `${baseX}px ${baseY}px`,
       }}
     >
       <path
-        d={
-          onRight
-            ? `M ${baseX} ${ADULT_H - 14} q 18 -4 22 -28 q 1 -10 -8 -10`
-            : `M ${baseX} ${ADULT_H - 14} q -18 -4 -22 -28 q -1 -10 8 -10`
-        }
+        d={`M ${baseX} ${baseY} q ${sweep * 16} -10 ${sweep * 22} -28 q ${sweep * 2} -10 ${-sweep * 6} -8`}
         stroke={palette.f}
         strokeWidth={6}
         strokeLinecap="round"
         fill="none"
       />
+      {/* Tail tip cap so the curl reads cleanly */}
+      <circle cx={tipX - sweep * 6} cy={tipY + 4} r={3.5} fill={palette.f} />
     </motion.g>
   );
 }
@@ -938,6 +1030,12 @@ function adultSymbolColor(
       return palette.star;
     case "f":
       return palette.f;
+    case "b":
+      return palette.b;
+    case "P":
+      return palette.P;
+    case "p":
+      return palette.p;
     case "e":
       return palette.e;
     case "n":
@@ -1043,66 +1141,144 @@ function kittenSymbolColor(
   }
 }
 
-// Kitten that bounces from left to right, off-stage, repeats — pure scene candy.
+// Kitten that bounces across the foreground, off-stage, then repeats.
 function RunningKitten({
   verdict,
   palette,
+  direction,
+  offset,
+  duration,
 }: {
   verdict: Verdict;
   palette: KittenPalette;
+  direction: "left" | "right";
+  offset: number;
+  duration: number;
 }) {
-  const startX = -KITTEN_W - 30;
-  const endX = SCENE_WIDTH + 40;
-  const baseY = SCENE_HEIGHT - 78;
-  const duration = verdict === "approve" ? 4.5 : verdict === "reject" ? 9 : 6.4;
+  const goingRight = direction === "right";
+  const startX = goingRight ? -KITTEN_W - 30 : SCENE_WIDTH + 30;
+  const endX = goingRight ? SCENE_WIDTH + 40 : -KITTEN_W - 40;
+  const baseY = goingRight ? SCENE_HEIGHT - 80 : SCENE_HEIGHT - 56;
+  const speedScale =
+    verdict === "approve" ? 0.7 : verdict === "reject" ? 1.4 : 1;
+  const totalDuration = duration * speedScale;
 
   return (
     <motion.g
       animate={{ x: [startX, endX] }}
-      transition={{ duration, repeat: Infinity, ease: "linear", delay: 0.2 }}
+      transition={{
+        duration: totalDuration,
+        repeat: Infinity,
+        ease: "linear",
+        delay: offset,
+      }}
     >
-      {/* Bouncy y for trotting effect */}
       <motion.g
-        animate={{ y: [baseY, baseY - 6, baseY, baseY - 6, baseY] }}
+        animate={{ y: [baseY, baseY - 8, baseY, baseY - 8, baseY] }}
         transition={{
-          duration: duration / 4,
+          duration: totalDuration / 5,
           repeat: Infinity,
           ease: "easeInOut",
         }}
       >
-        {/* Tail wagging behind */}
-        <motion.g
-          animate={{ rotate: [-12, 14, -12] }}
-          transition={{ duration: 0.5, repeat: Infinity, ease: "easeInOut" }}
-          style={{
-            transformBox: "fill-box",
-            transformOrigin: `${KITTEN_W * 0.05}px ${KITTEN_H * 0.55}px`,
-          }}
-        >
-          <path
-            d={`M ${KITTEN_CELL} ${KITTEN_H * 0.5} q -8 -4 -10 -14`}
-            stroke={palette.k}
-            strokeWidth={3}
-            strokeLinecap="round"
-            fill="none"
+        <g transform={goingRight ? undefined : `scale(-1 1) translate(-${KITTEN_W} 0)`}>
+          {/* Tail flicking behind */}
+          <motion.g
+            animate={{ rotate: [-14, 18, -14] }}
+            transition={{ duration: 0.4, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              transformBox: "fill-box",
+              transformOrigin: `${KITTEN_CELL}px ${KITTEN_H * 0.55}px`,
+            }}
+          >
+            <path
+              d={`M ${KITTEN_CELL} ${KITTEN_H * 0.55} q -8 -3 -12 -16`}
+              stroke={palette.k}
+              strokeWidth={3}
+              strokeLinecap="round"
+              fill="none"
+            />
+          </motion.g>
+          <KittenSpriteSvg
+            sprite={KITTEN_SPRITE}
+            cell={KITTEN_CELL}
+            palette={palette}
           />
-        </motion.g>
+          {/* Shadow under feet */}
+          <ellipse
+            cx={KITTEN_W / 2}
+            cy={KITTEN_H + 2}
+            rx={KITTEN_W * 0.4}
+            ry={2}
+            fill="#06030c"
+            opacity={0.6}
+          />
+        </g>
+      </motion.g>
+    </motion.g>
+  );
+}
+
+// A kitten chasing its own tail — spins in place in a cute corner of the rug.
+function TailChaserKitten({
+  x,
+  y,
+  palette,
+  verdict,
+}: {
+  x: number;
+  y: number;
+  palette: KittenPalette;
+  verdict: Verdict;
+}) {
+  const spin: Variants = {
+    judging: {
+      rotate: [0, 360],
+      transition: { duration: 3.4, repeat: Infinity, ease: "linear" },
+    },
+    approve: {
+      rotate: [0, 360],
+      transition: { duration: 1.6, repeat: Infinity, ease: "linear" },
+    },
+    reject: {
+      rotate: [0, -20, 20, -10, 0],
+      transition: { duration: 0.8, repeat: Infinity, ease: "easeInOut" },
+    },
+  };
+
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <motion.g
+        variants={spin}
+        animate={verdict}
+        style={{
+          transformBox: "fill-box",
+          transformOrigin: "50% 60%",
+        }}
+      >
         <KittenSpriteSvg
           sprite={KITTEN_SPRITE}
           cell={KITTEN_CELL}
           palette={palette}
         />
-        {/* Tiny shadow under feet */}
-        <ellipse
-          cx={KITTEN_W / 2}
-          cy={KITTEN_H + 2}
-          rx={KITTEN_W * 0.4}
-          ry={2}
-          fill="#06030c"
-          opacity={0.6}
+        {/* Tail curving away from body — reads as something to chase */}
+        <path
+          d={`M ${KITTEN_W - KITTEN_CELL} ${KITTEN_H * 0.55} q 12 -2 14 -16 q 0 -6 -6 -6`}
+          stroke={palette.k}
+          strokeWidth={3}
+          strokeLinecap="round"
+          fill="none"
         />
       </motion.g>
-    </motion.g>
+      <ellipse
+        cx={KITTEN_W / 2}
+        cy={KITTEN_H + 2}
+        rx={KITTEN_W * 0.45}
+        ry={3}
+        fill="#06030c"
+        opacity={0.5}
+      />
+    </g>
   );
 }
 
@@ -1135,6 +1311,25 @@ function SleepingKitten({
 
   return (
     <g transform={`translate(${x}, ${y})`}>
+      {/* Tiny cushion */}
+      <rect
+        x={-4}
+        y={SLEEPING_H - 4}
+        width={SLEEPING_W + 8}
+        height={10}
+        rx={4}
+        fill="#7a4cd6"
+        opacity={0.55}
+      />
+      <rect
+        x={-4}
+        y={SLEEPING_H - 4}
+        width={SLEEPING_W + 8}
+        height={3}
+        rx={1.5}
+        fill="#a87bf2"
+        opacity={0.6}
+      />
       <motion.g
         variants={breathing}
         animate={verdict}
@@ -1145,19 +1340,19 @@ function SleepingKitten({
       >
         <KittenSpriteSvg
           sprite={SLEEPING_SPRITE}
-          cell={KITTEN_CELL}
+          cell={SLEEPING_CELL}
           palette={palette}
         />
       </motion.g>
       {/* Floating Z's for sleepy ambience */}
-      <SleepyZ x={SLEEPING_W - 4} y={-6} delay={0} />
+      <SleepyZ x={SLEEPING_W - 6} y={-6} delay={0} />
       <SleepyZ x={SLEEPING_W + 6} y={-14} delay={1.4} />
       {/* Floor shadow */}
       <ellipse
         cx={SLEEPING_W / 2}
-        cy={SLEEPING_H + 2}
-        rx={SLEEPING_W * 0.45}
-        ry={2}
+        cy={SLEEPING_H + 6}
+        rx={SLEEPING_W * 0.5}
+        ry={3}
         fill="#06030c"
         opacity={0.55}
       />
@@ -1253,6 +1448,43 @@ function PeekingKitten({
   );
 }
 
+// Tiny ball of yarn for the tail-chaser to bat around.
+function YarnBall({ x, y }: { x: number; y: number }) {
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <circle cx={0} cy={0} r={6} fill="#f8a4c8" />
+      <path
+        d="M -5 -2 q 5 6 10 2 q -5 -6 -10 -2 z"
+        fill="none"
+        stroke="#d56a98"
+        strokeWidth={0.8}
+      />
+      <path
+        d="M -5 1 q 5 4 10 -2"
+        fill="none"
+        stroke="#d56a98"
+        strokeWidth={0.8}
+      />
+      <path
+        d="M -2 -5 q 1 5 5 6"
+        fill="none"
+        stroke="#d56a98"
+        strokeWidth={0.8}
+      />
+      {/* Trailing thread toward the tail-chaser kitten */}
+      <path
+        d="M 0 -2 q -10 -8 -34 -4"
+        stroke="#f8a4c8"
+        strokeWidth={1}
+        fill="none"
+        opacity={0.85}
+      />
+      {/* Floor shadow */}
+      <ellipse cx={0} cy={7} rx={6} ry={1.6} fill="#06030c" opacity={0.5} />
+    </g>
+  );
+}
+
 // Tiny firefly bouncing near the sleeping kitten — adds atmosphere.
 function Firefly({
   x,
@@ -1288,22 +1520,20 @@ function Firefly({
 // ── Verdict overlays ────────────────────────────────────────────────────────
 
 function ApproveOverlay() {
-  // Hearts and sparkles rising over the scene.
-  const items = useMemo(
-    () =>
-      Array.from({ length: 18 }, (_, index) => ({
-        id: index,
-        x: 80 + Math.random() * (SCENE_WIDTH - 160),
-        y: 60 + Math.random() * 220,
-        delay: Math.random() * 0.8,
-        size: 4 + Math.random() * 6,
-        color: ["#ffd86b", "#fff7c0", "#f8a4c8", "#b7ffca", "#9fc5ff"][
-          index % 5
-        ],
-        kind: index % 4 === 0 ? "heart" : "sparkle",
-      })),
-    [],
-  );
+  // Bigger hearts + sparkles rising and drifting over the scene.
+  const items = useMemo(() => {
+    const palette = ["#ffd86b", "#fff7c0", "#f8a4c8", "#b7ffca", "#9fc5ff"];
+    return Array.from({ length: 22 }, (_, index) => ({
+      id: index,
+      x: 50 + Math.random() * (SCENE_WIDTH - 100),
+      y: 40 + Math.random() * 240,
+      drift: -16 + Math.random() * 32,
+      delay: Math.random() * 1.2,
+      size: 8 + Math.random() * 10,
+      color: palette[index % palette.length],
+      kind: index % 3 === 0 ? "heart" : "sparkle",
+    }));
+  }, []);
 
   return (
     <motion.g
@@ -1317,37 +1547,36 @@ function ApproveOverlay() {
             key={item.id}
             initial={{ x: item.x, y: item.y, opacity: 0, scale: 0 }}
             animate={{
-              y: [item.y, item.y - 60],
+              x: [item.x, item.x + item.drift],
+              y: [item.y, item.y - 80],
               opacity: [0, 1, 1, 0],
-              scale: [0, 1.2, 1, 0.8],
+              scale: [0, 1.3, 1.1, 0.6],
+              rotate: [-15, 10, -5, 0],
             }}
             transition={{
-              duration: 2,
+              duration: 2.4,
               delay: item.delay,
               repeat: Infinity,
               repeatDelay: 0.4,
               ease: "easeOut",
             }}
+            style={{ filter: `drop-shadow(0 0 8px ${item.color})` }}
           >
             <path
-              d="M0 -2 c -3 -6 -10 -2 -6 4 c 1 2 4 4 6 6 c 2 -2 5 -4 6 -6 c 4 -6 -3 -10 -6 -4 z"
+              d="M 0 -3 c -5 -9 -16 -2 -10 6 c 2 3 7 6 10 9 c 3 -3 8 -6 10 -9 c 6 -8 -5 -15 -10 -6 z"
               fill={item.color}
               opacity={0.95}
-              transform={`scale(${item.size / 6})`}
-              style={{ filter: `drop-shadow(0 0 6px ${item.color})` }}
+              transform={`scale(${item.size / 14})`}
             />
           </motion.g>
         ) : (
-          <motion.circle
+          <motion.g
             key={item.id}
-            cx={item.x}
-            cy={item.y}
-            r={item.size / 2}
-            fill={item.color}
-            initial={{ scale: 0, opacity: 0 }}
+            initial={{ x: item.x, y: item.y, scale: 0, opacity: 0 }}
             animate={{
               scale: [0, 1.4, 1, 1.4, 0.6],
               opacity: [0, 1, 1, 1, 0],
+              rotate: [0, 90, 180],
             }}
             transition={{
               duration: 1.6,
@@ -1356,8 +1585,13 @@ function ApproveOverlay() {
               repeatDelay: 0.4,
               ease: "easeOut",
             }}
-            style={{ filter: `drop-shadow(0 0 8px ${item.color})` }}
-          />
+            style={{ filter: `drop-shadow(0 0 10px ${item.color})` }}
+          >
+            <path
+              d={`M 0 -${item.size / 2} L ${item.size / 8} -${item.size / 8} L ${item.size / 2} 0 L ${item.size / 8} ${item.size / 8} L 0 ${item.size / 2} L -${item.size / 8} ${item.size / 8} L -${item.size / 2} 0 L -${item.size / 8} -${item.size / 8} z`}
+              fill={item.color}
+            />
+          </motion.g>
         ),
       )}
     </motion.g>
@@ -1365,34 +1599,83 @@ function ApproveOverlay() {
 }
 
 function RejectOverlay() {
+  // Big slashes above each judge plus tiny tear-drops.
+  const slashes = [
+    { x: 110, y: 200 },
+    { x: SCENE_WIDTH / 2, y: 220 },
+    { x: SCENE_WIDTH - 110, y: 200 },
+  ];
+  const drops = [
+    { x: 140, y: 250, delay: 0.1 },
+    { x: 380, y: 270, delay: 0.5 },
+    { x: 600, y: 250, delay: 0.3 },
+  ];
   return (
     <motion.g
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {[160, 360, 560].map((cx, index) => (
-        <motion.text
-          key={cx}
-          x={cx}
-          y={120}
-          fill="#f87e8b"
-          fontSize={26}
-          fontFamily="monospace"
-          textAnchor="middle"
-          style={{ filter: "drop-shadow(0 0 8px rgba(248,126,139,0.6))" }}
-          initial={{ y: 110, opacity: 0 }}
-          animate={{ y: [110, 80, 95], opacity: [0, 1, 0] }}
+      {slashes.map((s, index) => (
+        <motion.g
+          key={index}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{
+            opacity: [0.7, 1, 0.85, 1, 0.7],
+            scale: [0.95, 1.15, 1, 1.15, 0.95],
+            rotate: [-6, 6, -2, 4, -6],
+          }}
           transition={{
-            duration: 1.4,
-            delay: index * 0.2,
+            duration: 1.2,
+            delay: index * 0.15,
             repeat: Infinity,
-            repeatDelay: 0.4,
-            ease: "easeOut",
+            ease: "easeInOut",
+          }}
+          style={{
+            transformBox: "fill-box",
+            transformOrigin: `${s.x}px ${s.y}px`,
+            filter: "drop-shadow(0 0 8px rgba(248,126,139,0.8))",
           }}
         >
-          ✗
-        </motion.text>
+          <line
+            x1={s.x - 14}
+            y1={s.y - 14}
+            x2={s.x + 14}
+            y2={s.y + 14}
+            stroke="#ff7b8b"
+            strokeWidth={4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={s.x + 14}
+            y1={s.y - 14}
+            x2={s.x - 14}
+            y2={s.y + 14}
+            stroke="#ff7b8b"
+            strokeWidth={4}
+            strokeLinecap="round"
+          />
+        </motion.g>
+      ))}
+
+      {drops.map((d, index) => (
+        <motion.path
+          key={`d-${index}`}
+          d={`M ${d.x} ${d.y} q -3 4 0 8 q 3 -4 0 -8 z`}
+          fill="#9fc5ff"
+          initial={{ opacity: 0 }}
+          animate={{
+            y: [0, 18, 22],
+            opacity: [0, 0.85, 0],
+          }}
+          transition={{
+            duration: 1.4,
+            delay: d.delay,
+            repeat: Infinity,
+            repeatDelay: 0.6,
+            ease: "easeIn",
+          }}
+        />
       ))}
     </motion.g>
   );
