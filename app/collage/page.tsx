@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Instrument_Serif } from "next/font/google";
 
-import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
+import {
+  fetchAllHomepageBanners,
+  type HomepageBanner,
+} from "@/app/lib/homepage-banner";
+import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { createPublicClient } from "@/utils/supabase/server";
 
 import CollageExperience from "./CollageExperience";
@@ -26,6 +30,7 @@ type SketchPreview = {
   id: string;
   prompt: string | null;
   snapshot_url: string | null;
+  strokes: DrawingStroke[] | null;
   created_at: string;
 };
 
@@ -33,9 +38,9 @@ async function fetchSketchPreviews(): Promise<SketchPreview[]> {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("turtle_drawings")
-    .select("id, prompt, snapshot_url, created_at")
+    .select("id, prompt, snapshot_url, strokes, created_at")
     .order("created_at", { ascending: false })
-    .limit(80);
+    .limit(120);
 
   if (error) {
     console.error("Sketch preview fetch error:", error);
@@ -46,14 +51,19 @@ async function fetchSketchPreviews(): Promise<SketchPreview[]> {
 }
 
 export default async function CollagePage() {
-  const [banner, sketches] = await Promise.all([
-    fetchLatestHomepageBanner(createPublicClient()),
+  const supabase = createPublicClient();
+  const [banners, sketches] = await Promise.all([
+    fetchAllHomepageBanners(supabase),
     fetchSketchPreviews(),
   ]);
 
+  // The page wants oldest → newest so the chronological exhibit number reads
+  // naturally and the latest sits at the right end of the wall.
+  const orderedBanners: HomepageBanner[] = [...banners].reverse();
+
   return (
     <div className={`${instrumentSerif.variable} page-reveal`}>
-      <CollageExperience banner={banner} sketches={sketches} />
+      <CollageExperience banners={orderedBanners} sketches={sketches} />
     </div>
   );
 }

@@ -146,6 +146,24 @@ export async function fetchLatestHomepageBanner(
   return (data as HomepageBanner) ?? null;
 }
 
+export async function fetchAllHomepageBanners(
+  supabase: SupabaseClient,
+  limit = 60,
+): Promise<HomepageBanner[]> {
+  const { data, error } = await supabase
+    .from("homepage_banners")
+    .select("id, image_url, storage_path, sketch_count, prompt, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Banner history fetch error:", error);
+    return [];
+  }
+
+  return (data ?? []) as HomepageBanner[];
+}
+
 async function fetchSketches(
   supabase: SupabaseClient,
 ): Promise<SketchRecord[]> {

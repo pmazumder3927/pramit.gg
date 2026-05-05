@@ -5,8 +5,8 @@ export const CAPTCHA_TTL_MS = 10 * 60 * 1000;
 export const CAPTCHA_MIN_SOLVE_MS = 6_000;
 export const DRAWING_CANVAS_WIDTH = 480;
 export const DRAWING_CANVAS_HEIGHT = 320;
-export const DRAWING_MIN_STROKES = 1;
-export const DRAWING_MIN_TOTAL_LENGTH = 120;
+export const DRAWING_MIN_STROKES = 3;
+export const DRAWING_MIN_TOTAL_LENGTH = 640;
 export const DRAWING_MAX_LEVEL = 5;
 
 export type { DrawingPoint, DrawingStroke } from "./drawing/types";
@@ -71,7 +71,7 @@ export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
   const checklist: DrawingChecklistItem[] = [
     {
       key: "strokes",
-      label: "at least one stroke on the canvas",
+      label: "a few strokes on the canvas",
       passed: strokeCountOk,
     },
     {
@@ -83,10 +83,10 @@ export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
 
   const errors: string[] = [];
   if (!strokeCountOk) {
-    errors.push("Add at least one stroke before submitting.");
+    errors.push("Add a couple of strokes before submitting.");
   }
   if (!lengthOk) {
-    errors.push("Draw a little more — a single dot is not enough.");
+    errors.push("Draw a little more — the council expects an actual offering.");
   }
 
   return {
