@@ -1,17 +1,10 @@
-export const CAPTCHA_VERSION = 2 as const;
+export const CAPTCHA_VERSION = 3 as const;
 export const CAPTCHA_TTL_MS = 10 * 60 * 1000;
-export const CAPTCHA_MIN_SOLVE_MS = 9_000;
+export const CAPTCHA_MIN_SOLVE_MS = 6_000;
 export const DRAWING_CANVAS_WIDTH = 480;
 export const DRAWING_CANVAS_HEIGHT = 320;
 export const DRAWING_MIN_STROKES = 1;
 export const DRAWING_MIN_TOTAL_LENGTH = 120;
-
-export type CaptchaGlyph = {
-  id: string;
-  label: string;
-  symbol: string;
-  accent: string;
-};
 
 export type DrawingPoint = {
   x: number;
@@ -30,16 +23,11 @@ export type ConfessionalCaptchaChallenge = {
   issuedAt: number;
   expiresAt: number;
   minSolveMs: number;
-  phrase: string;
-  glyphs: CaptchaGlyph[];
-  glyphOrder: string[];
   drawingPrompt: string;
 };
 
 export type ConfessionalCaptchaSubmission = {
   token: string;
-  phrase: string;
-  glyphOrder: string[];
   strokes: DrawingStroke[];
 };
 
@@ -100,10 +88,6 @@ export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
     checklist,
     totalLength,
   };
-}
-
-export function normalizeCaptchaPhrase(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function strokeLength(points: DrawingPoint[]) {

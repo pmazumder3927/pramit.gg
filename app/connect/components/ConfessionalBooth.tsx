@@ -5,18 +5,30 @@ import { useState } from "react";
 
 import type { ConfessionalCaptchaSubmission } from "@/app/lib/confessional-captcha";
 import DrawingCaptcha from "@/app/connect/components/DrawingCaptcha";
+import CatCouncil from "@/app/connect/components/CatCouncil";
+
+type Phase = "form" | "judging" | "approve" | "reject" | "received";
+
+const MIN_JUDGING_MS = 2_400;
+const VERDICT_HOLD_MS = 1_700;
+const RECEIVED_HOLD_MS = 3_400;
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export default function ConfessionalBooth() {
   const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [phase, setPhase] = useState<Phase>("form");
   const [characterCount, setCharacterCount] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [captchaPayload, setCaptchaPayload] = useState<ConfessionalCaptchaSubmission | null>(null);
-  const [captchaSolved, setCaptchaSolved] = useState(false);
+  const [verdictMessage, setVerdictMessage] = useState<string | null>(null);
+  const [captchaPayload, setCaptchaPayload] =
+    useState<ConfessionalCaptchaSubmission | null>(null);
+  const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaRefreshKey, setCaptchaRefreshKey] = useState(0);
 
   const maxLength = 500;
+  const isBusy = phase !== "form";
 
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -28,22 +40,26 @@ export default function ConfessionalBooth() {
   };
 
   const submitMessage = async () => {
-    if (!message.trim() || isSubmitting) return;
+    if (!message.trim() || isBusy) return;
 
-    if (!captchaPayload || !captchaSolved) {
-      setSubmitError("Complete the captcha ritual before sending.");
+    if (!captchaPayload || !captchaReady) {
+      setSubmitError("Finish your drawing for the council first.");
       return;
     }
 
-    setIsSubmitting(true);
+    setPhase("judging");
     setSubmitError(null);
+    setVerdictMessage(null);
+
+    const minJudgingDeadline = sleep(MIN_JUDGING_MS);
+    let approved = false;
+    let approvalNote: string | null = null;
+    let rejectionNote: string | null = null;
 
     try {
       const response = await fetch("/api/confessional", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: message.trim(),
           timestamp: new Date().toISOString(),
@@ -52,49 +68,62 @@ export default function ConfessionalBooth() {
       });
 
       if (response.ok) {
-        setIsSubmitted(true);
-        setMessage("");
-        setCharacterCount(0);
-        setCaptchaPayload(null);
-        setCaptchaSolved(false);
-        setCaptchaRefreshKey((current) => current + 1);
-
-        // TurtleGallery refetches when it sees this.
-        window.dispatchEvent(new CustomEvent("turtle:new"));
-
-        setTimeout(() => {
-          setIsSubmitted(false);
-        }, 3000);
+        approved = true;
       } else {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-
-        setSubmitError(data?.error ?? "Could not send the message.");
-
-        if (response.status === 400) {
-          setCaptchaPayload(null);
-          setCaptchaSolved(false);
-          setCaptchaRefreshKey((current) => current + 1);
-        }
+        rejectionNote =
+          data?.error ?? "the council did not accept your drawing.";
       }
     } catch (error) {
       console.error("Error submitting message:", error);
-      setSubmitError("Could not send the message. Try again.");
-    } finally {
-      setIsSubmitting(false);
+      rejectionNote = "the council was unreachable. Try again.";
+    }
+
+    await minJudgingDeadline;
+
+    if (approved) {
+      setVerdictMessage(approvalNote ?? "your whisper has been recorded.");
+      setPhase("approve");
+      window.dispatchEvent(new CustomEvent("turtle:new"));
+
+      await sleep(VERDICT_HOLD_MS);
+
+      setMessage("");
+      setCharacterCount(0);
+      setCaptchaPayload(null);
+      setCaptchaReady(false);
+      setCaptchaRefreshKey((current) => current + 1);
+      setPhase("received");
+
+      await sleep(RECEIVED_HOLD_MS);
+      setPhase("form");
+    } else {
+      setVerdictMessage(rejectionNote);
+      setPhase("reject");
+
+      await sleep(VERDICT_HOLD_MS);
+
+      setSubmitError(rejectionNote);
+      // Force a fresh challenge — old one is signed but no longer valid for retry.
+      setCaptchaPayload(null);
+      setCaptchaReady(false);
+      setCaptchaRefreshKey((current) => current + 1);
+      setPhase("form");
     }
   };
 
+  const showCouncil =
+    phase === "judging" || phase === "approve" || phase === "reject";
+
   return (
     <div className="relative">
-      {/* Corner accents */}
       <div className="absolute top-0 left-0 w-8 h-px bg-white/10" />
       <div className="absolute top-0 left-0 w-px h-8 bg-white/10" />
       <div className="absolute bottom-0 right-0 w-8 h-px bg-white/10" />
       <div className="absolute bottom-0 right-0 w-px h-8 bg-white/10" />
 
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -109,7 +138,6 @@ export default function ConfessionalBooth() {
         </p>
       </motion.div>
 
-      {/* Form */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -117,7 +145,63 @@ export default function ConfessionalBooth() {
         className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden"
       >
         <AnimatePresence mode="wait">
-          {!isSubmitted ? (
+          {showCouncil ? (
+            <motion.div
+              key="council"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="px-6 py-10 md:py-14"
+            >
+              <CatCouncil
+                verdict={
+                  phase === "approve"
+                    ? "approve"
+                    : phase === "reject"
+                      ? "reject"
+                      : "judging"
+                }
+                message={verdictMessage ?? undefined}
+              />
+            </motion.div>
+          ) : phase === "received" ? (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="p-12 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                className="w-12 h-12 mx-auto mb-4 rounded-full border border-emerald-300/30 flex items-center justify-center"
+              >
+                <svg
+                  className="w-5 h-5 text-emerald-200/80"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </motion.div>
+
+              <h3 className="text-lg font-light text-white/80 mb-1">
+                message received
+              </h3>
+              <p className="text-white/40 text-sm font-light">
+                the council waves you on. whispered into the void.
+              </p>
+            </motion.div>
+          ) : (
             <motion.div
               key="form"
               initial={{ opacity: 0 }}
@@ -125,7 +209,6 @@ export default function ConfessionalBooth() {
               exit={{ opacity: 0 }}
               className="p-6 md:p-8"
             >
-              {/* Message Input */}
               <div className="relative mb-4">
                 <textarea
                   value={message}
@@ -138,21 +221,30 @@ export default function ConfessionalBooth() {
                 </div>
               </div>
 
-              {/* Anonymity note */}
               <div className="flex items-center gap-2 text-white/30 text-xs mb-6">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
                 </svg>
                 <span>completely anonymous · no tracking</span>
               </div>
 
               <div className="mb-6">
                 <DrawingCaptcha
-                  disabled={isSubmitting}
+                  disabled={isBusy}
                   refreshKey={captchaRefreshKey}
-                  onChange={(payload, solved) => {
+                  onChange={(payload, ready) => {
                     setCaptchaPayload(payload);
-                    setCaptchaSolved(solved);
+                    setCaptchaReady(ready);
                     setSubmitError(null);
                   }}
                 />
@@ -164,54 +256,21 @@ export default function ConfessionalBooth() {
                 </div>
               ) : null}
 
-              {/* Submit Button */}
               <motion.button
                 onClick={submitMessage}
-                disabled={!message.trim() || isSubmitting || !captchaSolved}
+                disabled={!message.trim() || isBusy || !captchaReady}
                 className="w-full py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/70 text-sm font-light hover:bg-white/[0.08] hover:text-white/90 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                whileHover={{ scale: message.trim() && captchaSolved ? 1.01 : 1 }}
-                whileTap={{ scale: message.trim() && captchaSolved ? 0.99 : 1 }}
+                whileHover={{
+                  scale: message.trim() && captchaReady && !isBusy ? 1.01 : 1,
+                }}
+                whileTap={{
+                  scale: message.trim() && captchaReady && !isBusy ? 0.99 : 1,
+                }}
               >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <motion.span
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      ↻
-                    </motion.span>
-                    sending...
-                  </span>
-                ) : (
-                  captchaSolved ? "whisper away" : "finish the ritual to whisper"
-                )}
+                {captchaReady
+                  ? "submit to the council"
+                  : "draw something for the council first"}
               </motion.button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="p-12 text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
-                className="w-12 h-12 mx-auto mb-4 rounded-full border border-white/10 flex items-center justify-center"
-              >
-                <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </motion.div>
-
-              <h3 className="text-lg font-light text-white/80 mb-1">
-                message received
-              </h3>
-              <p className="text-white/40 text-sm font-light">
-                whispered into the void
-              </p>
             </motion.div>
           )}
         </AnimatePresence>

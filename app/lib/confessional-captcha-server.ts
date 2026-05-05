@@ -9,28 +9,11 @@ import {
   CAPTCHA_VERSION,
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
-  type CaptchaGlyph,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
   type DrawingStroke,
   evaluateDrawing,
-  normalizeCaptchaPhrase,
 } from "@/app/lib/confessional-captcha";
-
-const GLYPH_CATALOG: CaptchaGlyph[] = [
-  { id: "fern", label: "fern", symbol: "❦", accent: "#90f6c3" },
-  { id: "shell", label: "shell", symbol: "◔", accent: "#f5ca9f" },
-  { id: "comet", label: "comet", symbol: "✦", accent: "#b7c7ff" },
-  { id: "puddle", label: "puddle", symbol: "◡", accent: "#8fe5ff" },
-  { id: "moss", label: "moss", symbol: "⬒", accent: "#a7f27a" },
-  { id: "orbit", label: "orbit", symbol: "◎", accent: "#ffb4d9" },
-  { id: "lantern", label: "lantern", symbol: "◌", accent: "#ffd36d" },
-  { id: "tide", label: "tide", symbol: "≈", accent: "#9fd1ff" },
-];
-
-const PHRASE_OPENERS = ["moss turtle", "quiet turtle", "midnight turtle", "honest turtle"];
-const PHRASE_VERBS = ["guards", "admits", "survives", "outsmarts"];
-const PHRASE_OBJECTS = ["the human inbox", "this tiny confessional", "a sincere message", "the spam swamp"];
 
 const DRAWING_SUBJECTS = [
   "a turtle",
@@ -85,11 +68,6 @@ let cachedClient: OpenAI | null = null;
 
 export function createConfessionalCaptchaChallenge() {
   const issuedAt = Date.now();
-  const glyphs = shuffle([...GLYPH_CATALOG]).slice(0, 6);
-  const glyphOrder = shuffle([...glyphs]).slice(0, 4).map((glyph) => glyph.id);
-  const phrase = normalizeCaptchaPhrase(
-    `${pick(PHRASE_OPENERS)} ${pick(PHRASE_VERBS)} ${pick(PHRASE_OBJECTS)}`,
-  );
   const drawingPrompt = pick(DRAWING_SUBJECTS);
 
   const challenge: ConfessionalCaptchaChallenge = {
@@ -98,9 +76,6 @@ export function createConfessionalCaptchaChallenge() {
     issuedAt,
     expiresAt: issuedAt + CAPTCHA_TTL_MS,
     minSolveMs: CAPTCHA_MIN_SOLVE_MS,
-    phrase,
-    glyphs,
-    glyphOrder,
     drawingPrompt,
   };
 
@@ -114,41 +89,25 @@ export async function verifyConfessionalCaptchaSubmission(
   submission: unknown,
 ): Promise<CaptchaVerificationResult> {
   if (!isSubmission(submission)) {
-    return { ok: false, error: "Complete the captcha ritual before sending." };
+    return { ok: false, error: "The council needs your drawing." };
   }
 
   const challenge = decodeChallenge(submission.token);
   if (!challenge) {
-    return { ok: false, error: "Captcha challenge could not be verified." };
+    return { ok: false, error: "The council could not verify the challenge." };
   }
 
   const now = Date.now();
 
   if (challenge.expiresAt <= now) {
-    return { ok: false, error: "Captcha expired. Refresh the ritual and try again." };
+    return { ok: false, error: "Challenge expired. Refresh and try again." };
   }
 
   if (challenge.issuedAt + challenge.minSolveMs > now) {
     return {
       ok: false,
-      error: `Take at least ${Math.ceil(challenge.minSolveMs / 1000)} seconds to finish the ritual.`,
+      error: `Take at least ${Math.ceil(challenge.minSolveMs / 1000)} seconds with your drawing.`,
     };
-  }
-
-  if (normalizeCaptchaPhrase(submission.phrase) !== challenge.phrase) {
-    return { ok: false, error: "Passphrase mismatch. Copy the phrase exactly." };
-  }
-
-  if (submission.glyphOrder.length !== challenge.glyphOrder.length) {
-    return { ok: false, error: "Tap the glyphs in the requested order first." };
-  }
-
-  const glyphOrderMatches = submission.glyphOrder.every(
-    (glyphId, index) => glyphId === challenge.glyphOrder[index],
-  );
-
-  if (!glyphOrderMatches) {
-    return { ok: false, error: "The glyph order was incorrect." };
   }
 
   const drawing = evaluateDrawing(submission.strokes);
@@ -179,7 +138,7 @@ export async function verifyConfessionalCaptchaSubmission(
   if (!verdict.matches) {
     return {
       ok: false,
-      error: `That doesn't quite read as ${challenge.drawingPrompt}. Try again.`,
+      error: `The council is unconvinced — that doesn't quite read as ${challenge.drawingPrompt}.`,
     };
   }
 
@@ -254,7 +213,7 @@ async function classifyDrawing({
   if (!client) {
     return {
       ok: false,
-      error: "Drawing review is unavailable right now. Please try again later.",
+      error: "The council is asleep. Please try again later.",
     };
   }
 
@@ -302,7 +261,7 @@ async function classifyDrawing({
 
     const raw = response.choices[0]?.message?.content?.trim();
     if (!raw) {
-      return { ok: false, error: "Could not review the drawing. Try again." };
+      return { ok: false, error: "The council was silent. Try again." };
     }
 
     const parsed = JSON.parse(raw) as { matches?: unknown; reason?: unknown };
@@ -311,13 +270,13 @@ async function classifyDrawing({
       typeof parsed.reason === "string" && parsed.reason.length > 0
         ? parsed.reason
         : matches
-          ? "looks right"
-          : "doesn't match";
+          ? "the council approves"
+          : "the council disapproves";
 
     return { ok: true, matches, reason };
   } catch (error) {
     console.error("Drawing classification error:", error);
-    return { ok: false, error: "Could not review the drawing. Try again." };
+    return { ok: false, error: "The council was distracted. Try again." };
   }
 }
 
@@ -396,9 +355,6 @@ function isSubmission(value: unknown): value is ConfessionalCaptchaSubmission {
 
   return (
     typeof candidate.token === "string" &&
-    typeof candidate.phrase === "string" &&
-    Array.isArray(candidate.glyphOrder) &&
-    candidate.glyphOrder.every((glyphId) => typeof glyphId === "string") &&
     Array.isArray(candidate.strokes) &&
     candidate.strokes.every(isStroke)
   );
@@ -414,15 +370,4 @@ function isStroke(value: unknown): value is DrawingStroke {
 
 function pick<T>(values: T[]) {
   return values[Math.floor(Math.random() * values.length)];
-}
-
-function shuffle<T>(values: T[]) {
-  const copy = [...values];
-
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
-  }
-
-  return copy;
 }
