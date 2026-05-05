@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const captchaResult = verifyConfessionalCaptchaSubmission(captcha);
+    const captchaResult = await verifyConfessionalCaptchaSubmission(captcha);
     if (!captchaResult.ok) {
       return NextResponse.json(
         { error: captchaResult.error },
@@ -60,12 +60,13 @@ export async function POST(request: NextRequest) {
       .insert([
         {
           strokes: captcha.strokes,
+          prompt: captchaResult.challenge.drawingPrompt,
           created_at: createdAt,
         },
       ]);
 
     if (turtleError) {
-      console.error("Turtle save error:", turtleError);
+      console.error("Drawing save error:", turtleError);
     }
 
     return NextResponse.json(

@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("turtle_drawings")
-    .select("id, strokes, created_at")
+    .select("id, strokes, prompt, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 

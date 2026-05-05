@@ -3,18 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  TURTLE_CANVAS_HEIGHT,
-  TURTLE_CANVAS_WIDTH,
+  DRAWING_CANVAS_HEIGHT,
+  DRAWING_CANVAS_WIDTH,
   type CaptchaGlyph,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
-  type TurtlePoint,
-  type TurtleStroke,
-  evaluateTurtleDrawing,
+  type DrawingPoint,
+  type DrawingStroke,
+  evaluateDrawing,
   normalizeCaptchaPhrase,
 } from "@/app/lib/confessional-captcha";
 
-type TurtleCaptchaProps = {
+type DrawingCaptchaProps = {
   disabled?: boolean;
   refreshKey?: number;
   onChange: (
@@ -28,23 +28,39 @@ type CaptchaResponse = {
   challenge: ConfessionalCaptchaChallenge;
 };
 
-const STROKE_COLORS = [
-  "#f2d1b0",
-  "#b9ddff",
-  "#b7ffca",
+type BrushSize = {
+  id: "fine" | "medium" | "thick";
+  label: string;
+  width: number;
+};
+
+const BRUSH_PALETTE: string[] = [
+  "#f5f5f5",
   "#f8a4c8",
-  "#ffe28a",
+  "#ffd36d",
+  "#b7ffca",
+  "#b9ddff",
   "#d0c0ff",
   "#9df4f2",
+  "#ff8f6b",
 ];
 
-export default function TurtleCaptcha({
+const BRUSH_SIZES: BrushSize[] = [
+  { id: "fine", label: "fine", width: 3 },
+  { id: "medium", label: "medium", width: 5 },
+  { id: "thick", label: "thick", width: 8 },
+];
+
+const DEFAULT_COLOR = BRUSH_PALETTE[0];
+const DEFAULT_BRUSH = BRUSH_SIZES[1];
+
+export default function DrawingCaptcha({
   disabled = false,
   refreshKey = 0,
   onChange,
-}: TurtleCaptchaProps) {
+}: DrawingCaptchaProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const currentStrokeRef = useRef<TurtlePoint[]>([]);
+  const currentStrokeRef = useRef<DrawingPoint[]>([]);
   const [challengeResponse, setChallengeResponse] =
     useState<CaptchaResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,14 +68,17 @@ export default function TurtleCaptcha({
   const [phrase, setPhrase] = useState("");
   const [selectedGlyphs, setSelectedGlyphs] = useState<string[]>([]);
   const [glyphFeedback, setGlyphFeedback] = useState<string | null>(null);
-  const [strokes, setStrokes] = useState<TurtleStroke[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<TurtlePoint[]>([]);
+  const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [activePointerId, setActivePointerId] = useState<number | null>(null);
+  const [activeColor, setActiveColor] = useState<string>(DEFAULT_COLOR);
+  const [activeBrush, setActiveBrush] = useState<BrushSize>(DEFAULT_BRUSH);
+  const [image, setImage] = useState<string>("");
 
   const challenge = challengeResponse?.challenge ?? null;
   const token = challengeResponse?.token ?? "";
-  const drawingEvaluation = evaluateTurtleDrawing(strokes);
+  const drawingEvaluation = evaluateDrawing(strokes);
   const glyphPrompt = challenge
     ? challenge.glyphOrder
         .map(
@@ -78,14 +97,9 @@ export default function TurtleCaptcha({
     selectedGlyphs.every(
       (glyphId, index) => glyphId === challenge.glyphOrder[index],
     );
-  const solved = Boolean(
-    challenge && phraseSolved && glyphSolved && drawingEvaluation.ok,
+  const ready = Boolean(
+    challenge && phraseSolved && glyphSolved && drawingEvaluation.ok && image,
   );
-  const currentStep = Math.min(strokes.length + 1, 7);
-  const showDrawingError =
-    strokes.length > 0 &&
-    !drawingEvaluation.ok &&
-    drawingEvaluation.errors.length > 0;
 
   useEffect(() => {
     let ignore = false;
@@ -118,6 +132,7 @@ export default function TurtleCaptcha({
         setCurrentStroke([]);
         setIsDrawing(false);
         setActivePointerId(null);
+        setImage("");
       } catch (error) {
         if (ignore) {
           return;
@@ -149,55 +164,26 @@ export default function TurtleCaptcha({
       return;
     }
 
-    context.clearRect(0, 0, TURTLE_CANVAS_WIDTH, TURTLE_CANVAS_HEIGHT);
-    context.fillStyle = "rgba(255, 255, 255, 0.02)";
-    context.fillRect(0, 0, TURTLE_CANVAS_WIDTH, TURTLE_CANVAS_HEIGHT);
+    drawCanvas(context, strokes, currentStroke, activeColor, activeBrush.width);
+  }, [strokes, currentStroke, activeColor, activeBrush.width]);
 
-    context.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    context.lineWidth = 1;
-    for (let x = 40; x < TURTLE_CANVAS_WIDTH; x += 40) {
-      context.beginPath();
-      context.moveTo(x, 0);
-      context.lineTo(x, TURTLE_CANVAS_HEIGHT);
-      context.stroke();
+  // Snapshot the canvas to PNG only when committed strokes change so we don't
+  // burn cycles regenerating during pointer drag.
+  useEffect(() => {
+    if (!canvasRef.current) {
+      return;
     }
 
-    for (let y = 40; y < TURTLE_CANVAS_HEIGHT; y += 40) {
-      context.beginPath();
-      context.moveTo(0, y);
-      context.lineTo(TURTLE_CANVAS_WIDTH, y);
-      context.stroke();
+    if (strokes.length === 0) {
+      setImage("");
+      return;
     }
 
-    [...strokes, { points: currentStroke }]
-      .filter((stroke) => stroke.points.length > 0)
-      .forEach((stroke, index) => {
-        const color = STROKE_COLORS[index] ?? "#ffffff";
-        context.strokeStyle = color;
-        context.fillStyle = color;
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        context.lineWidth = 4;
-        context.beginPath();
-
-        stroke.points.forEach((point, pointIndex) => {
-          if (pointIndex === 0) {
-            context.moveTo(point.x, point.y);
-          } else {
-            context.lineTo(point.x, point.y);
-          }
-        });
-
-        context.stroke();
-
-        const anchor = stroke.points[0];
-        context.font = "12px monospace";
-        context.fillText(String(index + 1), anchor.x + 6, anchor.y - 6);
-      });
-  }, [strokes, currentStroke]);
+    setImage(canvasRef.current.toDataURL("image/png"));
+  }, [strokes]);
 
   useEffect(() => {
-    if (!solved || !challenge) {
+    if (!ready || !challenge) {
       onChange(null, false);
       return;
     }
@@ -208,13 +194,14 @@ export default function TurtleCaptcha({
         phrase,
         glyphOrder: selectedGlyphs,
         strokes,
+        image,
       },
       true,
     );
-  }, [challenge, onChange, phrase, selectedGlyphs, solved, strokes, token]);
+  }, [challenge, image, onChange, phrase, ready, selectedGlyphs, strokes, token]);
 
   const beginStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || strokes.length >= 7) {
+    if (disabled) {
       return;
     }
 
@@ -235,7 +222,7 @@ export default function TurtleCaptcha({
 
     setCurrentStroke((previous) => {
       const lastPoint = previous[previous.length - 1];
-      if (lastPoint && distance(lastPoint, point) < 2) {
+      if (lastPoint && distance(lastPoint, point) < 1.5) {
         return previous;
       }
 
@@ -260,11 +247,18 @@ export default function TurtleCaptcha({
     const finalizedStroke = currentStrokeRef.current;
 
     setStrokes((previous) => {
-      if (!finalizedStroke.length || previous.length >= 7) {
+      if (!finalizedStroke.length) {
         return previous;
       }
 
-      return [...previous, { points: finalizedStroke }];
+      return [
+        ...previous,
+        {
+          points: finalizedStroke,
+          color: activeColor,
+          width: activeBrush.width,
+        },
+      ];
     });
 
     currentStrokeRef.current = [];
@@ -320,6 +314,7 @@ export default function TurtleCaptcha({
     setCurrentStroke([]);
     setIsDrawing(false);
     setActivePointerId(null);
+    setImage("");
     setLoadError(null);
     setIsLoading(true);
 
@@ -397,7 +392,7 @@ export default function TurtleCaptcha({
       <div className="mb-5 grid gap-2 md:grid-cols-3">
         <StatusPill label="phrase" complete={phraseSolved} />
         <StatusPill label="glyphs" complete={Boolean(glyphSolved)} />
-        <StatusPill label="turtle" complete={drawingEvaluation.ok} />
+        <StatusPill label="drawing" complete={drawingEvaluation.ok} />
       </div>
 
       <div className="space-y-5">
@@ -476,14 +471,16 @@ export default function TurtleCaptcha({
         </section>
 
         <section className="rounded-2xl border border-white/[0.06] bg-black/10 p-4">
-          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="mb-2 text-xs uppercase tracking-[0.24em] text-white/30">
-                3. draw the turtle blueprint
+                3. draw the prompt
               </p>
               <p className="text-sm font-light text-white/60">
-                Current stroke: {currentStep}/7. The first stroke must be the
-                shell.
+                Sketch{" "}
+                <span className="text-white/90">{challenge.drawingPrompt}</span>
+                . An LLM checks if it&apos;s recognizable — be loose, not
+                careful.
               </p>
             </div>
 
@@ -494,7 +491,7 @@ export default function TurtleCaptcha({
                 disabled={disabled || strokes.length === 0}
                 className="rounded-xl border border-white/10 px-3 py-2 text-xs font-light text-white/50 transition-colors duration-300 hover:text-white/80 disabled:opacity-30"
               >
-                undo stroke
+                undo
               </button>
               <button
                 type="button"
@@ -505,51 +502,89 @@ export default function TurtleCaptcha({
                 }
                 className="rounded-xl border border-white/10 px-3 py-2 text-xs font-light text-white/50 transition-colors duration-300 hover:text-white/80 disabled:opacity-30"
               >
-                clear turtle
+                clear
               </button>
             </div>
           </div>
 
-          <div className="mb-4 grid gap-2">
-            {challenge.turtleSteps.map((step) => (
-              <p key={step} className="text-sm font-light text-white/58">
-                {step}
-              </p>
-            ))}
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+            <div className="flex flex-wrap gap-1.5">
+              {BRUSH_PALETTE.map((color) => {
+                const selected = color === activeColor;
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setActiveColor(color)}
+                    disabled={disabled}
+                    aria-label={`color ${color}`}
+                    className="h-6 w-6 rounded-full border transition-transform duration-200 hover:scale-110 disabled:opacity-40"
+                    style={{
+                      backgroundColor: color,
+                      borderColor: selected
+                        ? "rgba(255,255,255,0.85)"
+                        : "rgba(255,255,255,0.15)",
+                      boxShadow: selected
+                        ? "0 0 0 2px rgba(255,255,255,0.15)"
+                        : undefined,
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="ml-auto flex items-center gap-1.5">
+              {BRUSH_SIZES.map((size) => {
+                const selected = size.id === activeBrush.id;
+                return (
+                  <button
+                    key={size.id}
+                    type="button"
+                    onClick={() => setActiveBrush(size)}
+                    disabled={disabled}
+                    aria-label={`brush ${size.label}`}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border transition-colors duration-200 hover:border-white/30 disabled:opacity-40"
+                    style={{
+                      borderColor: selected
+                        ? "rgba(255,255,255,0.6)"
+                        : "rgba(255,255,255,0.1)",
+                      backgroundColor: selected
+                        ? "rgba(255,255,255,0.04)"
+                        : "transparent",
+                    }}
+                  >
+                    <span
+                      className="rounded-full"
+                      style={{
+                        width: size.width + 2,
+                        height: size.width + 2,
+                        backgroundColor: activeColor,
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <canvas
             ref={canvasRef}
-            width={TURTLE_CANVAS_WIDTH}
-            height={TURTLE_CANVAS_HEIGHT}
+            width={DRAWING_CANVAS_WIDTH}
+            height={DRAWING_CANVAS_HEIGHT}
             onPointerDown={beginStroke}
             onPointerMove={drawStroke}
             onPointerUp={endStroke}
             onPointerLeave={endStroke}
             onPointerCancel={endStroke}
-            className="mb-4 w-full rounded-2xl border border-dashed border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)] touch-none"
+            className="w-full rounded-2xl border border-dashed border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)] touch-none"
+            style={{ aspectRatio: `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}` }}
           />
 
-          <div className="grid gap-2">
-            {drawingEvaluation.checklist.map((item) => (
-              <div
-                key={item.key}
-                className={`rounded-xl border px-3 py-2 text-sm font-light ${
-                  item.passed
-                    ? "border-emerald-400/20 bg-emerald-500/5 text-emerald-100/80"
-                    : "border-white/[0.06] bg-white/[0.02] text-white/45"
-                }`}
-              >
-                {item.label}
-              </div>
-            ))}
-          </div>
-
-          {showDrawingError ? (
-            <p className="mt-3 text-xs font-light text-amber-100/70">
-              {drawingEvaluation.errors[0]}
-            </p>
-          ) : null}
+          <p className="mt-3 text-xs font-light text-white/35">
+            {strokes.length === 0
+              ? "Start with any stroke. The LLM is generous."
+              : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"} on the canvas.`}
+          </p>
         </section>
       </div>
     </div>
@@ -557,13 +592,83 @@ export default function TurtleCaptcha({
 
   function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const scaleX = TURTLE_CANVAS_WIDTH / bounds.width;
-    const scaleY = TURTLE_CANVAS_HEIGHT / bounds.height;
+    const scaleX = DRAWING_CANVAS_WIDTH / bounds.width;
+    const scaleY = DRAWING_CANVAS_HEIGHT / bounds.height;
 
     return {
       x: (event.clientX - bounds.left) * scaleX,
       y: (event.clientY - bounds.top) * scaleY,
     };
+  }
+}
+
+function drawCanvas(
+  context: CanvasRenderingContext2D,
+  strokes: DrawingStroke[],
+  currentStroke: DrawingPoint[],
+  currentColor: string,
+  currentWidth: number,
+) {
+  context.clearRect(0, 0, DRAWING_CANVAS_WIDTH, DRAWING_CANVAS_HEIGHT);
+  context.fillStyle = "rgba(8, 6, 14, 0.85)";
+  context.fillRect(0, 0, DRAWING_CANVAS_WIDTH, DRAWING_CANVAS_HEIGHT);
+
+  context.strokeStyle = "rgba(255, 255, 255, 0.05)";
+  context.lineWidth = 1;
+  for (let x = 40; x < DRAWING_CANVAS_WIDTH; x += 40) {
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, DRAWING_CANVAS_HEIGHT);
+    context.stroke();
+  }
+  for (let y = 40; y < DRAWING_CANVAS_HEIGHT; y += 40) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(DRAWING_CANVAS_WIDTH, y);
+    context.stroke();
+  }
+
+  strokes.forEach((stroke) => paintStroke(context, stroke));
+
+  if (currentStroke.length > 0) {
+    paintStroke(context, {
+      points: currentStroke,
+      color: currentColor,
+      width: currentWidth,
+    });
+  }
+}
+
+function paintStroke(
+  context: CanvasRenderingContext2D,
+  stroke: DrawingStroke,
+) {
+  if (stroke.points.length === 0) {
+    return;
+  }
+
+  context.strokeStyle = stroke.color ?? "#f5f5f5";
+  context.lineWidth = stroke.width ?? 5;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+
+  stroke.points.forEach((point, index) => {
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  });
+
+  if (stroke.points.length === 1) {
+    const only = stroke.points[0];
+    context.fillStyle = stroke.color ?? "#f5f5f5";
+    context.beginPath();
+    context.arc(only.x, only.y, (stroke.width ?? 5) / 2, 0, Math.PI * 2);
+    context.fill();
+  } else {
+    context.stroke();
   }
 }
 
@@ -581,6 +686,6 @@ function StatusPill({ label, complete }: { label: string; complete: boolean }) {
   );
 }
 
-function distance(first: TurtlePoint, second: TurtlePoint) {
+function distance(first: DrawingPoint, second: DrawingPoint) {
   return Math.hypot(first.x - second.x, first.y - second.y);
 }

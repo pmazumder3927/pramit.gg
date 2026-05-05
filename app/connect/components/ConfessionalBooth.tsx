@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 
 import type { ConfessionalCaptchaSubmission } from "@/app/lib/confessional-captcha";
-import TurtleCaptcha from "@/app/connect/components/TurtleCaptcha";
+import DrawingCaptcha from "@/app/connect/components/DrawingCaptcha";
 
 export default function ConfessionalBooth() {
   const [message, setMessage] = useState("");
@@ -147,7 +147,7 @@ export default function ConfessionalBooth() {
               </div>
 
               <div className="mb-6">
-                <TurtleCaptcha
+                <DrawingCaptcha
                   disabled={isSubmitting}
                   refreshKey={captchaRefreshKey}
                   onChange={(payload, solved) => {

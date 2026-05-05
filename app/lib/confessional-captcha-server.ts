@@ -1,14 +1,17 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 
+import OpenAI from "openai";
+
 import {
   CAPTCHA_MIN_SOLVE_MS,
   CAPTCHA_TTL_MS,
   CAPTCHA_VERSION,
+  DRAWING_IMAGE_MAX_BYTES,
   type CaptchaGlyph,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
-  type TurtleStroke,
-  evaluateTurtleDrawing,
+  type DrawingStroke,
+  evaluateDrawing,
   normalizeCaptchaPhrase,
 } from "@/app/lib/confessional-captcha";
 
@@ -27,17 +30,65 @@ const PHRASE_OPENERS = ["moss turtle", "quiet turtle", "midnight turtle", "hones
 const PHRASE_VERBS = ["guards", "admits", "survives", "outsmarts"];
 const PHRASE_OBJECTS = ["the human inbox", "this tiny confessional", "a sincere message", "the spam swamp"];
 
+const DRAWING_SUBJECTS = [
+  "a turtle",
+  "a fish",
+  "a cat",
+  "a dog",
+  "a bird",
+  "a snail",
+  "a butterfly",
+  "a tree",
+  "a flower",
+  "a mushroom",
+  "a leaf",
+  "a sun",
+  "a moon",
+  "a star",
+  "a cloud",
+  "a house",
+  "a chair",
+  "a teapot",
+  "a mug",
+  "an umbrella",
+  "a key",
+  "a book",
+  "a balloon",
+  "a kite",
+  "a sailboat",
+  "a hot air balloon",
+  "a slice of pizza",
+  "an ice cream cone",
+  "a banana",
+  "a strawberry",
+  "a heart",
+  "a smiley face",
+  "an eye",
+  "a hand",
+  "a pair of glasses",
+  "a hat",
+  "a guitar",
+  "a piano",
+  "a paper airplane",
+  "a snowman",
+];
+
+const DEFAULT_VISION_MODEL = "gpt-4o-mini";
+
 type CaptchaVerificationResult =
-  | { ok: true; challenge: ConfessionalCaptchaChallenge }
+  | { ok: true; challenge: ConfessionalCaptchaChallenge; matchReason: string }
   | { ok: false; error: string };
+
+let cachedClient: OpenAI | null = null;
 
 export function createConfessionalCaptchaChallenge() {
   const issuedAt = Date.now();
   const glyphs = shuffle([...GLYPH_CATALOG]).slice(0, 6);
   const glyphOrder = shuffle([...glyphs]).slice(0, 4).map((glyph) => glyph.id);
   const phrase = normalizeCaptchaPhrase(
-    `${pick(PHRASE_OPENERS)} ${pick(PHRASE_VERBS)} ${pick(PHRASE_OBJECTS)}`
+    `${pick(PHRASE_OPENERS)} ${pick(PHRASE_VERBS)} ${pick(PHRASE_OBJECTS)}`,
   );
+  const drawingPrompt = pick(DRAWING_SUBJECTS);
 
   const challenge: ConfessionalCaptchaChallenge = {
     version: CAPTCHA_VERSION,
@@ -48,12 +99,7 @@ export function createConfessionalCaptchaChallenge() {
     phrase,
     glyphs,
     glyphOrder,
-    turtleSteps: [
-      "Stroke 1: draw one closed shell loop in the middle.",
-      "Stroke 2: add a head on the right side of the shell.",
-      "Strokes 3-6: draw four separate legs below the shell.",
-      "Stroke 7: finish with a tail on the left.",
-    ],
+    drawingPrompt,
   };
 
   return {
@@ -62,9 +108,9 @@ export function createConfessionalCaptchaChallenge() {
   };
 }
 
-export function verifyConfessionalCaptchaSubmission(
-  submission: unknown
-): CaptchaVerificationResult {
+export async function verifyConfessionalCaptchaSubmission(
+  submission: unknown,
+): Promise<CaptchaVerificationResult> {
   if (!isSubmission(submission)) {
     return { ok: false, error: "Complete the captcha ritual before sending." };
   }
@@ -96,22 +142,157 @@ export function verifyConfessionalCaptchaSubmission(
   }
 
   const glyphOrderMatches = submission.glyphOrder.every(
-    (glyphId, index) => glyphId === challenge.glyphOrder[index]
+    (glyphId, index) => glyphId === challenge.glyphOrder[index],
   );
 
   if (!glyphOrderMatches) {
     return { ok: false, error: "The glyph order was incorrect." };
   }
 
-  const drawing = evaluateTurtleDrawing(submission.strokes);
+  const drawing = evaluateDrawing(submission.strokes);
   if (!drawing.ok) {
     return {
       ok: false,
-      error: drawing.errors[0] ?? "The turtle drawing did not pass inspection.",
+      error: drawing.errors[0] ?? "Add a little more to your drawing.",
     };
   }
 
-  return { ok: true, challenge };
+  const imageCheck = validateImagePayload(submission.image);
+  if (!imageCheck.ok) {
+    return { ok: false, error: imageCheck.error };
+  }
+
+  const verdict = await classifyDrawing({
+    prompt: challenge.drawingPrompt,
+    imageDataUrl: submission.image,
+  });
+
+  if (!verdict.ok) {
+    return { ok: false, error: verdict.error };
+  }
+
+  if (!verdict.matches) {
+    return {
+      ok: false,
+      error: `That doesn't quite read as ${challenge.drawingPrompt}. Try again.`,
+    };
+  }
+
+  return { ok: true, challenge, matchReason: verdict.reason };
+}
+
+type ImageValidation =
+  | { ok: true; bytes: number }
+  | { ok: false; error: string };
+
+function validateImagePayload(image: string): ImageValidation {
+  if (typeof image !== "string" || !image.startsWith("data:image/")) {
+    return { ok: false, error: "Drawing image was missing or malformed." };
+  }
+
+  const commaIndex = image.indexOf(",");
+  if (commaIndex < 0) {
+    return { ok: false, error: "Drawing image was missing or malformed." };
+  }
+
+  // base64 encoded length is ~4/3 of byte length; clamp to byte budget.
+  const base64Length = image.length - commaIndex - 1;
+  const approxBytes = Math.ceil((base64Length * 3) / 4);
+
+  if (approxBytes > DRAWING_IMAGE_MAX_BYTES) {
+    return { ok: false, error: "Drawing image is too large." };
+  }
+
+  return { ok: true, bytes: approxBytes };
+}
+
+type DrawingVerdict =
+  | { ok: true; matches: boolean; reason: string }
+  | { ok: false; error: string };
+
+async function classifyDrawing({
+  prompt,
+  imageDataUrl,
+}: {
+  prompt: string;
+  imageDataUrl: string;
+}): Promise<DrawingVerdict> {
+  const client = getOpenAIClient();
+  if (!client) {
+    return {
+      ok: false,
+      error: "Drawing review is unavailable right now. Please try again later.",
+    };
+  }
+
+  const model = process.env.OPENAI_VISION_MODEL?.trim() || DEFAULT_VISION_MODEL;
+
+  try {
+    const response = await client.chat.completions.create(
+      {
+        model,
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a generous captcha verifier reviewing rough finger sketches. " +
+              "Decide whether a quick, sincere sketch reasonably depicts a target subject. " +
+              "Sketches are crude — be lenient, accept any reasonable attempt, and only reject if it is clearly a different subject, just scribbles, or essentially blank. " +
+              'Always reply with strict JSON of the form {"matches": boolean, "reason": "<one short sentence>"}.',
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Target subject: ${prompt}. Does this sketch reasonably depict that subject?`,
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageDataUrl, detail: "low" },
+              },
+            ],
+          },
+        ],
+      },
+      { timeout: 15_000 },
+    );
+
+    const raw = response.choices[0]?.message?.content?.trim();
+    if (!raw) {
+      return { ok: false, error: "Could not review the drawing. Try again." };
+    }
+
+    const parsed = JSON.parse(raw) as { matches?: unknown; reason?: unknown };
+    const matches = parsed.matches === true;
+    const reason =
+      typeof parsed.reason === "string" && parsed.reason.length > 0
+        ? parsed.reason
+        : matches
+          ? "looks right"
+          : "doesn't match";
+
+    return { ok: true, matches, reason };
+  } catch (error) {
+    console.error("Drawing classification error:", error);
+    return { ok: false, error: "Could not review the drawing. Try again." };
+  }
+}
+
+function getOpenAIClient() {
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  cachedClient = new OpenAI({ apiKey });
+  return cachedClient;
 }
 
 function signChallenge(challenge: ConfessionalCaptchaChallenge) {
@@ -143,7 +324,7 @@ function decodeChallenge(token: string) {
 
   try {
     const decoded = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8")
+      Buffer.from(payload, "base64url").toString("utf8"),
     ) as ConfessionalCaptchaChallenge;
 
     if (decoded.version !== CAPTCHA_VERSION) {
@@ -179,15 +360,16 @@ function isSubmission(value: unknown): value is ConfessionalCaptchaSubmission {
     Array.isArray(candidate.glyphOrder) &&
     candidate.glyphOrder.every((glyphId) => typeof glyphId === "string") &&
     Array.isArray(candidate.strokes) &&
-    candidate.strokes.every(isStroke)
+    candidate.strokes.every(isStroke) &&
+    typeof candidate.image === "string"
   );
 }
 
-function isStroke(value: unknown): value is TurtleStroke {
+function isStroke(value: unknown): value is DrawingStroke {
   return Boolean(
     value &&
       typeof value === "object" &&
-      Array.isArray((value as Partial<TurtleStroke>).points)
+      Array.isArray((value as Partial<DrawingStroke>).points),
   );
 }
 

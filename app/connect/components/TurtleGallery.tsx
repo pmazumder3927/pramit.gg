@@ -4,12 +4,15 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  TURTLE_CANVAS_HEIGHT,
-  TURTLE_CANVAS_WIDTH,
-  type TurtleStroke,
+  DRAWING_CANVAS_HEIGHT,
+  DRAWING_CANVAS_WIDTH,
+  type DrawingStroke,
 } from "@/app/lib/confessional-captcha";
 
-const STROKE_COLORS = [
+const LEGACY_CANVAS_WIDTH = 320;
+const LEGACY_CANVAS_HEIGHT = 220;
+
+const LEGACY_STROKE_COLORS = [
   "#f2d1b0",
   "#b9ddff",
   "#b7ffca",
@@ -19,33 +22,34 @@ const STROKE_COLORS = [
   "#9df4f2",
 ];
 
-type TurtleRecord = {
+type DrawingRecord = {
   id: string;
-  strokes: TurtleStroke[];
+  strokes: DrawingStroke[];
+  prompt: string | null;
   created_at: string;
 };
 
 type GalleryResponse = {
-  turtles: TurtleRecord[];
+  turtles: DrawingRecord[];
 };
 
 export default function TurtleGallery() {
-  const [turtles, setTurtles] = useState<TurtleRecord[] | null>(null);
+  const [drawings, setDrawings] = useState<DrawingRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/turtles", { cache: "no-store" });
       if (!response.ok) {
-        throw new Error("Failed to load turtles.");
+        throw new Error("Failed to load drawings.");
       }
 
       const data = (await response.json()) as GalleryResponse;
-      setTurtles(data.turtles);
+      setDrawings(data.turtles);
       setError(null);
     } catch (loadError) {
       console.error("Gallery load error:", loadError);
-      setError("the turtles are hiding. try again in a moment.");
+      setError("the gallery is hiding. try again in a moment.");
     }
   }, []);
 
@@ -53,13 +57,13 @@ export default function TurtleGallery() {
     void load();
 
     // ConfessionalBooth dispatches this after a successful submission so the
-    // freshly drawn turtle shows up without a page reload.
-    const handleNewTurtle = () => {
+    // freshly drawn sketch shows up without a page reload.
+    const handleNew = () => {
       void load();
     };
 
-    window.addEventListener("turtle:new", handleNewTurtle);
-    return () => window.removeEventListener("turtle:new", handleNewTurtle);
+    window.addEventListener("turtle:new", handleNew);
+    return () => window.removeEventListener("turtle:new", handleNew);
   }, [load]);
 
   return (
@@ -76,10 +80,10 @@ export default function TurtleGallery() {
         className="text-center mb-8"
       >
         <h2 className="text-2xl md:text-3xl font-extralight text-white/80 mb-2">
-          the turtle gallery
+          the drawing gallery
         </h2>
         <p className="text-white/40 font-light text-sm max-w-md mx-auto">
-          every confession leaves a turtle behind. these are theirs.
+          every confession comes with a sketch. these are theirs.
         </p>
       </motion.div>
 
@@ -87,19 +91,19 @@ export default function TurtleGallery() {
         <div className="rounded-2xl border border-rose-400/20 bg-rose-500/5 p-5 text-center text-sm font-light text-rose-100/80">
           {error}
         </div>
-      ) : turtles === null ? (
+      ) : drawings === null ? (
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center text-sm font-light text-white/40">
-          gathering turtles...
+          gathering drawings...
         </div>
-      ) : turtles.length === 0 ? (
+      ) : drawings.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center text-sm font-light text-white/40">
-          no turtles yet. be the first.
+          nothing here yet. be the first.
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {turtles.map((turtle, index) => (
+          {drawings.map((drawing, index) => (
             <motion.div
-              key={turtle.id}
+              key={drawing.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
@@ -108,10 +112,15 @@ export default function TurtleGallery() {
               }}
               className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-2 transition-colors duration-300 hover:border-white/15 hover:bg-white/[0.04]"
             >
-              <TurtleSvg strokes={turtle.strokes} />
-              <p className="mt-1 text-[10px] font-light text-white/25 text-center tabular-nums">
-                {formatDate(turtle.created_at)}
-              </p>
+              <DrawingSvg drawing={drawing} />
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] font-light text-white/40">
+                <span className="truncate">
+                  {drawing.prompt ?? "a turtle"}
+                </span>
+                <span className="text-white/25 tabular-nums">
+                  {formatDate(drawing.created_at)}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -120,19 +129,30 @@ export default function TurtleGallery() {
   );
 }
 
-function TurtleSvg({ strokes }: { strokes: TurtleStroke[] }) {
+function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
+  // Old turtle records were drawn on a 320x220 canvas with no per-stroke color;
+  // detect by absence of stored prompt and fall back to the legacy palette.
+  const isLegacy = drawing.prompt === null;
+  const width = isLegacy ? LEGACY_CANVAS_WIDTH : DRAWING_CANVAS_WIDTH;
+  const height = isLegacy ? LEGACY_CANVAS_HEIGHT : DRAWING_CANVAS_HEIGHT;
+
   return (
     <svg
-      viewBox={`0 0 ${TURTLE_CANVAS_WIDTH} ${TURTLE_CANVAS_HEIGHT}`}
-      className="w-full aspect-[320/220] rounded-lg bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)]"
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full rounded-lg bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)]"
+      style={{ aspectRatio: `${width} / ${height}` }}
       preserveAspectRatio="xMidYMid meet"
     >
-      {strokes.map((stroke, index) => {
-        const color = STROKE_COLORS[index] ?? "#ffffff";
+      {drawing.strokes.map((stroke, index) => {
         const path = strokeToPath(stroke);
         if (!path) {
           return null;
         }
+
+        const color = isLegacy
+          ? LEGACY_STROKE_COLORS[index] ?? "#ffffff"
+          : stroke.color ?? "#f5f5f5";
+        const strokeWidth = isLegacy ? 4 : stroke.width ?? 5;
 
         return (
           <path
@@ -140,10 +160,10 @@ function TurtleSvg({ strokes }: { strokes: TurtleStroke[] }) {
             d={path}
             fill="none"
             stroke={color}
-            strokeWidth={4}
+            strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeLinejoin="round"
-            opacity={0.85}
+            opacity={0.9}
           />
         );
       })}
@@ -151,7 +171,7 @@ function TurtleSvg({ strokes }: { strokes: TurtleStroke[] }) {
   );
 }
 
-function strokeToPath(stroke: TurtleStroke) {
+function strokeToPath(stroke: DrawingStroke) {
   const points = Array.isArray(stroke?.points) ? stroke.points : [];
   if (points.length === 0) {
     return null;
