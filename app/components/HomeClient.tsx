@@ -241,10 +241,10 @@ export default function HomeClient({
               </div>
               <div className="flex items-center gap-6 text-sm text-gray-500">
                 <a
-                  href="/about"
+                  href="/connect"
                   className="hover:text-white transition-colors duration-300 font-light"
                 >
-                  About
+                  Connect
                 </a>
                 <div className="w-1 h-1 bg-gray-700 rounded-full" />
                 <span className="font-light">© 2025 pramit mazumder</span>

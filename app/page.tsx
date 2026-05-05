@@ -56,10 +56,10 @@ export default async function Home() {
           <div className="max-w-7xl mx-auto px-6 md:px-8">
             <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
               <Link
-                href="/about"
+                href="/connect"
                 className="hover:text-white transition-colors duration-300 font-light"
               >
-                About
+                Connect
               </Link>
               <div className="w-1 h-1 bg-gray-700 rounded-full" />
               <span className="font-light">© 2025 pramit mazumder</span>

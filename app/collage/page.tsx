@@ -29,10 +29,8 @@ export default async function CollagePage() {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-base font-light leading-relaxed text-white/60 md:text-lg">
-            every confession in the booth comes with a sketch. an LLM weaves
-            them all into one painted nocturne — every contributor's drawing
-            stays recognizable, set into a moonlit world that gets re-imagined
-            as new sketches arrive.
+            a collage of every sketch left in the confessional. the council
+            painstakingly weaves each one together into a single painting.
           </p>
         </header>
 
@@ -103,9 +101,9 @@ export default async function CollagePage() {
             </p>
             <p className="mt-4 text-base font-light leading-relaxed text-white/70">
               every confession requires a small sketch — a captcha, a ritual.
-              this collage is what those sketches become when an LLM is asked
-              to paint a single moonlit world around them. the contributors
-              stay anonymous; their drawings remain.
+              this collage is what those sketches become when an LLM is asked to
+              paint a single moonlit world around them. the contributors stay
+              anonymous; their drawings remain.
             </p>
           </div>
         </section>

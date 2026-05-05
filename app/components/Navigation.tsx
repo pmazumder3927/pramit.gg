@@ -120,7 +120,6 @@ export default function Navigation() {
                 { href: "/", label: "home" },
                 { href: "/music", label: "music" },
                 { href: "/collage", label: "collage" },
-                { href: "/about", label: "about" },
                 { href: "/connect", label: "connect" },
               ].map((item, index) => (
                 <motion.div

@@ -127,6 +127,25 @@ END:VCARD`;
               </p>
             </motion.div>
 
+            {/* Bio */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.05 }}
+              className="mb-12 max-w-2xl mx-auto space-y-4 text-center text-base md:text-lg leading-relaxed font-light text-white/70"
+            >
+              <p>this is a place where i share things i think are cool.</p>
+              <p>
+                i believe in building things that feel personal and alive — this
+                site is an experiment in that philosophy.
+              </p>
+              <p className="text-white/50">
+                currently interested in: reinforcement learning, robotics,
+                bouldering, electronic music production, and spending way too
+                much time optimizing my life.
+              </p>
+            </motion.div>
+
             {/* Contact Card */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
