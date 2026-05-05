@@ -144,8 +144,8 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
       preserveAspectRatio="xMidYMid meet"
     >
       {drawing.strokes.map((stroke, index) => {
-        const path = strokeToPath(stroke);
-        if (!path) {
+        const points = Array.isArray(stroke?.points) ? stroke.points : [];
+        if (points.length === 0) {
           return null;
         }
 
@@ -153,6 +153,38 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
           ? LEGACY_STROKE_COLORS[index] ?? "#ffffff"
           : stroke.color ?? "#f5f5f5";
         const strokeWidth = isLegacy ? 4 : stroke.width ?? 5;
+        const opacity = isLegacy ? 0.9 : stroke.opacity ?? 0.9;
+
+        if (!isLegacy && stroke.tool === "spray") {
+          const r = Math.max(0.6, strokeWidth / 2);
+          return (
+            <g key={index} opacity={opacity}>
+              {points.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={r} fill={color} />
+              ))}
+            </g>
+          );
+        }
+
+        if (points.length === 1) {
+          return (
+            <circle
+              key={index}
+              cx={points[0].x}
+              cy={points[0].y}
+              r={strokeWidth / 2}
+              fill={color}
+              opacity={opacity}
+            />
+          );
+        }
+
+        const path = points
+          .map((point, i) => {
+            const command = i === 0 ? "M" : "L";
+            return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+          })
+          .join(" ");
 
         return (
           <path
@@ -163,26 +195,12 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeLinejoin="round"
-            opacity={0.9}
+            opacity={opacity}
           />
         );
       })}
     </svg>
   );
-}
-
-function strokeToPath(stroke: DrawingStroke) {
-  const points = Array.isArray(stroke?.points) ? stroke.points : [];
-  if (points.length === 0) {
-    return null;
-  }
-
-  return points
-    .map((point, index) => {
-      const command = index === 0 ? "M" : "L";
-      return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-    })
-    .join(" ");
 }
 
 function formatDate(value: string) {

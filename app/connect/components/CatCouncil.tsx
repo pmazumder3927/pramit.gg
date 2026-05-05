@@ -575,24 +575,9 @@ function Easel({
         viewBox={`0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
       >
-        {strokes.map((stroke, index) => {
-          const path = strokeToPath(stroke);
-          if (!path) return null;
-          const color = stroke.color ?? "#f5f5f5";
-          const width = stroke.width ?? 5;
-          return (
-            <path
-              key={index}
-              d={path}
-              stroke={color}
-              strokeWidth={width * 1.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-              opacity={0.95}
-            />
-          );
-        })}
+        {strokes.map((stroke, index) => (
+          <StrokeShape key={index} stroke={stroke} widthScale={1.4} />
+        ))}
       </svg>
 
       {/* Top hanger nail */}
@@ -603,12 +588,41 @@ function Easel({
   );
 }
 
-function strokeToPath(stroke: DrawingStroke): string {
+function StrokeShape({
+  stroke,
+  widthScale = 1,
+}: {
+  stroke: DrawingStroke;
+  widthScale?: number;
+}) {
   const points = stroke.points;
-  if (!points || points.length === 0) return "";
+  if (!points || points.length === 0) return null;
+
+  const color = stroke.color ?? "#f5f5f5";
+  const width = (stroke.width ?? 5) * widthScale;
+  const opacity = stroke.opacity ?? 0.95;
+
+  if (stroke.tool === "spray") {
+    const r = Math.max(0.6, width / 2);
+    return (
+      <g opacity={opacity}>
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={r} fill={color} />
+        ))}
+      </g>
+    );
+  }
+
   if (points.length === 1) {
-    const p = points[0];
-    return `M ${p.x} ${p.y} l 0.1 0.1`;
+    return (
+      <circle
+        cx={points[0].x}
+        cy={points[0].y}
+        r={width / 2}
+        fill={color}
+        opacity={opacity}
+      />
+    );
   }
 
   let d = `M ${points[0].x} ${points[0].y}`;
@@ -619,7 +633,18 @@ function strokeToPath(stroke: DrawingStroke): string {
   }
   const last = points[points.length - 1];
   d += ` L ${last.x} ${last.y}`;
-  return d;
+
+  return (
+    <path
+      d={d}
+      stroke={color}
+      strokeWidth={width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+      opacity={opacity}
+    />
+  );
 }
 
 // ── Adult cat sprite ────────────────────────────────────────────────────────

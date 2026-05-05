@@ -2,10 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { useNowPlayingContext } from "./NowPlayingContext";
-
-type AuroraBackgroundProps = {
-  bannerUrl?: string | null;
-};
 import { createNoise, createRng, hashString, hexToRgb, mixColor, rgba } from "./aurora/math";
 import { createSceneAssets, FALLBACK_COLOR, makePalette, makeSceneConfig } from "./aurora/scene";
 import { drawSceneFrame } from "./aurora/render";
@@ -47,7 +43,7 @@ function resolveAlbumColor(albumColor: string): Rgb {
     : FALLBACK_COLOR;
 }
 
-export default function AuroraBackground({ bannerUrl }: AuroraBackgroundProps = {}) {
+export default function AuroraBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const redrawRef = useRef<(() => void) | null>(null);
@@ -59,39 +55,8 @@ export default function AuroraBackground({ bannerUrl }: AuroraBackgroundProps = 
   const currentColorRef = useRef<Rgb>(FALLBACK_COLOR);
   const targetColorRef = useRef<Rgb>(FALLBACK_COLOR);
   const reducedMotionRef = useRef(false);
-  const bannerImageRef = useRef<HTMLImageElement | null>(null);
 
   const { albumColor, track, variant } = useNowPlayingContext();
-
-  useEffect(() => {
-    if (!bannerUrl) {
-      bannerImageRef.current = null;
-      redrawRef.current?.();
-      return;
-    }
-
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    let cancelled = false;
-
-    img.onload = () => {
-      if (cancelled) return;
-      bannerImageRef.current = img;
-      redrawRef.current?.();
-    };
-    img.onerror = () => {
-      if (cancelled) return;
-      bannerImageRef.current = null;
-    };
-    img.src = bannerUrl;
-
-    return () => {
-      cancelled = true;
-      if (bannerImageRef.current === img) {
-        bannerImageRef.current = null;
-      }
-    };
-  }, [bannerUrl]);
 
   useEffect(() => {
     const nextColor = resolveAlbumColor(albumColor);
@@ -180,7 +145,6 @@ export default function AuroraBackground({ bannerUrl }: AuroraBackgroundProps = 
         timeSeconds: time / 1000,
         deltaSeconds: reducedMotionRef.current ? 0 : deltaSeconds,
         skyTime,
-        bannerImage: bannerImageRef.current,
       });
     }
 

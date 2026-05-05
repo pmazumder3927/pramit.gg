@@ -199,6 +199,85 @@ const PROMPTS: Variant[] = [
         SUBJECT_LIST(s),
       ].join(" "),
   },
+  // P-series: painterly nocturne for the dedicated collage page. Goal: a
+  // cinematic painted scene that retains each contributor's idiosyncratic
+  // silhouette/pose so the viewer can recognize "that's the cat someone drew",
+  // not a generic stock cat.
+  {
+    name: "P1-medium",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "medium",
+    buildPrompt: (s) =>
+      [
+        "A wide cinematic moonlit nocturne — one cohesive painted scene that incorporates every sketched subject from the reference as a natural element of the landscape.",
+        SUBJECT_LIST(s),
+        "CRITICAL: each subject's silhouette must match the contributor's reference sketch as closely as possible — the SAME pose, SAME proportions, SAME quirky details. Do not normalize the cat into a stock cat; if the contributor drew it sitting upright with one paw raised and uneven whiskers, draw THAT cat. If the umbrella has a wobbly handle in the sketch, keep the wobbly handle. The scene should feel like the contributors' drawings have stepped into a painted world, retaining their personality.",
+        "Style: refined ink-and-watercolor wash. Deep indigo and midnight teal sky, soft amber moonlight, restrained palette. Atmospheric, late-night, intimate, slightly mysterious. Not cute, not children's-book — Apple-restrained painting craft.",
+      ].join(" "),
+  },
+  {
+    name: "P1-faithful-pose",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "low",
+    buildPrompt: (s) =>
+      [
+        "A wide cinematic moonlit nocturne — one cohesive painted scene that incorporates every sketched subject from the reference as a natural element of the landscape.",
+        SUBJECT_LIST(s),
+        "CRITICAL: each subject's silhouette must match the contributor's reference sketch as closely as possible — the SAME pose, SAME proportions, SAME quirky details. Do not normalize the cat into a stock cat; if the contributor drew it sitting upright with one paw raised and uneven whiskers, draw THAT cat. If the umbrella has a wobbly handle in the sketch, keep the wobbly handle. The scene should feel like the contributors' drawings have stepped into a painted world, retaining their personality.",
+        "Style: refined ink-and-watercolor wash. Deep indigo and midnight teal sky, soft amber moonlight, restrained palette. Atmospheric, late-night, intimate, slightly mysterious. Not cute, not children's-book — Apple-restrained painting craft.",
+      ].join(" "),
+  },
+  {
+    name: "P2-traced-painted",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "low",
+    buildPrompt: (s) =>
+      [
+        "A wide painted nocturne. The reference shows finger-sketches by anonymous visitors, scattered across a black canvas. Build ONE cohesive painted scene where each subject appears in its sketched location.",
+        SUBJECT_LIST(s),
+        "STRICT RULE: trace each subject's outer silhouette directly from the reference sketch, then paint INSIDE that silhouette with refined craft. Do not redraw or normalize the subject — its shape, proportions, and pose must match the contributor's drawing. The umbrella keeps its slightly off-kilter dome. The cat keeps its specific posture. The house keeps its windows.",
+        "Render the scene in soft ink-and-watercolor wash with restrained color: indigo night sky, amber lamplight, deep teal shadow, cream highlights. Build a quiet cohesive vignette around the subjects. Atmospheric and tasteful, late-night.",
+      ].join(" "),
+  },
+  {
+    name: "P3-folk",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "low",
+    buildPrompt: (s) =>
+      [
+        "A wide cinematic painted folk-art nocturne — one cohesive scene weaving all sketched subjects into a tasteful nighttime composition.",
+        SUBJECT_LIST(s),
+        "Embrace a slightly naive, hand-painted quality that honors the children's-drawing source: keep each subject's silhouette idiosyncratic — same pose, same quirks, same proportions as the contributor's sketch. The painted style should feel intimate and storybook-illustration-meets-James-Jean: refined linework, soft ink wash, restrained palette of indigo, deep teal, soft amber, cream. Not cartoonish, not cute — quiet and contemplative.",
+      ].join(" "),
+  },
+  {
+    name: "P4-overlay",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "low",
+    buildPrompt: (s) =>
+      [
+        "A wide cinematic painted nocturne. Build a quiet atmospheric scene that incorporates every sketched subject from the reference as an element of the composition.",
+        SUBJECT_LIST(s),
+        "Render each subject AS a hand-drawn ink line drawing (the silhouette comes directly from the contributor's reference sketch — pose, proportions, character preserved exactly), then paint a soft watercolor scene around and behind them. The contributor's lines remain as visible inked outlines on top of the painted environment, so a viewer sees the actual sketch silhouette set against an atmospheric painted world. Restrained palette: indigo, teal, amber, cream. Late-night, intimate.",
+      ].join(" "),
+  },
+  {
+    name: "P5-loose-spirit",
+    layout: "scattered",
+    size: "1536x1024",
+    quality: "low",
+    buildPrompt: (s) =>
+      [
+        "A wide cinematic painted nocturne — a single cohesive moonlit scene woven from rough finger-sketches by anonymous visitors of a personal website.",
+        SUBJECT_LIST(s),
+        "Treat the reference sketches as portraits — render each subject in the painted scene with its silhouette and personality preserved (the specific cat someone drew, the specific umbrella, etc.). Honor the imperfection of the originals; don't smooth them into stock illustrations. Style: ink and watercolor, restrained indigo/teal/amber palette, atmospheric depth. Mood: contemplative, late-night, slightly mischievous, intimate.",
+      ].join(" "),
+  },
 ];
 
 async function main() {

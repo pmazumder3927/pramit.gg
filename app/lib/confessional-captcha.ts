@@ -16,6 +16,11 @@ export type DrawingStroke = {
   points: DrawingPoint[];
   color?: string;
   width?: number;
+  opacity?: number;
+  // Optional rendering hint. Polyline/shape strokes leave this undefined and
+  // render as a connected path. "spray" strokes render each point as an
+  // independent dot rather than a connected line.
+  tool?: "spray";
 };
 
 export type ConfessionalCaptchaChallenge = {

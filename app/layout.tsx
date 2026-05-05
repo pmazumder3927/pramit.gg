@@ -6,8 +6,6 @@ import NowPlaying from "./components/NowPlaying";
 import Navigation from "./components/Navigation";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 import AuroraBackground from "./components/AuroraBackground";
-import { fetchLatestHomepageBanner } from "./lib/homepage-banner";
-import { createPublicClient } from "@/utils/supabase/server";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -64,23 +62,11 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
-async function fetchBannerUrl() {
-  try {
-    const banner = await fetchLatestHomepageBanner(createPublicClient());
-    return banner?.image_url ?? null;
-  } catch (error) {
-    console.error("Banner fetch error in layout:", error);
-    return null;
-  }
-}
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const bannerUrl = await fetchBannerUrl();
-
   return (
     <html lang="en" className={inter.className}>
       <head>
@@ -91,7 +77,7 @@ export default async function RootLayout({
       </head>
       <body className="grain min-h-screen">
         <NowPlayingProvider>
-          <AuroraBackground bannerUrl={bannerUrl} />
+          <AuroraBackground />
           <div className="relative z-10">{children}</div>
           <Navigation />
           <NowPlaying />

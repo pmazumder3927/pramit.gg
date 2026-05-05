@@ -535,41 +535,11 @@ function drawHorizonProps(state: DrawState) {
   }
 }
 
-function drawBannerLayer(state: DrawState) {
-  const { ctx, width, height, bannerImage } = state;
-  if (!bannerImage || !bannerImage.complete || !bannerImage.naturalWidth) {
-    return;
-  }
-
-  // The banner is a cohesive constellation scene generated on pure black via
-  // gpt-image-2 (see app/lib/homepage-banner.ts). With "screen" compositing
-  // the deep black disappears and only the star-points and hairlines brighten
-  // the existing sky, weaving the contributors' constellations into the
-  // procedural starfield.
-  //
-  // The scene composition has a horizon along its lower edge with subjects
-  // grounded on it, so we fit it as "cover" but anchor the bottom of the
-  // banner to the bottom of the viewport (so the horizon doesn't get cut off
-  // by the procedural terrain at the bottom of the canvas).
-  const aspect = bannerImage.naturalWidth / bannerImage.naturalHeight;
-  const drawWidth = Math.max(width, height * aspect);
-  const drawHeight = drawWidth / aspect;
-  const offsetX = (width - drawWidth) / 2;
-  const offsetY = height - drawHeight;
-
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.6;
-  ctx.drawImage(bannerImage, offsetX, offsetY, drawWidth, drawHeight);
-  ctx.restore();
-}
-
 export function drawSceneFrame(state: DrawState) {
   const { ctx, width, height } = state;
 
   ctx.clearRect(0, 0, width, height);
   drawSky(state);
-  drawBannerLayer(state);
   drawCelestials(state);
   drawStars(state);
   drawConstellations(state);

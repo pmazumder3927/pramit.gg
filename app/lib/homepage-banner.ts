@@ -172,19 +172,21 @@ function buildBannerPrompt(sketches: SketchRecord[]) {
 
   const subjectLine =
     subjects.length > 0
-      ? `Subjects (one per contributor): ${subjects.join("; ")}.`
+      ? `Subjects to incorporate (one per contributor): ${subjects.join("; ")}.`
       : "";
 
-  // The reference shows the contributor sketches scattered (not gridded) on a
-  // black canvas at varied scales. The prompt asks for ONE cohesive
-  // constellation scene rendered entirely as star-points + hairlines on pure
-  // black — suitable for screen-blending into the procedural starfield. Each
-  // subject's silhouette comes from the contributor's sketch, but the model is
-  // free to render it tastefully (no literal stroke tracing).
+  // Painterly nocturne for the dedicated /collage page. The reference is a
+  // scattered (not gridded) layout of every contributor sketch on pure black.
+  // The model paints a cinematic moonlit landscape *around* those sketches,
+  // preserving their exact silhouettes and idiosyncrasies — the cat keeps its
+  // raised paw, the eye keeps its eyelashes and pink tear, etc. The scene
+  // wraps the contributors' actual marks rather than replacing them with
+  // polished stock illustrations.
   return [
-    "A single wide cinematic constellation scene, rendered ENTIRELY as star-points (1–3px) and ultra-thin connecting hairlines on pure #000000. No fills, no painterly elements, no color washes — only stars and faint lines.",
+    "A wide cinematic moonlit nocturne — one cohesive painted scene that incorporates every sketched subject from the reference as a natural element of the landscape.",
     subjectLine,
-    "Compose the subjects into one coherent vignette — for example, a house and cat on the ground level (lower portion of frame), an umbrella nearby, a balloon drifting overhead, a celestial eye watching from above — but feel free to choose what makes the scene feel right. Each subject's silhouette must be tied to the contributor's original sketch (recognizable pose). Vary the constellation scales (one or two larger anchors, the rest smaller and quiet). Soft off-white predominates, with occasional warm-orange or indigo accent stars. Tasteful, contemplative, late-night.",
+    "CRITICAL: each subject's silhouette must match the contributor's reference sketch as closely as possible — the SAME pose, SAME proportions, SAME quirky details. Do not normalize the cat into a stock cat; if the contributor drew it sitting upright with one paw raised and uneven whiskers, draw THAT cat. If the umbrella has a wobbly handle in the sketch, keep the wobbly handle. The scene should feel like the contributors' drawings have stepped into a painted world, retaining their personality.",
+    "Style: refined ink-and-watercolor wash. Deep indigo and midnight teal sky, soft amber moonlight, restrained palette. Atmospheric, late-night, intimate, slightly mysterious. Not cute, not children's-book — Apple-restrained painting craft.",
   ].join(" ");
 }
 
