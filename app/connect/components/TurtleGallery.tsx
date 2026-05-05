@@ -27,6 +27,7 @@ type DrawingRecord = {
   strokes: DrawingStroke[];
   prompt: string | null;
   created_at: string;
+  snapshot_url?: string | null;
 };
 
 type GalleryResponse = {
@@ -135,6 +136,22 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
   const isLegacy = drawing.prompt === null;
   const width = isLegacy ? LEGACY_CANVAS_WIDTH : DRAWING_CANVAS_WIDTH;
   const height = isLegacy ? LEGACY_CANVAS_HEIGHT : DRAWING_CANVAS_HEIGHT;
+
+  // New rows ship a pre-rasterized snapshot that includes the brush textures
+  // and dark canvas background. Use it directly when available; legacy rows
+  // fall back to re-rendering the strokes as SVG paths.
+  if (drawing.snapshot_url) {
+    return (
+      <img
+        src={drawing.snapshot_url}
+        alt={drawing.prompt ?? "drawing"}
+        loading="lazy"
+        decoding="async"
+        className="w-full rounded-lg"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      />
+    );
+  }
 
   return (
     <svg

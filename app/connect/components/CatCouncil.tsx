@@ -1,13 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
   type DrawingStroke,
 } from "@/app/lib/confessional-captcha";
+import { renderStroke } from "@/app/lib/drawing/paint";
 
 export type Verdict = "judging" | "approve" | "reject";
 
@@ -566,19 +567,15 @@ function Easel({
       {/* Canvas */}
       <rect x={0} y={0} width={FRAME_W} height={FRAME_H} fill="#0c0816" />
 
-      {/* The drawing itself, centered + scaled to fit canvas */}
-      <svg
-        x={0}
-        y={0}
-        width={FRAME_W}
-        height={FRAME_H}
-        viewBox={`0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}`}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {strokes.map((stroke, index) => (
-          <StrokeShape key={index} stroke={stroke} widthScale={1.4} />
-        ))}
-      </svg>
+      {/* The drawing itself, replayed stroke-by-stroke during deliberation. */}
+      <foreignObject x={0} y={0} width={FRAME_W} height={FRAME_H}>
+        <EaselReplay
+          strokes={strokes}
+          verdict={verdict}
+          cssWidth={FRAME_W}
+          cssHeight={FRAME_H}
+        />
+      </foreignObject>
 
       {/* Top hanger nail */}
       <rect x={FRAME_W / 2 - 1} y={-13} width={2} height={4} fill="#3a261a" />
@@ -588,63 +585,124 @@ function Easel({
   );
 }
 
-function StrokeShape({
-  stroke,
-  widthScale = 1,
+// EaselReplay paints the user's strokes back onto the easel using the same
+// brush engine the canvas uses, so the council sees what was actually drawn.
+// During `judging` the strokes paint stroke-by-stroke, looping over a fixed
+// window. On `approve`/`reject` it paints the full result and idles.
+const REPLAY_WINDOW_MS = 3200;
+const FALLBACK_STROKE_MS = 220;
+
+function EaselReplay({
+  strokes,
+  verdict,
+  cssWidth,
+  cssHeight,
 }: {
-  stroke: DrawingStroke;
-  widthScale?: number;
+  strokes: DrawingStroke[];
+  verdict: Verdict;
+  cssWidth: number;
+  cssHeight: number;
 }) {
-  const points = stroke.points;
-  if (!points || points.length === 0) return null;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const color = stroke.color ?? "#f5f5f5";
-  const width = (stroke.width ?? 5) * widthScale;
-  const opacity = stroke.opacity ?? 0.95;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const pxW = Math.round(cssWidth * dpr);
+    const pxH = Math.round(cssHeight * dpr);
+    canvas.width = pxW;
+    canvas.height = pxH;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
 
-  if (stroke.tool === "spray") {
-    const r = Math.max(0.6, width / 2);
-    return (
-      <g opacity={opacity}>
-        {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={r} fill={color} />
-        ))}
-      </g>
-    );
-  }
+    const slots = computeReplaySlots(strokes, REPLAY_WINDOW_MS);
+    const startedAt = performance.now();
+    let frame = 0;
 
-  if (points.length === 1) {
-    return (
-      <circle
-        cx={points[0].x}
-        cy={points[0].y}
-        r={width / 2}
-        fill={color}
-        opacity={opacity}
-      />
-    );
-  }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const midX = (points[i].x + points[i + 1].x) / 2;
-    const midY = (points[i].y + points[i + 1].y) / 2;
-    d += ` Q ${points[i].x} ${points[i].y} ${midX} ${midY}`;
-  }
-  const last = points[points.length - 1];
-  d += ` L ${last.x} ${last.y}`;
+    function paint() {
+      if (!ctx) return;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, pxW, pxH);
+      // Dark paper underneath so multiply/destination-out behave consistently
+      // with how the strokes were originally drawn.
+      ctx.fillStyle = "#0c0816";
+      ctx.fillRect(0, 0, pxW, pxH);
+      ctx.restore();
+
+      ctx.setTransform(
+        (dpr * cssWidth) / DRAWING_CANVAS_WIDTH,
+        0,
+        0,
+        (dpr * cssHeight) / DRAWING_CANVAS_HEIGHT,
+        0,
+        0,
+      );
+
+      const elapsed = performance.now() - startedAt;
+      const playhead =
+        verdict === "judging"
+          ? elapsed % REPLAY_WINDOW_MS
+          : Number.POSITIVE_INFINITY;
+
+      for (let i = 0; i < strokes.length; i += 1) {
+        const slot = slots[i];
+        if (playhead < slot.start) break;
+        const span = Math.max(1, slot.end - slot.start);
+        const progress =
+          playhead >= slot.end
+            ? 1
+            : Math.max(0, Math.min(1, (playhead - slot.start) / span));
+        renderStroke(ctx, strokes[i], { progress });
+      }
+    }
+
+    function loop() {
+      paint();
+      // For a settled verdict the playhead is infinity so the result is
+      // static — keep painting once a frame anyway in case devicePixelRatio
+      // changes (e.g., zoom). Cheap; the canvas is small.
+      frame = requestAnimationFrame(loop);
+    }
+
+    frame = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frame);
+  }, [strokes, verdict, cssWidth, cssHeight]);
 
   return (
-    <path
-      d={d}
-      stroke={color}
-      strokeWidth={width}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-      opacity={opacity}
+    <canvas
+      ref={canvasRef}
+      style={{ display: "block", width: cssWidth, height: cssHeight }}
     />
   );
+}
+
+function computeReplaySlots(
+  strokes: DrawingStroke[],
+  windowMs: number,
+): { start: number; end: number }[] {
+  if (strokes.length === 0) return [];
+  const durations = strokes.map((s) => {
+    const pts = s.points;
+    if (!pts || pts.length < 2) return FALLBACK_STROKE_MS / 2;
+    const first = pts[0].t ?? 0;
+    const last = pts[pts.length - 1].t ?? 0;
+    const measured = last - first;
+    return measured > 30 ? measured : FALLBACK_STROKE_MS;
+  });
+  const total = durations.reduce((a, b) => a + b, 0) || 1;
+  const scale = windowMs / total;
+  let cursor = 0;
+  return durations.map((d) => {
+    const start = cursor;
+    const end = cursor + d * scale;
+    cursor = end;
+    return { start, end };
+  });
 }
 
 // ── Adult cat sprite ────────────────────────────────────────────────────────
