@@ -1,12 +1,6 @@
 import OpenAI from "openai";
-import { toFile } from "openai/uploads";
-import sharp from "sharp";
 
-import {
-  DRAWING_CANVAS_HEIGHT,
-  DRAWING_CANVAS_WIDTH,
-  type DrawingStroke,
-} from "@/app/lib/confessional-captcha";
+import { type DrawingStroke } from "@/app/lib/confessional-captcha";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BANNER_BUCKET = "images";
@@ -14,10 +8,6 @@ const BANNER_PATH_PREFIX = "banners";
 const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 const DEFAULT_BANNER_SIZE = "1536x1024";
 const DEFAULT_BANNER_QUALITY = "medium";
-
-// Cap how many sketches we feed into the reference grid; gpt-image-2 doesn't
-// need every last one, and the input image gets large fast.
-const MAX_REFERENCE_SKETCHES = 36;
 
 export type SketchRecord = {
   id: string;
@@ -48,19 +38,16 @@ export async function generateHomepageBanner(
     throw new Error("No sketches available to build a banner from.");
   }
 
-  const referencePng = await composeReferenceGrid(sketches);
   const promptText = buildBannerPrompt(sketches);
 
   const client = new OpenAI({ apiKey });
 
-  const referenceFile = await toFile(referencePng, "sketches.png", {
-    type: "image/png",
-  });
-
-  const response = await client.images.edit(
+  // Text-only generation: passing the sketches as a reference image biased the
+  // model toward retracing the input strokes. Without a reference, gpt-image-2
+  // has to actually reinterpret each named subject as a celestial element.
+  const response = await client.images.generate(
     {
       model: process.env.OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL,
-      image: referenceFile,
       prompt: promptText,
       size: (process.env.OPENAI_IMAGE_SIZE?.trim() ||
         DEFAULT_BANNER_SIZE) as "1536x1024",
@@ -158,114 +145,29 @@ function buildBannerPrompt(sketches: SketchRecord[]) {
 
   const subjectLine =
     subjects.length > 0
-      ? `The reference grid is rough finger-sketches by site visitors of: ${subjects.join("; ")}.`
-      : "The reference grid is rough finger-sketches by site visitors.";
+      ? `Subjects to reinterpret (one per visitor, list may include duplicates of category): ${subjects.join("; ")}.`
+      : "A small set of arbitrary subjects drawn by site visitors.";
 
   // This image is screen-blended at low opacity into a procedural pixel-art
-  // starfield (the existing AuroraBackground canvas). Pure black goes
-  // transparent under "screen", so only the linework brightens the existing
-  // sky. Treat it as an additive overlay, not a hero card.
+  // starfield (the existing AuroraBackground canvas — stars, constellations,
+  // distant terrain silhouettes, drifting satellites). Pure black goes
+  // transparent under "screen", so only the bright pixels survive. The model's
+  // real job is to TRANSLATE each rough sketch into the visual language of
+  // that sky: a constellation of stars+lines, a tiny silhouette on the
+  // horizon, or a faint orbital drifter. Don't return the line drawings.
   return [
-    "An additive sky overlay for a minimalist late-night personal website.",
+    "Generate a wide cinematic star chart for a late-night personal website's procedural sky background.",
     subjectLine,
-    "This image will be composited at low opacity using SCREEN blend mode over a dark animated starfield. ONLY the bright pixels will show. The black background MUST be pure #000000 so it disappears under the blend.",
-    "Treat the reference sketches as the linework itself — preserve the original wobble, gesture, and character of each rough sketch. Do NOT repaint or over-render them. Re-draw them as if from the same trembling hand: thin, single-weight, slightly imperfect lines.",
-    "Composition: a sparse constellation of these subjects floating across the frame with vast negative space between them. Most of the canvas is empty pure black. Subjects are small relative to the frame and well-separated. No grid, no panels, no borders — they must read as scattered individual marks against a void, like notes pinned to a night sky.",
-    "Linework: thin (1–2px) strokes in soft off-white (#e8e8ea), with rare accent strokes in muted warm orange (#ff6b3d) or indigo (#7c77c6). No fills, no shading, no painted blocks, no glow, no halos. Single-pen drawing on void black.",
-    "Mood: quiet, contemplative, slightly mischievous. Apple-restrained, not whimsical, not painterly, not fantasy, not children's-book.",
-    "Hard rules: background is pure #000000 with no gradients, no textures, no clouds, no atmosphere. No text, no letters, no numerals, no signatures, no watermark, no frame, no border, no panel grid. No watercolor, no painterly brushwork, no glow, no anime, no 3D, no photo-real elements. Output must be a flat 2D line drawing on a uniform black field.",
+    "Each subject is something a different visitor was prompted to draw. Reinterpret each one as a polished celestial element — do NOT render any of them as doodles, sketches, hand-drawings, or wobbly lines.",
+    "For each subject, choose ONE of these treatments and execute it cleanly:",
+    "(a) Constellation: place 4–10 small bright star-points (1–2px white dots, occasionally warm orange #ff6b3d or indigo #7c77c6) in a configuration whose connecting hairline (extremely faint, around 8–15% opacity) traces the silhouette of the subject. The stars are the focus; the connecting line is barely visible.",
+    "(b) Horizon silhouette: for grounded or architectural subjects, render a tiny crisp pixel-edge silhouette sitting on the very bottom edge of the frame, in deep slate (#1a1b22) backlit by a single accent pixel.",
+    "(c) Drifter: a small pixel-art sprite (12–24px) of the subject — flat single-color, no shading, anchored mid-sky.",
+    "Mix the three treatments across the subjects so the scene reads as a coherent night sky, not as a single repeated motif. Most subjects should be (a). Reserve (b) for the bottom 10% of the canvas only.",
+    "Background: pure #000000 across the entire canvas. No gradients, no haze, no atmosphere, no textures.",
+    "Density: SPARSE. Vast negative space between elements. The subjects are small relative to the frame; the chart breathes. No clusters, no overlaps, no grid arrangement — scatter them organically across a wide horizontal panorama.",
+    "Palette: predominantly soft off-white (#e8e8ea) star-points and hairlines, with selective accents in muted warm orange (#ff6b3d) and indigo (#7c77c6). No other colors.",
+    "Style reference: think NASA-style star chart crossed with a minimalist pixel-art space sim. Quiet, precise, intentional. Apple-restrained.",
+    "Hard rules: background MUST be pure #000000 (will be screen-blended away). No text, no letters, no numerals, no labels, no signatures, no watermark, no frame, no border, no panel grid, no caption. No watercolor, no painterly brushwork, no glow halos, no lens flares, no anime, no 3D rendering, no photo-real elements, no full color illustrations. The output must read as scattered tiny luminous marks on a void, NOT as a doodle, NOT as a re-drawing of the input sketches.",
   ].join(" ");
-}
-
-async function composeReferenceGrid(
-  sketches: SketchRecord[],
-): Promise<Buffer> {
-  const sample = sketches.slice(0, MAX_REFERENCE_SKETCHES);
-  const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(sample.length))));
-  const rows = Math.ceil(sample.length / cols);
-
-  const cellWidth = 320;
-  const cellHeight = Math.round(
-    (cellWidth * DRAWING_CANVAS_HEIGHT) / DRAWING_CANVAS_WIDTH,
-  );
-  const padding = 16;
-
-  const canvasWidth = cols * cellWidth + (cols + 1) * padding;
-  const canvasHeight = rows * cellHeight + (rows + 1) * padding;
-
-  const cellSvgs = await Promise.all(
-    sample.map((sketch) =>
-      sharp(Buffer.from(strokesToSvg(sketch.strokes)))
-        .resize(cellWidth, cellHeight, { fit: "fill" })
-        .png()
-        .toBuffer(),
-    ),
-  );
-
-  const composites = cellSvgs.map((buffer, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    return {
-      input: buffer,
-      left: padding + col * (cellWidth + padding),
-      top: padding + row * (cellHeight + padding),
-    };
-  });
-
-  return sharp({
-    create: {
-      width: canvasWidth,
-      height: canvasHeight,
-      channels: 3,
-      background: { r: 10, g: 8, b: 20 },
-    },
-  })
-    .composite(composites)
-    .png()
-    .toBuffer();
-}
-
-function strokesToSvg(strokes: DrawingStroke[]) {
-  const paths = strokes
-    .map((stroke) => {
-      const points = Array.isArray(stroke?.points) ? stroke.points : [];
-      if (points.length === 0) {
-        return "";
-      }
-
-      const color = sanitizeColor(stroke.color) ?? "#f5f5f5";
-      const width = sanitizeWidth(stroke.width) ?? 5;
-
-      if (points.length === 1) {
-        const p = points[0];
-        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}"/>`;
-      }
-
-      const d = points
-        .map((point, index) => {
-          const command = index === 0 ? "M" : "L";
-          return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-        })
-        .join(" ");
-
-      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
-    })
-    .filter(Boolean)
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${DRAWING_CANVAS_WIDTH}" height="${DRAWING_CANVAS_HEIGHT}" viewBox="0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}">
-  <rect width="100%" height="100%" fill="#0a0814"/>
-  ${paths}
-</svg>`;
-}
-
-function sanitizeColor(value: unknown) {
-  if (typeof value !== "string") return null;
-  return /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : null;
-}
-
-function sanitizeWidth(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.min(20, Math.max(1, value));
 }
