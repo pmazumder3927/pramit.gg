@@ -83,7 +83,7 @@ export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
 
   const errors: string[] = [];
   if (!strokeCountOk) {
-    errors.push("Add a couple of strokes before submitting.");
+    errors.push("Add a few more strokes before submitting.");
   }
   if (!lengthOk) {
     errors.push("Draw a little more — the council expects an actual offering.");
