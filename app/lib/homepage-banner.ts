@@ -125,6 +125,20 @@ export async function generateHomepageBanner(
     );
   }
 
+  // Attribute every sketch that hadn't yet been claimed to this banner so the
+  // collage page can render "the sketches behind it" per painting.
+  const { error: attributionError } = await supabase
+    .from("turtle_drawings")
+    .update({ banner_id: inserted.id })
+    .is("banner_id", null);
+
+  if (attributionError) {
+    console.error(
+      "Sketch attribution failed:",
+      attributionError.message,
+    );
+  }
+
   return inserted as HomepageBanner;
 }
 

@@ -25,6 +25,7 @@ type SketchPreview = {
   prompt: string | null;
   snapshot_url: string | null;
   created_at: string;
+  banner_id: string | null;
 };
 
 export default function CollageExperience({
@@ -83,17 +84,16 @@ export default function CollageExperience({
     return () => window.removeEventListener("keydown", onKey);
   }, [goPrev, goNext]);
 
-  const currentCreatedAt = total > 0 ? banners[index].created_at : null;
+  const currentBannerId = total > 0 ? banners[index].id : null;
 
-  // Sketches "behind" a banner = the ones that existed when it was painted.
-  // The generator pulls every sketch at the moment of creation, so we
-  // approximate that set with `created_at <= banner.created_at` here.
+  // Each sketch is attributed to the first banner that consumed it via
+  // turtle_drawings.banner_id, so this filter is now exact.
   const visibleSketches = useMemo(() => {
-    if (!currentCreatedAt) return [];
+    if (!currentBannerId) return [];
     return sketches.filter(
-      (s) => s.snapshot_url && s.created_at <= currentCreatedAt,
+      (s) => s.snapshot_url && s.banner_id === currentBannerId,
     );
-  }, [sketches, currentCreatedAt]);
+  }, [sketches, currentBannerId]);
 
   if (total === 0) {
     return <EmptyState />;
