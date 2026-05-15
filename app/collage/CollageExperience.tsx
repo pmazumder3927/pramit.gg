@@ -2,18 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 
 type Banner = {
@@ -32,21 +27,6 @@ type SketchPreview = {
   created_at: string;
 };
 
-const PALETTE = {
-  "--ink": "rgba(237, 229, 211, 0.92)",
-  "--ink-dim": "rgba(237, 229, 211, 0.55)",
-  "--ink-faint": "rgba(237, 229, 211, 0.32)",
-  "--ink-trace": "rgba(237, 229, 211, 0.14)",
-  "--gilt": "rgba(244, 220, 168, 0.92)",
-  "--gilt-soft": "rgba(244, 220, 168, 0.55)",
-  "--void": "#000105",
-} as CSSProperties;
-
-const MONO_STACK =
-  "[font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace)]";
-const SERIF_STACK =
-  "[font-family:var(--font-instrument-serif),ui-serif,Georgia,serif]";
-
 export default function CollageExperience({
   banners,
   sketches,
@@ -54,10 +34,9 @@ export default function CollageExperience({
   banners: Banner[];
   sketches: SketchPreview[];
 }) {
-  const reduce = useReducedMotion();
   const total = banners.length;
 
-  // Latest exhibit lives at the end of the array (oldest → newest).
+  // Latest banner lives at the end of the array (oldest → newest).
   const [index, setIndex] = useState(() => Math.max(0, total - 1));
   const [direction, setDirection] = useState<1 | -1>(1);
 
@@ -65,7 +44,9 @@ export default function CollageExperience({
     (next: number) => {
       if (total === 0) return;
       const clamped = (next + total) % total;
-      setDirection(clamped > index || (index === total - 1 && clamped === 0) ? 1 : -1);
+      setDirection(
+        clamped > index || (index === total - 1 && clamped === 0) ? 1 : -1,
+      );
       setIndex(clamped);
     },
     [index, total],
@@ -83,10 +64,13 @@ export default function CollageExperience({
     setIndex((i) => (i + 1) % total);
   }, [total]);
 
-  // Arrow key traversal
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
@@ -105,103 +89,70 @@ export default function CollageExperience({
   );
 
   if (total === 0) {
-    return <EmptyExhibit />;
+    return <EmptyState />;
   }
 
   const current = banners[index];
-
-  const exhibitNumber = String(index + 1).padStart(3, "0");
-  const totalLabel = String(total).padStart(3, "0");
+  const isLatest = index === total - 1;
   const dateLong = new Date(current.created_at).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const updatedLabel = formatRelative(current.created_at);
-  const isLatest = index === total - 1;
 
   return (
-    <main
-      className="relative min-h-screen overflow-x-hidden text-[var(--ink)]"
-      style={PALETTE}
-    >
-      {/* Faint stellar grain over everything */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-0 opacity-[0.07] mix-blend-screen"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 18% 22%, rgba(244,220,168,0.45), transparent 55%), radial-gradient(circle at 82% 78%, rgba(124,119,198,0.35), transparent 60%)",
-        }}
-      />
+    <main className="relative min-h-screen">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.04),transparent_55%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_75%,rgba(255,107,61,0.03),transparent_55%)]" />
 
-      <section className="relative mx-auto w-full max-w-[110rem] px-5 pt-24 sm:px-8 md:pt-28 lg:px-14">
-        {/* Top exhibit ribbon */}
-        <header className={`mb-10 grid grid-cols-12 items-start gap-4 text-[10px] font-light uppercase text-[var(--ink-dim)] md:mb-14 ${MONO_STACK}`}>
-          <div className="col-span-6 flex flex-col gap-1 md:col-span-3">
-            <span className="tracking-[0.32em] text-[var(--ink-faint)]">
-              exhibit №
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-8 pt-16 md:pt-24 pb-16">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12 md:mb-16"
+        >
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-extralight tracking-tight mb-5">
+            <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+              collage
             </span>
-            <span className="text-2xl font-extralight tracking-[0.14em] text-[var(--gilt)] tabular-nums">
-              {exhibitNumber}
-              <span className="ml-2 text-[10px] font-light tracking-[0.32em] text-[var(--ink-faint)]">
-                / {totalLabel}
-              </span>
-            </span>
-          </div>
-          <div className="col-span-12 hidden flex-col items-center gap-2 text-center md:col-span-6 md:flex">
-            <span className="h-px w-12 bg-[var(--ink-faint)]" />
-            <span className="tracking-[0.5em] text-[var(--ink-dim)]">
-              painted nocturne
-            </span>
-            <span className="tracking-[0.32em] text-[var(--ink-faint)]">
-              {isLatest ? "currently on view" : "from the archive"}
-            </span>
-          </div>
-          <div className="col-span-6 flex flex-col items-end gap-1 text-right md:col-span-3">
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={`updated-${current.id}`}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.4 }}
-                className="tracking-[0.32em] text-[var(--ink)]"
-              >
-                {updatedLabel}
-              </motion.span>
-            </AnimatePresence>
-            <span className="tracking-[0.32em] text-[var(--ink-faint)]">
-              by gpt-image-2
-            </span>
-          </div>
-        </header>
+          </h1>
+          <p className="text-base md:text-lg text-white/40 font-light max-w-md mx-auto leading-relaxed">
+            every sketch left in the booth gets painted into one image
+            overnight.
+          </p>
+        </motion.div>
 
-        {/* The painting + traversal arrows */}
-        <div className="relative">
-          {/* Floating chevrons just outside the frame on desktop */}
-          <ChevronButton
-            direction="left"
-            onClick={goPrev}
-            disabled={total < 2}
-            className="absolute -left-2 top-1/2 z-20 hidden -translate-x-full -translate-y-1/2 md:flex"
-            label="previous exhibit"
-          />
-          <ChevronButton
-            direction="right"
-            onClick={goNext}
-            disabled={total < 2}
-            className="absolute -right-2 top-1/2 z-20 hidden -translate-y-1/2 translate-x-full md:flex"
-            label="next exhibit"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.1 }}
+          className="relative"
+        >
+          {/* Candlelit glow — purple velvet & gold flame, picked from the council scene */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-6 -top-6 -bottom-10 bg-[radial-gradient(ellipse_at_30%_30%,rgba(122,76,214,0.14),transparent_60%),radial-gradient(ellipse_at_75%_75%,rgba(255,211,109,0.08),transparent_60%)] blur-2xl"
           />
 
-          <figure className="relative">
-            <Bracket className="-left-2 -top-2 border-l border-t md:-left-3 md:-top-3" />
-            <Bracket className="-right-2 -top-2 border-r border-t md:-right-3 md:-top-3" />
-            <Bracket className="-bottom-2 -left-2 border-b border-l md:-bottom-3 md:-left-3" />
-            <Bracket className="-bottom-2 -right-2 border-b border-r md:-bottom-3 md:-right-3" />
+          <div className="relative">
+            {/* Side chevrons floating just outside the frame on desktop */}
+            {total > 1 && (
+              <>
+                <NavButton
+                  onClick={goPrev}
+                  direction="left"
+                  className="absolute left-0 top-1/2 z-20 hidden -translate-x-[calc(100%+1.25rem)] -translate-y-1/2 md:flex"
+                />
+                <NavButton
+                  onClick={goNext}
+                  direction="right"
+                  className="absolute right-0 top-1/2 z-20 hidden translate-x-[calc(100%+1.25rem)] -translate-y-1/2 md:flex"
+                />
+              </>
+            )}
 
-            <div className="relative aspect-[3/2] w-full overflow-hidden">
+            <div className="relative aspect-[3/2] w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] shadow-[0_30px_120px_-40px_rgba(122,76,214,0.4)]">
               <AnimatePresence mode="popLayout" custom={direction}>
                 <motion.div
                   key={current.id}
@@ -209,310 +160,195 @@ export default function CollageExperience({
                   variants={{
                     enter: (d: number) => ({
                       opacity: 0,
-                      scale: 1.04,
-                      x: d > 0 ? 40 : -40,
-                      filter: "blur(18px)",
+                      x: d > 0 ? 30 : -30,
                     }),
-                    center: {
-                      opacity: 1,
-                      scale: 1,
-                      x: 0,
-                      filter: "blur(0px)",
-                    },
-                    leave: (d: number) => ({
+                    center: { opacity: 1, x: 0 },
+                    exit: (d: number) => ({
                       opacity: 0,
-                      scale: 0.99,
-                      x: d > 0 ? -40 : 40,
-                      filter: "blur(12px)",
+                      x: d > 0 ? -30 : 30,
                     }),
                   }}
                   initial="enter"
                   animate="center"
-                  exit="leave"
-                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                  exit="exit"
+                  transition={{ duration: 0.55, ease: [0.25, 0.1, 0.25, 1] }}
                   className="absolute inset-0"
                 >
-                  <motion.div
-                    animate={
-                      reduce
-                        ? undefined
-                        : {
-                            scale: [1, 1.06, 1],
-                            x: ["0%", "-1%", "0%"],
-                            y: ["0%", "0.8%", "0%"],
-                          }
-                    }
-                    transition={{
-                      duration: 64,
-                      ease: "easeInOut",
-                      repeat: Infinity,
-                    }}
-                    className="absolute inset-0"
-                  >
-                    <Image
-                      src={current.image_url}
-                      alt={`exhibit ${exhibitNumber} — painted nocturne composed of confessional sketches`}
-                      fill
-                      priority={isLatest}
-                      sizes="(min-width: 1280px) 1280px, 100vw"
-                      className="object-cover"
-                    />
-                  </motion.div>
+                  <Image
+                    src={current.image_url}
+                    alt={`collage from ${dateLong}`}
+                    fill
+                    priority={isLatest}
+                    sizes="(min-width: 1024px) 1024px, 100vw"
+                    className="object-cover"
+                  />
                 </motion.div>
               </AnimatePresence>
 
-              {/* Vignette + moonlight gleam (always on top) */}
+              {/* Faint inner edge for depth */}
               <div
                 aria-hidden
-                className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_42%,rgba(0,1,5,0.55)_88%,rgba(0,1,5,0.95)_100%)]"
-              />
-              <div
-                aria-hidden
-                className="absolute -top-1/4 left-1/3 h-2/3 w-1/2 rounded-full bg-[radial-gradient(circle,rgba(244,220,168,0.18),transparent_70%)] blur-3xl"
+                className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.04]"
               />
 
-              {/* On-painting chronology stamp */}
-              <div className={`absolute bottom-3 right-4 text-right text-[9px] font-light uppercase tracking-[0.36em] text-[var(--ink-dim)] mix-blend-screen ${MONO_STACK}`}>
-                <div>{dateLong}</div>
-                <div className="text-[var(--gilt-soft)]">
-                  №{exhibitNumber}
-                </div>
-              </div>
-
-              {/* Mobile chevron overlays */}
+              {/* Mobile tap zones */}
               <button
                 type="button"
                 onClick={goPrev}
                 disabled={total < 2}
-                aria-label="previous exhibit"
-                className="absolute inset-y-0 left-0 z-20 flex w-1/4 items-center justify-start px-3 text-[var(--ink)] opacity-0 transition-opacity active:opacity-100 md:hidden"
-              >
-                <span className="rounded-full border border-[var(--ink-faint)] bg-black/60 p-2 backdrop-blur-md">
-                  <Chevron direction="left" />
-                </span>
-              </button>
+                aria-label="previous"
+                className="absolute inset-y-0 left-0 z-10 w-1/3 md:hidden"
+              />
               <button
                 type="button"
                 onClick={goNext}
                 disabled={total < 2}
-                aria-label="next exhibit"
-                className="absolute inset-y-0 right-0 z-20 flex w-1/4 items-center justify-end px-3 text-[var(--ink)] opacity-0 transition-opacity active:opacity-100 md:hidden"
-              >
-                <span className="rounded-full border border-[var(--ink-faint)] bg-black/60 p-2 backdrop-blur-md">
-                  <Chevron direction="right" />
-                </span>
-              </button>
+                aria-label="next"
+                className="absolute inset-y-0 right-0 z-10 w-1/3 md:hidden"
+              />
             </div>
-          </figure>
 
-          {/* Caption + traversal hint */}
-          <figcaption className={`mt-5 flex flex-wrap items-center justify-between gap-y-2 text-[10px] font-light uppercase tracking-[0.32em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-            <span>
-              {current.sketch_count} sketches woven into one scene
-            </span>
-            <span className="hidden text-[var(--ink-dim)] md:inline">
-              ← →  walk the hall
-            </span>
-            <span className="text-[var(--ink-dim)]">
-              <time dateTime={current.created_at}>{dateLong}</time>
-            </span>
-          </figcaption>
-        </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={current.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.4 }}
+                className="mt-5 flex items-center justify-between gap-4"
+              >
+                <div className="flex items-baseline gap-3 text-sm font-light">
+                  <span className="text-white/70 tabular-nums">
+                    {current.sketch_count}
+                  </span>
+                  <span className="text-white/40">sketches</span>
+                  <span className="h-1 w-1 rounded-full bg-white/20" />
+                  <span className="text-white/40">{dateLong}</span>
+                  {isLatest && (
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#ffd36d]/80 font-light">
+                      latest
+                    </span>
+                  )}
+                </div>
+                {total > 1 && (
+                  <span className="text-xs font-light tabular-nums text-white/30">
+                    {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+                  </span>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </motion.div>
 
-        {/* Wall index — every painting in the gallery */}
         {total > 1 && (
-          <WallIndex
+          <ThumbnailStrip
             banners={banners}
             currentIndex={index}
             onSelect={goTo}
           />
         )}
 
-        {/* Editorial spread — title + dossier */}
-        <div className="mt-20 grid grid-cols-12 gap-y-12 md:mt-28 md:gap-x-16">
-          <div className="col-span-12 md:col-span-7">
-            <p className={`mb-6 flex items-center gap-3 text-[10px] font-light uppercase tracking-[0.32em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-              <span className="inline-block h-px w-10 bg-[var(--ink-faint)]" />
-              the confessional booth
-            </p>
-            <h1
-              className={`font-normal leading-[0.82] tracking-[-0.025em] text-[var(--ink)] ${SERIF_STACK}`}
-              style={{ fontSize: "clamp(4rem, 13vw, 11rem)" }}
-            >
-              <motion.span
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, delay: 0.2 }}
-                className="block"
-              >
-                the
-              </motion.span>
-              <motion.span
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, delay: 0.45 }}
-                className="block italic text-[var(--gilt)]"
-              >
-                collage<span className="text-[var(--gilt-soft)]">.</span>
-              </motion.span>
-            </h1>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
+        {visibleSketches.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.65 }}
-            className="col-span-12 md:col-span-5 md:pt-10"
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-24 md:mt-32"
           >
-            <p className="max-w-md text-base font-light leading-[1.75] text-[var(--ink-dim)] md:text-[17px]">
-              every confession comes with a sketch. they wash up here,
-              <em className="not-italic text-[var(--ink)]"> painted nightly </em>
-              into one cohesive nocturne — a moonlit landscape composed
-              entirely of strangers' marks.
-            </p>
-
-            <dl className={`mt-10 grid max-w-sm grid-cols-[7rem_1fr] gap-y-4 border-t border-[var(--ink-trace)] pt-7 text-[10px] font-light uppercase tracking-[0.28em] ${MONO_STACK}`}>
-              <dt className="text-[var(--ink-faint)]">on view</dt>
-              <dd className="text-[var(--gilt)] tabular-nums">
-                №{exhibitNumber} of {totalLabel}
-              </dd>
-              <dt className="text-[var(--ink-faint)]">sketches</dt>
-              <dd className="text-[var(--ink)] tabular-nums">
-                {current.sketch_count}
-              </dd>
-              <dt className="text-[var(--ink-faint)]">painted</dt>
-              <dd className="text-[var(--ink)]">{dateLong}</dd>
-              <dt className="text-[var(--ink-faint)]">medium</dt>
-              <dd className="text-[var(--ink)]">ink + watercolor wash</dd>
-              <dt className="text-[var(--ink-faint)]">cadence</dt>
-              <dd className="text-[var(--ink)]">renewed nightly</dd>
-            </dl>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* The credit roll — every contributor's actual mark */}
-      {visibleSketches.length > 0 && (
-        <section className="relative mt-28 border-y border-[var(--ink-trace)] bg-[rgba(0,0,0,0.35)] py-12 md:mt-36">
-          <div className={`mb-8 flex items-end justify-between gap-6 px-5 text-[10px] font-light uppercase tracking-[0.32em] text-[var(--ink-faint)] sm:px-8 lg:px-14 ${MONO_STACK}`}>
-            <div className="flex items-center gap-3">
-              <span className="inline-block h-px w-10 bg-[var(--ink-faint)]" />
-              <span>the contributors</span>
+            <SectionDivider />
+            <div className="text-center mb-8 mt-12">
+              <h2 className="text-2xl md:text-3xl font-extralight text-white/80 mb-2">
+                the sketches behind it
+              </h2>
+              <p className="text-white/40 font-light text-sm tabular-nums">
+                {visibleSketches.length} hands
+              </p>
             </div>
-            <span className="text-[var(--ink-dim)] tabular-nums">
-              {visibleSketches.length} on view
-            </span>
-          </div>
+            <SketchRiver sketches={visibleSketches} />
+          </motion.section>
+        )}
 
-          <SketchRiver sketches={visibleSketches} reduce={!!reduce} />
-
-          <p className={`mt-8 px-5 text-center text-[10px] font-light uppercase tracking-[0.36em] text-[var(--ink-faint)] sm:px-8 lg:px-14 ${MONO_STACK}`}>
-            hover to pause · each mark left by a different hand
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="mt-28 md:mt-36 text-center"
+        >
+          <p className="text-white/40 font-light text-sm mb-6 max-w-sm mx-auto leading-relaxed">
+            leave a sketch in the booth. if the council lets it through it
+            lands in tomorrow&apos;s.
           </p>
-        </section>
-      )}
-
-      {/* Guestbook CTA */}
-      <section className="relative px-5 py-32 text-center sm:px-8 lg:px-14 md:py-40">
-        <div className="mx-auto max-w-2xl">
-          <p className={`flex items-center justify-center gap-3 text-[10px] font-light uppercase tracking-[0.36em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-            <span className="inline-block h-px w-8 bg-[var(--ink-faint)]" />
-            visitors&rsquo; book
-            <span className="inline-block h-px w-8 bg-[var(--ink-faint)]" />
-          </p>
-          <h2
-            className={`mt-6 font-normal leading-[0.95] tracking-[-0.015em] text-[var(--ink)] ${SERIF_STACK}`}
-            style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}
-          >
-            sign the next <em className="text-[var(--gilt)]">painting</em>.
-          </h2>
-          <p className="mx-auto mt-6 max-w-md text-sm font-light leading-[1.7] text-[var(--ink-dim)] md:text-base">
-            leave a sketch in the booth. when enough hands have passed
-            through, a new nocturne paints itself overnight.
-          </p>
-
           <Link
             href="/connect"
-            className={`group relative mt-12 inline-flex items-center gap-4 text-[11px] font-light uppercase tracking-[0.36em] text-[var(--gilt)] transition-colors duration-300 hover:text-[var(--ink)] ${MONO_STACK}`}
+            className="group inline-flex items-center gap-3 px-7 py-3.5 bg-white/[0.04] border border-white/10 rounded-full text-white/80 text-sm font-light hover:bg-white/[0.08] hover:border-white/25 hover:text-white transition-all duration-300"
           >
-            <span className="relative pb-2">
-              enter the booth
-              <span className="absolute inset-x-0 bottom-0 h-px origin-left scale-x-100 bg-[var(--gilt)]/40 transition-all duration-500 group-hover:bg-[var(--ink)]" />
-            </span>
-            <span
+            leave a sketch
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
               aria-hidden
-              className="inline-block transition-transform duration-500 group-hover:translate-x-2"
             >
-              ⟶
-            </span>
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </Link>
-        </div>
+        </motion.div>
       </section>
-
-      <footer className={`border-t border-[var(--ink-trace)] px-5 py-10 text-center text-[9px] font-light uppercase tracking-[0.4em] text-[var(--ink-faint)] sm:px-8 lg:px-14 ${MONO_STACK}`}>
-        ⌬ a hall that changes when you visit it
-      </footer>
     </main>
   );
 }
 
-function Bracket({ className }: { className: string }) {
-  return (
-    <span
-      aria-hidden
-      className={`pointer-events-none absolute z-10 h-4 w-4 border-[var(--ink-faint)] md:h-6 md:w-6 ${className}`}
-    />
-  );
-}
-
-function ChevronButton({
-  direction,
+function NavButton({
   onClick,
-  disabled,
+  direction,
   className,
-  label,
 }: {
-  direction: "left" | "right";
   onClick: () => void;
-  disabled?: boolean;
+  direction: "left" | "right";
   className?: string;
-  label: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={`group h-12 w-12 items-center justify-center rounded-full border border-[var(--ink-faint)] bg-black/40 text-[var(--ink-dim)] backdrop-blur-md transition-all duration-300 hover:border-[var(--gilt-soft)] hover:bg-black/70 hover:text-[var(--gilt)] disabled:opacity-30 disabled:hover:border-[var(--ink-faint)] disabled:hover:text-[var(--ink-dim)] ${className ?? ""}`}
+      aria-label={direction === "left" ? "previous" : "next"}
+      className={`flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-black/40 text-white/50 backdrop-blur-md transition-all duration-300 hover:border-white/25 hover:bg-black/70 hover:text-white ${className ?? ""}`}
     >
-      <Chevron direction={direction} />
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-4 h-4"
+        aria-hidden
+      >
+        {direction === "left" ? (
+          <path d="M15 18l-6-6 6-6" />
+        ) : (
+          <path d="M9 6l6 6-6 6" />
+        )}
+      </svg>
     </button>
   );
 }
 
-function Chevron({ direction }: { direction: "left" | "right" }) {
+function SectionDivider() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.25}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="mx-auto h-5 w-5"
-      aria-hidden
-    >
-      {direction === "left" ? (
-        <path d="M15 18l-6-6 6-6" />
-      ) : (
-        <path d="M9 6l6 6-6 6" />
-      )}
-    </svg>
+    <div className="flex items-center justify-center gap-3" aria-hidden>
+      <span className="h-px w-16 bg-gradient-to-r from-transparent to-white/15" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[#ffd36d]/50" />
+      <span className="h-px w-16 bg-gradient-to-l from-transparent to-white/15" />
+    </div>
   );
 }
 
-function WallIndex({
+function ThumbnailStrip({
   banners,
   currentIndex,
   onSelect,
@@ -521,10 +357,8 @@ function WallIndex({
   currentIndex: number;
   onSelect: (index: number) => void;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  // Auto-scroll the active thumbnail into the centered viewing position
   useEffect(() => {
     const node = itemRefs.current[currentIndex];
     if (!node) return;
@@ -536,21 +370,8 @@ function WallIndex({
   }, [currentIndex]);
 
   return (
-    <div className="mt-12 md:mt-16">
-      <div className={`mb-4 flex items-center justify-between text-[10px] font-light uppercase tracking-[0.32em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-        <div className="flex items-center gap-3">
-          <span className="inline-block h-px w-10 bg-[var(--ink-faint)]" />
-          <span>the wall</span>
-        </div>
-        <span className="text-[var(--ink-dim)] tabular-nums">
-          {currentIndex + 1} / {banners.length}
-        </span>
-      </div>
-
-      <div
-        ref={containerRef}
-        className="scrollbar-hide -mx-5 flex snap-x gap-3 overflow-x-auto px-5 py-4 sm:-mx-8 sm:px-8 lg:-mx-14 lg:px-14"
-      >
+    <div className="mt-12 md:mt-14">
+      <div className="scrollbar-hide ios-momentum-scroll -mx-6 md:-mx-8 flex snap-x gap-3 overflow-x-auto px-6 md:px-8 py-3">
         {banners.map((banner, i) => {
           const isActive = i === currentIndex;
           return (
@@ -561,54 +382,33 @@ function WallIndex({
               }}
               type="button"
               onClick={() => onSelect(i)}
-              aria-label={`view exhibit ${i + 1}`}
+              aria-label={`view collage ${i + 1}`}
               aria-current={isActive ? "true" : undefined}
-              className="group relative shrink-0 snap-center"
+              className="group relative shrink-0 snap-center text-left"
             >
               <div
-                className={`relative aspect-[3/2] w-[88px] overflow-hidden border transition-all duration-500 sm:w-[112px] md:w-[128px] ${
+                className={`relative aspect-[3/2] w-24 sm:w-28 overflow-hidden rounded-lg border transition-all duration-300 ${
                   isActive
-                    ? "scale-[1.08] border-[var(--gilt)] shadow-[0_18px_42px_-18px_rgba(244,220,168,0.55)]"
-                    : "border-[var(--ink-trace)] opacity-55 hover:opacity-100 hover:border-[var(--ink-faint)]"
+                    ? "border-[#ffd36d]/60 opacity-100 shadow-[0_10px_30px_-12px_rgba(255,211,109,0.45)]"
+                    : "border-white/[0.06] opacity-50 group-hover:opacity-90 group-hover:border-white/20"
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={banner.image_url}
-                  alt={`exhibit ${i + 1}`}
+                  alt={`collage ${i + 1}`}
                   loading="lazy"
                   decoding="async"
                   className="h-full w-full object-cover"
                 />
-                {!isActive && (
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 bg-[rgba(0,1,5,0.35)]"
-                  />
-                )}
-                {isActive && (
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,1,5,0.65)_100%)]"
-                  />
-                )}
               </div>
-              <div className="mt-2 flex flex-col items-center gap-0.5">
-                <span
-                  className={`text-[9px] font-light uppercase tracking-[0.28em] tabular-nums transition-colors ${
-                    isActive ? "text-[var(--gilt)]" : "text-[var(--ink-faint)]"
-                  } ${MONO_STACK}`}
-                >
-                  №{String(i + 1).padStart(3, "0")}
-                </span>
-                <span
-                  className={`text-[8px] font-light uppercase tracking-[0.22em] transition-colors ${
-                    isActive ? "text-[var(--ink-dim)]" : "text-[var(--ink-faint)]/60"
-                  } ${MONO_STACK}`}
-                >
-                  {formatShortDate(banner.created_at)}
-                </span>
-              </div>
+              <span
+                className={`mt-2 block text-center text-[10px] font-light tabular-nums transition-colors duration-300 ${
+                  isActive ? "text-[#ffd36d]/80" : "text-white/25 group-hover:text-white/40"
+                }`}
+              >
+                {formatShortDate(banner.created_at)}
+              </span>
             </button>
           );
         })}
@@ -617,57 +417,25 @@ function WallIndex({
   );
 }
 
-function SketchRiver({
-  sketches,
-  reduce,
-}: {
-  sketches: SketchPreview[];
-  reduce: boolean;
-}) {
-  const items = [...sketches, ...sketches];
-
+function SketchRiver({ sketches }: { sketches: SketchPreview[] }) {
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[var(--void)] to-transparent sm:w-40" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[var(--void)] to-transparent sm:w-40" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 sm:w-16 bg-gradient-to-r from-[#000105] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 sm:w-16 bg-gradient-to-l from-[#000105] to-transparent" />
 
-      <div
-        className={`flex w-max items-end gap-7 ${
-          reduce ? "" : "animate-collage-marquee hover:[animation-play-state:paused]"
-        }`}
-        style={{ willChange: "transform" }}
-      >
-        {items.map((sketch, i) => (
-          <SketchTile
-            key={`${sketch.id}-${i}`}
-            sketch={sketch}
-            index={i}
-          />
+      <div className="scrollbar-hide ios-momentum-scroll -mx-6 md:-mx-8 flex gap-3 overflow-x-auto px-6 md:px-8 py-2">
+        {sketches.map((sketch) => (
+          <SketchTile key={sketch.id} sketch={sketch} />
         ))}
       </div>
     </div>
   );
 }
 
-function SketchTile({
-  sketch,
-  index,
-}: {
-  sketch: SketchPreview;
-  index: number;
-}) {
-  const seed = sketch.id.charCodeAt(0) + sketch.id.charCodeAt(2) + index;
-  const tilt = ((seed % 9) - 4) * 0.7;
-  const lift = (seed % 5) * 4;
-
+function SketchTile({ sketch }: { sketch: SketchPreview }) {
   return (
-    <figure
-      className="group relative shrink-0 w-[150px] sm:w-[180px] md:w-[210px]"
-      style={{
-        transform: `translateY(-${lift}px) rotate(${tilt}deg)`,
-      }}
-    >
-      <div className="relative aspect-[3/2] overflow-hidden border border-[var(--ink-trace)] bg-[#05050a] shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)] transition-all duration-500 group-hover:scale-[1.06] group-hover:border-[var(--gilt-soft)] group-hover:shadow-[0_30px_80px_-30px_rgba(244,220,168,0.35)]">
+    <figure className="shrink-0 w-32 sm:w-40">
+      <div className="relative aspect-[3/2] overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02] transition-all duration-300 hover:border-white/20 hover:scale-[1.02]">
         {sketch.snapshot_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -678,73 +446,46 @@ function SketchTile({
             className="h-full w-full object-cover"
           />
         )}
-        <span className={`absolute right-1.5 top-1.5 text-[8px] font-light uppercase tracking-[0.22em] text-[var(--ink-faint)] mix-blend-screen ${MONO_STACK}`}>
-          №{String((seed * 13) % 999).padStart(3, "0")}
-        </span>
       </div>
-      <figcaption className={`mt-2.5 flex items-baseline justify-between gap-2 text-[10px] font-light uppercase tracking-[0.18em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-        <span className="truncate text-[var(--ink-dim)]">
-          {sketch.prompt?.trim() || "untitled"}
-        </span>
-        <span className="shrink-0 tabular-nums text-[var(--ink-faint)]">
-          {formatShortDate(sketch.created_at)}
-        </span>
-      </figcaption>
     </figure>
   );
 }
 
-function EmptyExhibit() {
+function EmptyState() {
   return (
-    <main
-      className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center"
-      style={PALETTE}
-    >
-      <p className={`text-[10px] font-light uppercase tracking-[0.36em] text-[var(--ink-faint)] ${MONO_STACK}`}>
-        exhibit closed
-      </p>
-      <h1
-        className={`mt-6 font-normal italic text-[var(--ink)] ${SERIF_STACK}`}
-        style={{ fontSize: "clamp(3rem, 9vw, 6rem)" }}
-      >
-        the room is empty.
+    <main className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center">
+      <h1 className="text-5xl md:text-7xl font-extralight tracking-tight mb-5">
+        <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+          collage
+        </span>
       </h1>
-      <p className="mt-6 max-w-md text-sm font-light leading-relaxed text-[var(--ink-dim)]">
-        no nocturne has been painted yet. once a few sketches land in
-        the booth, this hall fills itself.
+      <p className="text-white/40 font-light mb-10 max-w-md">
+        no sketches yet. be the first.
       </p>
       <Link
         href="/connect"
-        className={`mt-10 inline-flex items-center gap-3 text-[11px] font-light uppercase tracking-[0.36em] text-[var(--gilt)] ${MONO_STACK}`}
+        className="group inline-flex items-center gap-3 px-7 py-3.5 bg-white/[0.04] border border-white/10 rounded-full text-white/80 text-sm font-light hover:bg-white/[0.08] hover:border-white/25 hover:text-white transition-all duration-300"
       >
-        <span className="border-b border-[var(--gilt)]/40 pb-1">
-          be the first to leave a mark
-        </span>
-        <span aria-hidden>⟶</span>
+        leave the first sketch
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
+          aria-hidden
+        >
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
       </Link>
     </main>
   );
 }
 
-function formatRelative(dateString: string) {
-  const then = new Date(dateString).getTime();
-  if (!Number.isFinite(then)) return "";
-  const diffMs = Date.now() - then;
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 1) return "just painted";
-  if (minutes < 60) return `painted ${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `painted ${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `painted ${days}d ago`;
-  const months = Math.round(days / 30);
-  if (months < 12) return `painted ${months}mo ago`;
-  const years = Math.round(months / 12);
-  return `painted ${years}y ago`;
-}
-
-function formatShortDate(dateString: string) {
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function formatShortDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

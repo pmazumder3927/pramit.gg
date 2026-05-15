@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Instrument_Serif } from "next/font/google";
 
 import {
   fetchAllHomepageBanners,
@@ -9,20 +8,12 @@ import { createPublicClient } from "@/utils/supabase/server";
 
 import CollageExperience from "./CollageExperience";
 
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: ["400"],
-  style: ["normal", "italic"],
-  display: "swap",
-  variable: "--font-instrument-serif",
-});
-
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "the collage",
+  title: "collage",
   description:
-    "every confession in the booth comes with a sketch. they all end up here.",
+    "every sketch left in the booth gets painted into one image overnight.",
 };
 
 type SketchPreview = {
@@ -56,12 +47,11 @@ export default async function CollagePage() {
     fetchSketchPreviews(),
   ]);
 
-  // The page wants oldest → newest so the chronological exhibit number reads
-  // naturally and the latest sits at the right end of the wall.
+  // Oldest → newest so the latest sits at the right end of the strip.
   const orderedBanners: HomepageBanner[] = [...banners].reverse();
 
   return (
-    <div className={`${instrumentSerif.variable} page-reveal`}>
+    <div className="page-reveal">
       <CollageExperience banners={orderedBanners} sketches={sketches} />
     </div>
   );
