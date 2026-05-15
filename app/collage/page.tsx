@@ -25,12 +25,14 @@ type SketchPreview = {
 
 async function fetchSketchPreviews(): Promise<SketchPreview[]> {
   const supabase = createPublicClient();
+  // No limit: the collage page filters this list per-banner by created_at, so
+  // older banners would render an empty row if their sketches fell outside a
+  // top-N cap.
   const { data, error } = await supabase
     .from("turtle_drawings")
     .select("id, prompt, snapshot_url, created_at")
     .not("snapshot_url", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(120);
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Sketch preview fetch error:", error);

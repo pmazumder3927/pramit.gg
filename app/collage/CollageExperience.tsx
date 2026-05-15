@@ -83,10 +83,17 @@ export default function CollageExperience({
     return () => window.removeEventListener("keydown", onKey);
   }, [goPrev, goNext]);
 
-  const visibleSketches = useMemo(
-    () => sketches.filter((s) => s.snapshot_url),
-    [sketches],
-  );
+  const currentCreatedAt = total > 0 ? banners[index].created_at : null;
+
+  // Sketches "behind" a banner = the ones that existed when it was painted.
+  // The generator pulls every sketch at the moment of creation, so we
+  // approximate that set with `created_at <= banner.created_at` here.
+  const visibleSketches = useMemo(() => {
+    if (!currentCreatedAt) return [];
+    return sketches.filter(
+      (s) => s.snapshot_url && s.created_at <= currentCreatedAt,
+    );
+  }, [sketches, currentCreatedAt]);
 
   if (total === 0) {
     return <EmptyState />;
@@ -264,7 +271,7 @@ export default function CollageExperience({
                 {visibleSketches.length} hands
               </p>
             </div>
-            <SketchRiver sketches={visibleSketches} />
+            <SketchRiver key={current.id} sketches={visibleSketches} />
           </motion.section>
         )}
 
