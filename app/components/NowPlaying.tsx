@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useNowPlayingContext } from "./NowPlayingContext";
+import { useListenAlong } from "./useListenAlong";
 
 function formatTime(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -25,6 +26,7 @@ export default function NowPlaying() {
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { track, albumColor } = useNowPlayingContext();
+  const listenAlong = useListenAlong(track);
 
   // Advance the playhead locally between polls so the elapsed time ticks up
   // every second instead of freezing until the next fetch. Each poll re-seeds
@@ -119,6 +121,67 @@ export default function NowPlaying() {
               </div>
             ) : null}
 
+            {/* listen along — true sync for Premium listeners, with a
+                deep-link fallback ("open in spotify") below for everyone else */}
+            {track.isPlaying && track.uri && (
+              <div className="px-4 pb-1">
+                {listenAlong.status === "live" ? (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest"
+                      style={{ background: albumColor, color: onAlbum }}
+                    >
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span
+                          className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                          style={{ background: onAlbum }}
+                        />
+                        <span
+                          className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                          style={{ background: onAlbum }}
+                        />
+                      </span>
+                      listening along
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        listenAlong.stop();
+                      }}
+                      className="rounded-full border-2 border-line px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-ink-soft transition-colors hover:border-ink hover:text-ink"
+                    >
+                      leave
+                    </button>
+                  </div>
+                ) : listenAlong.status === "premium_required" ? (
+                  <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                    spotify premium needed to sync — open below instead
+                  </p>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      listenAlong.start();
+                    }}
+                    disabled={listenAlong.status === "connecting"}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-ink px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60"
+                    style={{ background: albumColor, color: onAlbum }}
+                  >
+                    {listenAlong.status === "connecting"
+                      ? "syncing…"
+                      : listenAlong.connected
+                        ? "listen along"
+                        : "listen along with me"}
+                  </button>
+                )}
+                {listenAlong.error && (
+                  <p className="mt-1 text-center font-mono text-[10px] text-ink-faint">
+                    {listenAlong.error}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2 p-4 pt-2">
               {track.songUrl && (
                 <a
@@ -129,7 +192,7 @@ export default function NowPlaying() {
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-ink px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-transform hover:-translate-y-0.5"
                   style={{ background: albumColor, color: onAlbum }}
                 >
-                  spotify
+                  open in spotify
                 </a>
               )}
               <Link

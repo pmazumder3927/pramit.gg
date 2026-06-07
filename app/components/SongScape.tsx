@@ -208,13 +208,16 @@ export default function SongScape() {
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
       <svg className="h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" fill="none">
         <defs>
-          {/* hand-drawn roughen — static, so the browser computes it once and
-              caches it (an animated turbulence here repaints the whole viewport
-              every frame, which is far too expensive for a global backdrop) */}
-          <filter id="ss-rough" x="-5%" y="-10%" width="110%" height="120%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="5" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="7" />
-          </filter>
+          {/* Three STATIC roughen variants (different turbulence seeds). Each is
+              computed once and cached; the "boil" comes from stepping which
+              variant is visible (cheap opacity compositing), not from animating
+              the filter itself — which would repaint the whole viewport 60×/s. */}
+          {[5, 17, 29].map((seed, v) => (
+            <filter key={v} id={`ss-rough-${v}`} x="-5%" y="-10%" width="110%" height="120%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed={seed} result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="7" />
+            </filter>
+          ))}
         </defs>
 
         <AnimatePresence>
@@ -240,37 +243,44 @@ export default function SongScape() {
             {/* sky wash near the horizon */}
             <rect x="0" y="280" width={W} height={H - 280} fill={`url(#ss-sky-${scape.uid})`} />
 
-            <g filter="url(#ss-rough)">
-              {/* celestial body — sun by day, moon by night */}
-              <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR * 3.4} fill={`url(#ss-glow-${scape.uid})`} />
+            {/* celestial body — sun by day, moon by night (glow unfiltered) */}
+            <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR * 3.4} fill={`url(#ss-glow-${scape.uid})`} />
+            <g filter="url(#ss-rough-0)">
               <circle className="ss-body" cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} style={{ fill: c.body, fillOpacity: dark ? 0.85 : 0.8 }} />
               <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} fill="none" style={{ stroke: c.ring, strokeWidth: 1.2 }} />
-
-              {/* ridges: far → near */}
-              {ridges.map((rg, i) => {
-                const l = c.layers[i];
-                return (
-                  <g key={i}>
-                    <path className="ss-fill" d={rg.area} style={{ fill: l.fill, fillOpacity: l.fillOp }} />
-                    <polyline
-                      className="ss-stroke"
-                      points={rg.top}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={
-                        {
-                          stroke: l.stroke,
-                          strokeOpacity: l.strokeOp,
-                          strokeWidth: l.sw,
-                          "--len": rg.len,
-                          "--delay": `${0.3 + i * 0.45}s`,
-                        } as React.CSSProperties
-                      }
-                    />
-                  </g>
-                );
-              })}
             </g>
+
+            {/* ridges: far → near. The silhouette fill is static; the moonlit
+                ridge stroke is drawn three times (one per roughen variant) and
+                its layers flicker between them to "boil" like a living pencil. */}
+            {ridges.map((rg, i) => {
+              const l = c.layers[i];
+              return (
+                <g key={i}>
+                  <path className="ss-fill" d={rg.area} filter="url(#ss-rough-0)" style={{ fill: l.fill, fillOpacity: l.fillOp }} />
+                  {[0, 1, 2].map((v) => (
+                    <g key={v} className={`ss-boil ss-boil-${v}`}>
+                      <polyline
+                        className="ss-stroke"
+                        points={rg.top}
+                        filter={`url(#ss-rough-${v})`}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={
+                          {
+                            stroke: l.stroke,
+                            strokeOpacity: l.strokeOp,
+                            strokeWidth: l.sw,
+                            "--len": rg.len,
+                            "--delay": `${0.3 + i * 0.45}s`,
+                          } as React.CSSProperties
+                        }
+                      />
+                    </g>
+                  ))}
+                </g>
+              );
+            })}
           </motion.g>
         </AnimatePresence>
       </svg>

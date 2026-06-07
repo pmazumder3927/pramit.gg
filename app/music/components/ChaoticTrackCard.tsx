@@ -215,3 +215,7 @@ function ChaoticTrackCardImpl({
     </motion.div>
   );
 }
+
+// Memoized: track/playlist data only changes every 60–600s, so this skips the
+// reconcile when the page re-renders on the 5s now-playing tick or a tab switch.
+export const ChaoticTrackCard = memo(ChaoticTrackCardImpl);

@@ -14,7 +14,7 @@ interface SpotifyTokens {
   expires_at: Date;
 }
 
-interface TokenResponse {
+export interface TokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
@@ -89,9 +89,12 @@ async function saveTokens(tokens: SpotifyTokens): Promise<void> {
 }
 
 /**
- * Refresh the access token using the refresh token
+ * Refresh the access token using the refresh token.
+ * Raw call — does NOT persist anything. Used both by the owner token flow
+ * (which saves the result) and the per-visitor listen-along flow (which keeps
+ * the result in a cookie, never in the owner's credentials row).
  */
-async function refreshAccessToken(
+export async function refreshAccessToken(
   refresh_token: string
 ): Promise<TokenResponse> {
   const { client_id, client_secret } = getClientCredentials();
@@ -169,12 +172,14 @@ export async function getAccessToken(): Promise<string> {
 }
 
 /**
- * Exchange authorization code for tokens (used in OAuth callback)
+ * Exchange an authorization code for tokens. Raw call — does NOT persist
+ * anything. Used by the owner OAuth callback (which saves) and the per-visitor
+ * listen-along callback (which stores the result in a cookie).
  */
-export async function exchangeCodeForTokens(
+export async function exchangeCode(
   code: string,
   redirect_uri: string
-): Promise<void> {
+): Promise<TokenResponse> {
   const { client_id, client_secret } = getClientCredentials();
 
   const response = await fetch(SPOTIFY_TOKEN_URL, {
@@ -195,7 +200,17 @@ export async function exchangeCodeForTokens(
     throw new Error(`Failed to exchange code for tokens: ${error}`);
   }
 
-  const tokenResponse: TokenResponse = await response.json();
+  return response.json();
+}
+
+/**
+ * Exchange authorization code for tokens (used in the owner OAuth callback)
+ */
+export async function exchangeCodeForTokens(
+  code: string,
+  redirect_uri: string
+): Promise<void> {
+  const tokenResponse = await exchangeCode(code, redirect_uri);
 
   if (!tokenResponse.refresh_token) {
     throw new Error("No refresh token received from Spotify");

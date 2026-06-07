@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { memo, useState, useMemo } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
 import { generateChaoticStyle, seededRandom, hexToRgb } from "../lib/chaotic-styles";
@@ -25,7 +25,7 @@ interface ChaoticPlaylistCardProps {
 
 const TAPE_TONES = ["orange", "purple", "rust"] as const;
 
-export function ChaoticPlaylistCard({
+function ChaoticPlaylistCardImpl({
   playlist,
   index,
 }: ChaoticPlaylistCardProps) {
@@ -163,3 +163,7 @@ export function ChaoticPlaylistCard({
     </motion.div>
   );
 }
+
+// Memoized so the 5s now-playing re-render / tab switches don't reconcile every
+// card — playlist data only changes on its own (10-minute) poll.
+export const ChaoticPlaylistCard = memo(ChaoticPlaylistCardImpl);

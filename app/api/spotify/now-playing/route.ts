@@ -18,9 +18,19 @@ const CACHE_HEADERS = {
 const NOW_PLAYING_TTL_MS = 4000;
 let payloadCache: { at: number; body: Record<string, unknown> } | null = null;
 
+// `fetchedAt` (when the upstream Spotify data was actually pulled) plus a fresh
+// `serverNow` on every response let the client correct for in-memory cache
+// staleness when estimating the live playhead for listen-along.
+function respond(body: Record<string, unknown>) {
+  return NextResponse.json(
+    { ...body, serverNow: Date.now() },
+    { headers: CACHE_HEADERS }
+  );
+}
+
 export async function GET() {
   if (payloadCache && Date.now() - payloadCache.at < NOW_PLAYING_TTL_MS) {
-    return NextResponse.json(payloadCache.body, { headers: CACHE_HEADERS });
+    return respond({ ...payloadCache.body, fetchedAt: payloadCache.at });
   }
 
   try {
@@ -48,11 +58,13 @@ export async function GET() {
           album: nowPlaying.item.album.name,
           albumImageUrl: nowPlaying.item.album.images[0]?.url,
           songUrl: nowPlaying.item.external_urls.spotify,
+          trackId: nowPlaying.item.id,
+          uri: nowPlaying.item.uri,
           progress: nowPlaying.progress_ms,
           duration: nowPlaying.item.duration_ms,
         };
         payloadCache = { at: Date.now(), body };
-        return NextResponse.json(body, { headers: CACHE_HEADERS });
+        return respond({ ...body, fetchedAt: payloadCache.at });
       }
     }
 
@@ -78,10 +90,12 @@ export async function GET() {
           album: lastTrack.track.album.name,
           albumImageUrl: lastTrack.track.album.images[0]?.url,
           songUrl: lastTrack.track.external_urls.spotify,
+          trackId: lastTrack.track.id,
+          uri: lastTrack.track.uri,
           playedAt: lastTrack.played_at,
         };
         payloadCache = { at: Date.now(), body };
-        return NextResponse.json(body, { headers: CACHE_HEADERS });
+        return respond({ ...body, fetchedAt: payloadCache.at });
       }
     }
 
@@ -94,12 +108,12 @@ export async function GET() {
       songUrl: null,
     };
     payloadCache = { at: Date.now(), body };
-    return NextResponse.json(body, { headers: CACHE_HEADERS });
+    return respond({ ...body, fetchedAt: payloadCache.at });
   } catch (error) {
     console.error("Spotify API error:", error);
     // Don't cache errors — serve the last good payload if we have one.
     if (payloadCache) {
-      return NextResponse.json(payloadCache.body, { headers: CACHE_HEADERS });
+      return respond({ ...payloadCache.body, fetchedAt: payloadCache.at });
     }
     return NextResponse.json(
       {

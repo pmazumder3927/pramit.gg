@@ -11,8 +11,15 @@ export interface SpotifyTrack {
   album: string;
   albumImageUrl: string | null;
   songUrl: string | null;
+  trackId?: string | null;
+  uri?: string | null;
   progress?: number;
   duration?: number;
+  /** Epoch ms (server clock) when the upstream Spotify data was pulled. */
+  fetchedAt?: number;
+  /** Epoch ms (server clock) at response time — pairs with fetchedAt to
+   *  correct for cache staleness when estimating the live playhead. */
+  serverNow?: number;
 }
 
 type VisualVariant = "neon" | "glassy" | "minimal" | "accent";
