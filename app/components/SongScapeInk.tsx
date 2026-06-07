@@ -1,20 +1,20 @@
 "use client";
 
 // Songscape · Sumi-no-Mizu ("ink in the water") — an alternate now-playing
-// backdrop. The screen is a still tank; the album's colours float in it as a few
-// drops of marbled ink.
-//   · shape  : each drop is a set of CONCENTRIC, finger-edged rings (suminagashi
-//              veins — not glowing blobs). Each word of "title artist" bends the
-//              fingering, so the song's name is written into how the ink combs.
-//   · colour : palette → vibrant warms one drop, secondary cools another, deep =
-//              the inkstone cores, light = the bright bloom ring. Orange/purple
-//              are the warm/cool poles every song is nudged toward.
+// backdrop. The album's colours float in a still tank as a few sumi-e brush
+// gestures (a bold one + lighter accents), not as a widget.
+//   · shape  : each "drop" is a gestural brush stroke — a tapered ribbon
+//              (thin → swell → thin lift) over a gestural arc, with a denser
+//              inner core for ink value. Each word of "title artist" warps the
+//              centreline, so the song's hand is in the gesture.
+//   · colour : palette → vibrant warms the hero stroke, secondary cools the next;
+//              orange/purple are the warm/cool poles every song is nudged toward.
 //   · time   : the live playhead (progress/duration) DIFFUSES the ink — fresh at
-//              song-start (tight, crisp), dilute by the end (a natural lull).
-//   · change : the old pigment disperses & thins while a new drop falls and
-//              blooms open (fast-open, long-settle). Screen is never empty.
-//   · theme  : light = multiply stains on paper; dark = ink glowing in black water.
-// Compositor-only (CSS transforms + opacity + blend-mode). No SVG filters.
+//              song-start (tight), softly spreading by the end (a natural lull).
+//   · change : the old strokes spread & thin and drift out while the new ones
+//              bloom in (fast-open, long-settle). Screen is never empty.
+//   · theme  : light = multiply ink on paper; dark = ink glowing in black water.
+// Compositor-only transforms/opacity/blend + one cached blur for the bleed.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
@@ -61,11 +61,13 @@ const PURPLE = toRgb("#7c77c6"); // first crush's flower — the cool pole
 const INK: RGB = { r: 35, g: 32, b: 27 }; // warm black for paper-mode veins
 
 /* ------------------------------ geometry ------------------------------- */
-type Ring = { d: string; pos: number }; // pos 0 = innermost, 1 = bloom ring
-type Drop = {
-  cx: number;
-  cy: number;
-  rings: Ring[];
+// Each "drop" is a sumi-e brush GESTURE: a gestural arc centreline given a
+// tapered width profile (thin → swell → thin lift) and rendered as a filled
+// ribbon, with a denser inner core for ink value. Reads as confident calligraphy
+// rather than topographic contour rings.
+type Stroke = {
+  base: string; // full-width ribbon path
+  core: string; // narrower, denser inner ribbon path
   warmth: number; // 1 = warm, -1 = cool, mixes between
   dx: string; // drift target (user units, as a css length)
   dy: string;
@@ -78,90 +80,95 @@ type Drop = {
   py: number;
 };
 
-// A smooth CLOSED curve through points (Catmull-Rom → cubic béziers). Flowing
-// edges read as brushed ink rather than a faceted polygon.
-function smoothClosed(pts: [number, number][]): string {
-  const n = pts.length;
-  const r = (v: number) => Math.round(v * 10) / 10;
-  let d = `M${r(pts[0][0])} ${r(pts[0][1])}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n];
-    const p1 = pts[i];
-    const p2 = pts[(i + 1) % n];
-    const p3 = pts[(i + 2) % n];
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += `C${r(c1x)} ${r(c1y)} ${r(c2x)} ${r(c2y)} ${r(p2[0])} ${r(p2[1])}`;
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const poly = (p: [number, number][]) => "M" + p.map((q) => `${r1(q[0])} ${r1(q[1])}`).join("L");
+
+// brush pressure: enters thin, swells, lifts thin — with a faint living ripple
+function widthAt(t: number, wMax: number): number {
+  const up = Math.min(1, t / 0.16);
+  const down = Math.min(1, (1 - t) / 0.24);
+  return wMax * Math.pow(Math.min(up, down), 0.65) * (0.82 + 0.18 * Math.sin(t * 6 + 1));
+}
+
+// a gestural arc, word-warped, sampled densely
+function centerline(
+  cx: number, cy: number, R: number, a0: number, sweep: number,
+  harm: number[], amps: number[], phs: number[], squash: number
+): [number, number][] {
+  const N = 96;
+  const C: [number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const a = a0 + sweep * (i / N);
+    let warp = 1;
+    for (let h = 0; h < harm.length; h++) warp += amps[h] * Math.sin(harm[h] * a + phs[h]);
+    const r = R * warp;
+    C.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * squash]);
   }
-  return d + "Z";
+  return C;
+}
+
+// offset the centreline by ±width/2 along its normals → a closed brush ribbon
+function ribbon(C: [number, number][], wMax: number, wScale: number): string {
+  const L: [number, number][] = [];
+  const Rt: [number, number][] = [];
+  for (let i = 0; i < C.length; i++) {
+    const p = C[i];
+    const pa = C[Math.max(0, i - 1)];
+    const pb = C[Math.min(C.length - 1, i + 1)];
+    const tx = pb[0] - pa[0];
+    const ty = pb[1] - pa[1];
+    const ln = Math.hypot(tx, ty) || 1;
+    const nx = -ty / ln;
+    const ny = tx / ln;
+    const w = (widthAt(i / (C.length - 1), wMax) * wScale) / 2;
+    L.push([p[0] + nx * w, p[1] + ny * w]);
+    Rt.push([p[0] - nx * w, p[1] - ny * w]);
+  }
+  return poly(L) + "L" + poly(Rt.reverse()).slice(1) + "Z";
 }
 
 function makeInk(words: string[], seedStr: string, idle: boolean) {
   const seed = fnv(seedStr);
   const rand = mkRand(seed);
 
-  // word signatures → comb frequencies (the song's fingerprint in the veins)
+  // word signatures → centreline warp frequencies (the song's hand in the gesture)
   const sigs = (words.length ? words : ["nothing"]).slice(0, 6).map((w) => {
     let s = 0;
     for (let k = 0; k < w.length; k++) s += w.charCodeAt(k);
     return s;
   });
-  const freqs = sigs.map((s) => 2 + (s % 5)); // 2..6 lobes
-  while (freqs.length < 2) freqs.push(3 + freqs.length);
+  const freqs = sigs.map((s) => 2 + (s % 4));
+  while (freqs.length < 2) freqs.push(3);
 
-  const n = idle ? 2 : 3 + Math.floor(rand() * 3); // 2 idle, else 3..5
-  const drops: Drop[] = [];
+  const n = idle ? 2 : 2 + Math.floor(rand() * 2); // 2 idle, else 2..3 — calm
+  const drops: Stroke[] = [];
   const base = rand() * Math.PI * 2;
   for (let i = 0; i < n; i++) {
-    // arrange around the centre on a soft annulus → keeps the reading centre calm
-    const ang = base + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.7;
-    const rad = (0.26 + rand() * 0.2) * Math.min(W, H);
+    // sit each gesture on a soft annulus so the reading centre stays calm
+    const ang = base + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.5;
+    const rad = (0.18 + rand() * 0.16) * Math.min(W, H);
     const cx = W / 2 + Math.cos(ang) * rad;
-    const cy = H / 2 + Math.sin(ang) * rad * 0.82;
-    const baseR = 175 + rand() * 165;
+    const cy = H / 2 + Math.sin(ang) * rad * 0.8;
 
-    // ONE coherent warp field shared by every ring of this drop, so the nested
-    // rings flow together (marbling) instead of each wobbling on its own (noise).
-    const harm = freqs.slice(0, 3);
-    const amps = harm.map(() => 0.03 + rand() * 0.035);
+    const hero = i === 0; // first gesture is the bold one, rest are accents
+    const R = (hero ? 240 : 150) + rand() * (hero ? 110 : 120);
+    const a0 = rand() * Math.PI * 2;
+    const sweep = (0.6 + rand() * 1.15) * Math.PI * (rand() < 0.5 ? 1 : -1); // arc or near-ensō
+    const harm = freqs.slice(0, 2);
+    const amps = harm.map(() => 0.03 + rand() * 0.05);
     const phs = harm.map(() => rand() * Math.PI * 2);
-    // a single drag direction pulls the outer rings off-centre — the classic
-    // suminagashi teardrop after a breath crosses the water.
-    const dragAng = rand() * Math.PI * 2;
-    const dragMag = (0.1 + rand() * 0.16) * baseR;
-    const dragX = Math.cos(dragAng) * dragMag;
-    const dragY = Math.sin(dragAng) * dragMag;
-    const squash = 0.84 + rand() * 0.18; // slight ovalness
+    const squash = 0.82 + rand() * 0.22;
+    const wMax = R * ((hero ? 0.12 : 0.08) + rand() * 0.06);
+    const C = centerline(cx, cy, R, a0, sweep, harm, amps, phs, squash);
 
-    const ringCount = 5 + Math.floor(rand() * 3); // 5..7 — finer, since smooth
-    const SAMPLES = 32;
-    const rings: Ring[] = [];
-    for (let k = 0; k < ringCount; k++) {
-      const pos = ringCount === 1 ? 1 : k / (ringCount - 1);
-      const R = baseR * (0.16 + 0.84 * pos);
-      const ccx = dragX * pos; // outer rings pulled along the drag
-      const ccy = dragY * pos;
-      const pts: [number, number][] = [];
-      for (let s = 0; s < SAMPLES; s++) {
-        const a = (s / SAMPLES) * Math.PI * 2;
-        let warp = 1;
-        for (let h = 0; h < harm.length; h++) warp += amps[h] * (0.6 + pos) * Math.sin(harm[h] * a + phs[h]);
-        const rr = R * warp;
-        pts.push([ccx + Math.cos(a) * rr, ccy + Math.sin(a) * rr * squash]);
-      }
-      rings.push({ d: smoothClosed(pts), pos });
-    }
-    // warmth: first drop warm, second cool, rest drift between the poles
+    // warmth: first gesture warm, second cool, rest drift between the poles
     const warmth = i === 0 ? 1 : i === 1 ? -1 : (rand() - 0.5) * 1.6;
     const vx = (cx - W / 2) / W;
     const vy = (cy - H / 2) / H;
     const vlen = Math.hypot(vx, vy) || 1;
     drops.push({
-      cx,
-      cy,
-      rings,
+      base: ribbon(C, wMax, 1),
+      core: ribbon(C, wMax, 0.5),
       warmth,
       dx: `${((rand() * 2 - 1) * 26).toFixed(1)}px`,
       dy: `${((rand() * 2 - 1) * 20).toFixed(1)}px`,
@@ -184,24 +191,22 @@ function dropHue(p: AlbumPalette, warmth: number): RGB {
   return mix(cool, warm, (warmth + 1) / 2);
 }
 
-// Theme-aware vein style → an RGB colour + base alpha + width. Each ring is then
-// painted as a soft wet halo + a crisp vein on top (see render), which fakes the
-// bleeding edge of ink without an SVG filter. The blend modes invert what
-// "reads": multiply (light) shows the DARK ink, so we bias toward ink and make
-// the outer edge heaviest; screen (dark) shows only LIGHT, so we lift every
-// ring's luminance (inner→outer) so the nested rings stay distinct.
-type Vein = { c: RGB; a: number; w: number };
-function ringStyle(p: AlbumPalette, dark: boolean, hue: RGB, pos: number): Vein {
+// Theme-aware brush fills → the soft outer ribbon + the denser inner core, which
+// together give the stroke real ink VALUE (darker spine, lighter edges) plus a
+// blurred bleed. The blend modes invert what reads: multiply (light) shows the
+// DARK ink, so we bias toward ink; screen (dark) shows only LIGHT, so we lift the
+// hue toward the album's light so the gesture glows in black water.
+function strokeFills(p: AlbumPalette, dark: boolean, hue: RGB): { base: string; core: string } {
   if (dark) {
-    const inner = mix(hue, toRgb(p.light), 0.22); // lift cores so screen shows them
-    const c = mix(inner, toRgb(p.light), pos * 0.6); // outer rings brightest
-    return { c, a: 0.32 + 0.32 * pos, w: 1.1 + pos * 1.0 };
+    return {
+      base: cssRgb(mix(hue, toRgb(p.light), 0.12), 0.32),
+      core: cssRgb(mix(hue, toRgb(p.light), 0.5), 0.5), // brighter, denser spine
+    };
   }
-  // light / paper — ink veins, outer edge heaviest
-  const tinted = mix(INK, hue, 0.5); // ink carrying the drop's hue
-  const edge = mix(toRgb(p.deep), INK, 0.35); // darker bloom edge reads under multiply
-  const c = mix(tinted, edge, pos * 0.6);
-  return { c, a: 0.32 + 0.24 * pos, w: 1.5 + pos * 1.3 };
+  return {
+    base: cssRgb(mix(INK, hue, 0.6), 0.3),
+    core: cssRgb(mix(INK, hue, 0.32), 0.5), // darker, inkier spine
+  };
 }
 
 /* ----------------------------- playhead -------------------------------- */
@@ -259,31 +264,24 @@ const container: Variants = {
   show: { transition: { staggerChildren: 0.22 } },
   leave: { transition: { staggerChildren: 0.12 } },
 };
-// Each drop is a direct Motion child carrying its own position via x/y (so
-// stagger + exit propagation are reliable and the bloom scales around its own
-// centre). The bloom opens fast then settles long; on leave it balloons, thins,
-// and drifts outward from the tank centre (disperse).
+// Strokes are drawn at absolute coords, so each scales around its OWN centre
+// (fill-box) — no x/y for placement. The brush blooms in (ink swelling, settling
+// long); on leave it spreads, thins, and drifts outward (disperse).
 const dropV: Variants = {
-  enter: (d: Drop) => ({ x: d.cx, y: d.cy, scale: 0.12, opacity: 0 }),
-  show: (d: Drop) => ({
-    x: d.cx,
-    y: d.cy,
-    scale: 1,
-    opacity: 1,
-    transition: { duration: 1.7, ease: [0.16, 1, 0.3, 1] },
-  }),
-  leave: (d: Drop) => ({
-    x: d.cx + d.px,
-    y: d.cy + d.py,
-    scale: 1.7,
+  enter: { scale: 0.55, opacity: 0 },
+  show: { scale: 1, opacity: 1, transition: { duration: 1.7, ease: [0.16, 1, 0.3, 1] } },
+  leave: (d: Stroke) => ({
+    scale: 1.55,
     opacity: 0,
+    x: d.px,
+    y: d.py,
     transition: { duration: 1.25, ease: [0.4, 0, 0.6, 1] },
   }),
 };
 const dropReduced: Variants = {
-  enter: (d: Drop) => ({ x: d.cx, y: d.cy, opacity: 0 }),
-  show: (d: Drop) => ({ x: d.cx, y: d.cy, opacity: 1, transition: { duration: 0.7 } }),
-  leave: (d: Drop) => ({ x: d.cx, y: d.cy, opacity: 0, transition: { duration: 0.7 } }),
+  enter: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.7 } },
+  leave: { opacity: 0, transition: { duration: 0.7 } },
 };
 
 /* ------------------------------ component ------------------------------ */
@@ -370,8 +368,8 @@ export default function SongScapeInk() {
                   variants={variants}
                   style={{ transformBox: "fill-box", transformOrigin: "center" }}
                 >
-                  {/* rings are centred on the origin; the motion.g translates the
-                      drop into place via x/y and scales it around its own centre */}
+                  {/* strokes are at absolute coords; the motion.g scales each one
+                      around its own centre (fill-box) for the bloom/disperse */}
                   <g
                     className="ink-drift"
                     style={
@@ -403,38 +401,14 @@ export default function SongScapeInk() {
                       <g className="ink-soft">
                         {(() => {
                           const hue = dropHue(palette, d.warmth);
-                          const outer = d.rings[d.rings.length - 1];
-                          const body = dark
-                            ? cssRgb(mix(hue, toRgb(palette.light), 0.1), 0.05)
-                            : cssRgb(mix(INK, hue, 0.55), 0.035);
+                          const f = strokeFills(palette, dark, hue);
                           return (
-                            <>
-                              {/* faint suspended body — the wash the veins float in */}
-                              <path d={outer.d} fill={body} stroke="none" />
-                              {d.rings.map((r, k) => {
-                                const v = ringStyle(palette, dark, hue, r.pos);
-                                return (
-                                  <g key={k} className="ink-vein">
-                                    {/* wet halo (soft bleed) */}
-                                    <path
-                                      d={r.d}
-                                      fill="none"
-                                      stroke={cssRgb(v.c, v.a * 0.3)}
-                                      strokeWidth={v.w * 3.2}
-                                      strokeLinejoin="round"
-                                    />
-                                    {/* the vein itself */}
-                                    <path
-                                      d={r.d}
-                                      fill="none"
-                                      stroke={cssRgb(v.c, v.a)}
-                                      strokeWidth={v.w}
-                                      strokeLinejoin="round"
-                                    />
-                                  </g>
-                                );
-                              })}
-                            </>
+                            <g className="ink-stroke">
+                              {/* full-width ink ribbon */}
+                              <path d={d.base} fill={f.base} stroke="none" />
+                              {/* denser inner core → brush value (dark spine) */}
+                              <path d={d.core} fill={f.core} stroke="none" />
+                            </g>
                           );
                         })()}
                       </g>
