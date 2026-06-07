@@ -38,3 +38,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts 
+# favicon exploration scratch (mockups, not wired into Next)
+favicon-explorations/
