@@ -47,10 +47,11 @@ export function NowPlayingProvider({ children }: { children: ReactNode }) {
     "/api/spotify/now-playing",
     fetcher,
     {
-      refreshInterval: 30000,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 30000, // Prevent duplicate requests within 30s
+      refreshInterval: 5000, // poll every 5s so song changes show up quickly
+      revalidateOnFocus: true, // refresh when returning to the tab
+      revalidateOnReconnect: true,
+      dedupingInterval: 4000, // must be < refreshInterval or polls get deduped away
+      keepPreviousData: true, // don't drop the widget while a poll is in flight
     }
   );
 

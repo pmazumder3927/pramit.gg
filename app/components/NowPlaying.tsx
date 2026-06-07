@@ -26,6 +26,23 @@ export default function NowPlaying() {
   const pathname = usePathname();
   const { track, albumColor } = useNowPlayingContext();
 
+  // Advance the playhead locally between polls so the elapsed time ticks up
+  // every second instead of freezing until the next fetch. Each poll re-seeds
+  // the baseline, keeping it honest.
+  const [tick, setTick] = useState(0);
+  const baseRef = useRef({ progress: 0, at: 0 });
+  const seed = track?.progress ?? null;
+  const trackKey = track?.title ?? null;
+  useEffect(() => {
+    baseRef.current = { progress: seed ?? 0, at: Date.now() };
+    setTick(Date.now());
+  }, [seed, trackKey]);
+  useEffect(() => {
+    if (!track?.isPlaying) return;
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [track?.isPlaying]);
+
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setExpanded(false);
@@ -38,8 +55,11 @@ export default function NowPlaying() {
   if (pathname === "/" || !track) return null;
 
   const onAlbum = onColor(albumColor);
-  const pct =
-    track.progress && track.duration ? (track.progress / track.duration) * 100 : 0;
+  const elapsed = track.isPlaying ? tick - baseRef.current.at : 0;
+  const liveProgress = track.duration
+    ? Math.min(track.duration, baseRef.current.progress + Math.max(0, elapsed))
+    : track.progress ?? 0;
+  const pct = track.duration ? (liveProgress / track.duration) * 100 : 0;
 
   return (
     <motion.div
@@ -90,10 +110,10 @@ export default function NowPlaying() {
             {track.isPlaying && track.progress != null && track.duration != null ? (
               <div className="px-4 pb-2">
                 <div className="relative h-1.5 overflow-hidden rounded-full bg-paper-2">
-                  <div className="absolute left-0 top-0 h-full rounded-full" style={{ width: `${pct}%`, background: albumColor }} />
+                  <div className="absolute left-0 top-0 h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: albumColor }} />
                 </div>
                 <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-faint">
-                  <span>{formatTime(track.progress)}</span>
+                  <span>{formatTime(liveProgress)}</span>
                   <span>{formatTime(track.duration)}</span>
                 </div>
               </div>

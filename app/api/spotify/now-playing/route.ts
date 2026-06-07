@@ -8,7 +8,7 @@ const SPOTIFY_RECENTLY_PLAYED_URL =
 
 // Cache headers for now-playing (short TTL since it changes frequently)
 const CACHE_HEADERS = {
-  "Cache-Control": "public, s-maxage=10, stale-while-revalidate=20",
+  "Cache-Control": "public, s-maxage=3, stale-while-revalidate=8",
 };
 
 export async function GET() {
@@ -20,8 +20,8 @@ export async function GET() {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
-      // Add Next.js fetch cache
-      next: { revalidate: 10 },
+      // Keep the upstream fetch fresh so a song change surfaces quickly
+      cache: "no-store",
     });
 
     if (nowPlayingResponse.status === 200) {
