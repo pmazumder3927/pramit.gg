@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>taped-corner p — purple variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Work+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#f4ecd8;--card:#fbf6e9;--ink:#23201b;--ink-faint:#7a7264;--line:#cdbf9f;
+    --orange:#c75623;--hot:#ff6b3d;--purple:#5b56a8;--psoft:#7c77c6;--rust:#b04929;--night:#100f17;--cream:#f2ebde}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Work Sans',system-ui,sans-serif;
+    background-image:radial-gradient(rgba(0,0,0,.025) 1px,transparent 1px);background-size:4px 4px}
+  header{padding:42px 40px 6px}
+  h1{font-family:'Fraunces',serif;font-weight:900;font-size:34px;margin:0;letter-spacing:-.02em}
+  .sub{font-family:'Caveat',cursive;font-size:22px;color:var(--ink-faint);margin-top:2px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:28px 40px 80px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative;
+    box-shadow:0 14px 30px -22px rgba(0,0,0,.4)}
+  .num{position:absolute;top:-11px;left:14px;background:var(--ink);color:var(--cream);font-family:'Fraunces',serif;
+    font-weight:600;font-size:13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center}
+  .name{font-family:'Fraunces',serif;font-weight:600;font-size:16px;margin:0 0 2px}
+  .desc{font-size:11.5px;color:var(--ink-faint);line-height:1.4;min-height:42px}
+  .stage{display:flex;align-items:flex-end;gap:16px;margin:10px 0 0;padding:14px 12px;border-radius:10px;
+    background:var(--paper);border:1px dashed var(--line)}
+  .stage.dark{background:var(--night);border-color:#2a2740;margin-top:10px}
+  .s96{width:96px;height:96px}.s32{width:32px;height:32px}.s16{width:16px;height:16px}
+  .col{display:flex;flex-direction:column;align-items:center}
+  .lab{font-size:9px;color:var(--ink-faint);margin-top:4px}.stage.dark .lab{color:#8a849a}
+  .tab{display:inline-flex;align-items:center;gap:7px;background:var(--paper);border:1px solid var(--line);
+    border-bottom:none;border-radius:9px 9px 0 0;padding:7px 12px 8px;font-size:12px;color:#46413a;margin-left:auto}
+  .tab svg{width:16px;height:16px}
+  svg{display:block}
+</style></head>
+<body>
+<header><h1>taped-corner p — bringing in the purple</h1>
+<div class="sub">flower-purple #5b56a8 / #7c77c6 meets sunset-orange tape</div></header>
+<div class="grid" id="grid"></div>
+<script>
+const PAPER='#f4ecd8',CARD='#fbf6e9',INK='#23201b',ORANGE='#c75623',HOT='#ff6b3d',
+      PURPLE='#5b56a8',PSOFT='#7c77c6',RUST='#b04929',CREAM='#f2ebde';
+
+// the base paper chip (theme-aware via fg of the p.)
+const chip=(cardFill)=>`<rect x="16" y="16" width="68" height="68" rx="4" fill="${cardFill}" stroke="#cdbf9f" stroke-width="1.5"/>`;
+const tape=(x,y,rot,fill,op=.82,w=44)=>`<g transform="rotate(${rot} ${x} ${y})"><rect x="${x-22}" y="${y-8}" width="${w}" height="16" fill="${fill}" opacity="${op}"/></g>`;
+const P=(fg,size=52,fill=fg)=>`<text x="50" y="68" font-family="Caveat,cursive" font-weight="700" font-size="${size}" text-anchor="middle" fill="${fill}">p.</text>`;
+// p with a separately-colored period
+const Pdot=(fg,dot)=>`<text x="46" y="68" font-family="Caveat,cursive" font-weight="700" font-size="52" text-anchor="middle" fill="${fg}">p</text><circle cx="66" cy="64" r="5.5" fill="${dot}"/>`;
+
+const variants=[
+{name:'Two-tone tape',desc:'One washi strip blended sunset→flower across the corner. Subtle, painterly — both accents in a single piece of tape.',
+ draw:(fg,card)=>`<defs><linearGradient id="tt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${HOT}"/><stop offset="1" stop-color="${PSOFT}"/></linearGradient></defs>${chip(card)}${tape(24,24,-32,'url(#tt)')}${P(fg)}`},
+
+{name:'Two corners',desc:'Orange tape top-left, purple tape bottom-right — the chip pinned at opposite corners. Balanced, clearly a two-accent system.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,HOT)}${tape(76,76,-32,PSOFT)}${P(fg)}`},
+
+{name:'Purple period',desc:'Keep the orange tape; flip the period to flower-purple. Cleanest read at 16px — the dot is a tiny, deliberate spot of purple.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,HOT)}${Pdot(fg,PURPLE)}`},
+
+{name:'Purple tape',desc:'Just swap to a purple strip. Cooler, softer mood; the p. stays ink. Simplest single-accent flip toward purple.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,PSOFT,.85)}${P(fg)}`},
+
+{name:'Crossed tapes',desc:'Orange and purple strips crossing in an X over the corner — a little scrappier, more "pinned in a hurry" energy.',
+ draw:(fg,card)=>`${chip(card)}${tape(50,22,18,HOT)}${tape(50,22,-22,PSOFT)}${P(fg,48)}`},
+
+{name:'Purple p, orange dot',desc:'Invert the accents: flower-purple p with a sunset-orange period. The letter itself carries the purple.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,HOT,.5)}<text x="46" y="68" font-family="Caveat,cursive" font-weight="700" font-size="52" text-anchor="middle" fill="${PURPLE}">p</text><circle cx="66" cy="64" r="5.5" fill="${ORANGE}"/>`},
+
+{name:'Orange tape + purple clip',desc:'Orange tape up top, a little purple paperclip biting the bottom edge — adds the PaperClip motif and the second accent at once.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,HOT)}<path d="M58 78 q0 12 -8 12 q-8 0 -8 -10 l0 -18" fill="none" stroke="${PURPLE}" stroke-width="3.4" stroke-linecap="round"/>${P(fg)}`},
+
+{name:'Tape + purple star',desc:'Orange tape, ink p., and a tiny purple doodle-star tucked in the corner — straight from the homepage hand-notes.',
+ draw:(fg,card)=>`${chip(card)}${tape(24,24,-32,HOT)}${P(fg)}<path d="M72 26 l2.2 5 5 .7 -3.6 3.6 1 5 -4.6 -2.7 -4.6 2.7 1 -5 -3.6 -3.6 5 -.7 z" fill="${PURPLE}"/>`},
+
+{name:'Split tape',desc:'Two short strips side by side — orange then purple — like a torn piece taped twice. Reads as two colors even at 16px.',
+ draw:(fg,card)=>`${chip(card)}${tape(18,22,-32,HOT,.85,26)}${tape(40,11,-32,PSOFT,.85,26)}${P(fg)}`},
+];
+
+const grid=document.getElementById('grid');
+variants.forEach((v,i)=>{
+  const light=v.draw(INK,CARD), dark=v.draw(CREAM,'#211d20');
+  const svg=(cls,inner)=>`<svg viewBox="0 0 100 100" class="${cls}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  const c=document.createElement('div');c.className='card';
+  c.innerHTML=`<div class="num">${i+1}</div><div class="name">${v.name}</div><div class="desc">${v.desc}</div>
+    <div class="stage">
+      <div class="col">${svg('s96',light)}<div class="lab">96</div></div>
+      <div class="col">${svg('s32',light)}<div class="lab">32</div></div>
+      <div class="col">${svg('s16',light)}<div class="lab">16</div></div>
+    </div>
+    <div class="stage dark">
+      <div class="col">${svg('s32',dark)}<div class="lab">32 night</div></div>
+      <div class="col">${svg('s16',dark)}<div class="lab">16</div></div>
+      <div class="tab">${svg('',light)}<span>pramit.gg</span></div>
+    </div>`;
+  grid.appendChild(c);
+});
+</script>
+</body></html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>two corners — p legibility</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Work+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#f4ecd8;--card:#fbf6e9;--ink:#23201b;--ink-faint:#7a7264;--line:#cdbf9f;
+    --orange:#c75623;--hot:#ff6b3d;--purple:#5b56a8;--psoft:#7c77c6;--night:#100f17;--cream:#f2ebde}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Work Sans',sans-serif;
+    background-image:radial-gradient(rgba(0,0,0,.025) 1px,transparent 1px);background-size:4px 4px}
+  header{padding:40px 40px 4px}
+  h1{font-family:'Fraunces',serif;font-weight:900;font-size:32px;margin:0;letter-spacing:-.02em}
+  .sub{font-family:'Caveat',cursive;font-size:21px;color:var(--ink-faint)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:26px 40px 70px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative;
+    box-shadow:0 14px 30px -22px rgba(0,0,0,.4)}
+  .num{position:absolute;top:-11px;left:14px;background:var(--ink);color:var(--cream);font-family:'Fraunces',serif;
+    font-weight:600;font-size:13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center}
+  .name{font-family:'Fraunces',serif;font-weight:600;font-size:16px;margin:0 0 2px}
+  .desc{font-size:11.5px;color:var(--ink-faint);line-height:1.4;min-height:30px}
+  .stage{display:flex;align-items:flex-end;gap:16px;margin-top:10px;padding:14px 12px;border-radius:10px;
+    background:var(--paper);border:1px dashed var(--line)}
+  .stage.dark{background:var(--night);border-color:#2a2740;margin-top:10px}
+  .s96{width:96px;height:96px}.s32{width:32px;height:32px}.s16{width:16px;height:16px}
+  .col{display:flex;flex-direction:column;align-items:center}
+  .lab{font-size:9px;color:var(--ink-faint);margin-top:4px}.stage.dark .lab{color:#8a849a}
+  .tab{display:inline-flex;align-items:center;gap:7px;background:var(--paper);border:1px solid var(--line);
+    border-bottom:none;border-radius:9px 9px 0 0;padding:7px 12px 8px;font-size:12px;color:#46413a;margin-left:auto}
+  .tab svg{width:16px;height:16px}
+  svg{display:block}
+</style></head>
+<body>
+<header><h1>two corners — making the p legible</h1>
+<div class="sub">orange + purple tape pinned at opposite corners · which letterform?</div></header>
+<div class="grid" id="grid"></div>
+<script>
+const CARD='#fbf6e9',INK='#23201b',HOT='#ff6b3d',PSOFT='#7c77c6',CREAM='#f2ebde';
+const chip=(f)=>`<rect x="14" y="14" width="72" height="72" rx="5" fill="${f}" stroke="#cdbf9f" stroke-width="1.5"/>`;
+const tape=(x,y,fill)=>`<g transform="rotate(-32 ${x} ${y})"><rect x="${x-23}" y="${y-8.5}" width="46" height="17" fill="${fill}" opacity=".85"/></g>`;
+const corners=`${tape(22,22,HOT)}${tape(78,78,PSOFT)}`;
+const txt=(fg,fam,wt,size,dy=68,fst='normal')=>`<text x="50" y="${dy}" font-family="${fam}" font-weight="${wt}" font-style="${fst}" font-size="${size}" text-anchor="middle" fill="${fg}">p.</text>`;
+
+const opts=[
+{name:'Caveat, bigger',desc:'The original hand font, just enlarged & bolder. Most handwritten, but thin strokes still soften at 16px.',
+ p:(fg)=>txt(fg,'Caveat,cursive',700,60,70)},
+{name:'Fraunces serif',desc:'The site display serif. High-contrast, characterful, far crisper small. My pick — keeps soul + legibility.',
+ p:(fg)=>txt(fg,'Fraunces,serif',900,52,68)},
+{name:'Fraunces italic',desc:'Same serif, italic — a touch more editorial/penned without losing the clean read.',
+ p:(fg)=>txt(fg,'Fraunces,serif',700,52,68,'italic')},
+{name:'Work Sans bold',desc:'The body sans, heavy. Maximum legibility at 16px, but the most neutral/least "sketchbook."',
+ p:(fg)=>txt(fg,'Work Sans,sans-serif',800,50,67)},
+{name:'Geometric p (drawn)',desc:'A built stem+bowl glyph (no font dependency). Chunky, rock-solid at any size, renders identically everywhere.',
+ p:(fg)=>`<rect x="34" y="32" width="12" height="40" rx="6" fill="${fg}"/><circle cx="52" cy="46" r="14" fill="none" stroke="${fg}" stroke-width="12"/><circle cx="68" cy="68" r="6" fill="${fg}"/>`},
+{name:'Fraunces, fills corner',desc:'Big serif p. sitting lower-left so the two tapes frame it — letter and tape interplay, bolder presence.',
+ p:(fg)=>txt(fg,'Fraunces,serif',900,56,72)},
+];
+
+const grid=document.getElementById('grid');
+opts.forEach((o,i)=>{
+  const light=`${chip(CARD)}${corners}${o.p(INK)}`;
+  const dark=`${chip('#211d20')}${corners}${o.p(CREAM)}`;
+  const svg=(cls,inner)=>`<svg viewBox="0 0 100 100" class="${cls}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  const c=document.createElement('div');c.className='card';
+  c.innerHTML=`<div class="num">${i+1}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>
+    <div class="stage">
+      <div class="col">${svg('s96',light)}<div class="lab">96</div></div>
+      <div class="col">${svg('s32',light)}<div class="lab">32</div></div>
+      <div class="col">${svg('s16',light)}<div class="lab">16</div></div>
+    </div>
+    <div class="stage dark">
+      <div class="col">${svg('s32',dark)}<div class="lab">32 night</div></div>
+      <div class="col">${svg('s16',dark)}<div class="lab">16</div></div>
+      <div class="tab">${svg('',light)}<span>pramit.gg</span></div>
+    </div>`;
+  grid.appendChild(c);
+});
+</script>
+</body></html>
