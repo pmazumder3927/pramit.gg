@@ -128,8 +128,8 @@ export default async function PostPage({ params }: PostPageProps) {
 
   return (
     <div className="min-h-screen page-reveal">
-      <main className="relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
-        <PostContent post={post} prev={prev} next={next} />
+      <main className="post-reading relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
+        <PostContent key={post.id} post={post} prev={prev} next={next} />
       </main>
     </div>
   );

@@ -72,12 +72,22 @@
   color-scheme: dark;
 }
 
+/* Post reading view: nudge the faint ink darker so secondary text (captions,
+   meta, table of contents) clears WCAG AA contrast on the warm paper. Dark
+   mode already passes, so it re-asserts its own value. Unlayered + placed
+   after :root so it wins for the post subtree. */
+.post-reading { --fg-faint: 95 89 78; }
+.dark .post-reading { --fg-faint: 143 135 126; }
+
 @layer base {
   @keyframes page-reveal {
     0% { filter: blur(8px); opacity: 0; }
     100% { filter: blur(0px); opacity: 1; }
   }
   .page-reveal { animation: page-reveal 0.6s ease-out forwards; }
+  @media (prefers-reduced-motion: reduce) {
+    .page-reveal { animation: none; filter: none; opacity: 1; }
+  }
 
   html {
     @apply antialiased;
@@ -254,28 +264,23 @@
   .card-hover:hover { @apply -translate-y-1.5 shadow-paper-lg; }
 
   /* ---------- songscape (now-playing backdrop) ---------- */
-  /* each ridge stroke draws itself in when a new song's landscape appears */
-  @keyframes ss-draw { from { stroke-dashoffset: var(--len, 700); } to { stroke-dashoffset: 0; } }
-  .ss-stroke {
-    stroke-dasharray: var(--len, 700);
-    animation: ss-draw 2.6s cubic-bezier(0.4, 0, 0.2, 1) forwards var(--delay, 0.4s);
-    transition: stroke 0.9s ease, stroke-opacity 0.9s ease;
-  }
-  /* colours ease when the album palette resolves (same song) */
+  /* colours ease when the album palette resolves / the song changes */
   .ss-fill, .ss-body { transition: fill 0.9s ease, fill-opacity 0.9s ease; }
-  /* "boil": three seed-varied copies of each ridge stroke flicker between one
-     another (~7fps) so the line looks hand-drawn and alive. Only opacity
-     animates — the roughen filters themselves are static and cached. */
-  @keyframes ss-boil { 0%, 33.33% { opacity: 1; } 33.34%, 100% { opacity: 0; } }
-  .ss-boil { animation: ss-boil 0.42s linear infinite; }
-  .ss-boil-0 { opacity: 1; }
-  .ss-boil-1 { opacity: 0; animation-delay: -0.14s; }
-  .ss-boil-2 { opacity: 0; animation-delay: -0.28s; }
+  .ss-stroke { transition: stroke 0.9s ease, stroke-opacity 0.9s ease; }
+  /* Slow, layered parallax sway — each ridge drifts on its own timer and
+     heading, so the range feels like it has real depth. Pure compositor
+     transforms (no filters on these elements), so it stays perfectly smooth. */
+  @keyframes ss-sway-far  { 0%, 100% { transform: translate(0, 0); }  50% { transform: translate(-16px, -7px); } }
+  @keyframes ss-sway-mid  { 0%, 100% { transform: translate(0, 0); }  50% { transform: translate(22px, -11px); } }
+  @keyframes ss-sway-near { 0%, 100% { transform: translate(0, 0); }  50% { transform: translate(-30px, 9px); } }
+  .ss-sway-0 { animation: ss-sway-far 37s ease-in-out infinite; }
+  .ss-sway-1 { animation: ss-sway-mid 29s ease-in-out infinite; }
+  .ss-sway-2 { animation: ss-sway-near 23s ease-in-out infinite; }
+  /* the sun / moon glow breathes gently */
+  @keyframes ss-glow { 0%, 100% { opacity: 0.78; } 50% { opacity: 1; } }
+  .ss-glow-breathe { animation: ss-glow 7.5s ease-in-out infinite; }
   @media (prefers-reduced-motion: reduce) {
-    .ss-stroke { animation: none; stroke-dashoffset: 0; }
-    .ss-boil { animation: none; }
-    .ss-boil-0 { opacity: 1; }
-    .ss-boil-1, .ss-boil-2 { opacity: 0; }
+    .ss-sway-0, .ss-sway-1, .ss-sway-2, .ss-glow-breathe { animation: none; }
   }
 
   /* equalizer bars for now-playing */
@@ -373,23 +378,31 @@
   .prose table th { background: rgb(var(--fg) / 0.06) !important; color: rgb(var(--fg)) !important; font-weight: 600 !important; border-bottom: 1px solid rgb(var(--line)) !important; }
   .prose table td { border-bottom: 1px solid rgb(var(--line) / 0.6) !important; color: rgb(var(--fg-soft)) !important; }
   .prose table tr:hover { background: rgb(var(--fg) / 0.04) !important; }
-
-  .katex-display { margin: 2rem 0 !important; padding: 1rem 0; overflow-x: auto; overflow-y: hidden; }
-  .katex { font-size: 1.05em !important; }
-  .katex:not(.katex-display .katex) { padding: 0 0.1em; }
-
-  /* ---------- code syntax highlighting (theme-aware, both modes) ---------- */
-  .hljs { color: rgb(var(--fg)); background: transparent; }
-  .hljs-comment, .hljs-quote { color: rgb(var(--fg-faint)); font-style: italic; }
-  .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-name, .hljs-tag,
-  .hljs-meta-keyword { color: rgb(var(--accent-purple)); font-weight: 500; }
-  .hljs-string, .hljs-section, .hljs-attribute, .hljs-literal, .hljs-template-tag,
-  .hljs-template-variable, .hljs-type, .hljs-addition, .hljs-regexp { color: rgb(var(--accent-rust)); }
-  .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta,
-  .hljs-selector-id, .hljs-selector-class, .hljs-selector-attr { color: rgb(var(--accent-orange)); }
-  .hljs-title, .hljs-title.class_, .hljs-title.function_ { color: rgb(var(--accent-orange)); font-weight: 500; }
-  .hljs-attr, .hljs-variable, .hljs-params, .hljs-property { color: rgb(var(--fg-soft)); }
-  .hljs-deletion { color: rgb(var(--accent-pink)); }
-  .hljs-emphasis { font-style: italic; }
-  .hljs-strong { font-weight: 700; }
 }
+
+/* ===========================================================================
+   KaTeX + code syntax highlighting.
+   These target classes that only exist at RUNTIME (KaTeX output + rehype-highlight
+   tokens), so they MUST live outside @layer components: Tailwind purges custom
+   @layer rules whose class names never appear in the scanned source, which would
+   silently strip every hljs-* color and leave code monochrome.
+   =========================================================================== */
+.katex-display { margin: 2rem 0 !important; padding: 1rem 0; overflow-x: auto; overflow-y: hidden; }
+.katex { font-size: 1.05em !important; }
+.katex:not(.katex-display .katex) { padding: 0 0.1em; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+
+.hljs { color: rgb(var(--fg-soft)); background: transparent; }
+.hljs-comment, .hljs-quote { color: rgb(var(--fg-faint)); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-name,
+.hljs-tag, .hljs-meta-keyword { color: rgb(var(--accent-purple)); font-weight: 500; }
+.hljs-built_in, .hljs-class .hljs-title, .hljs-type, .hljs-title.class_ { color: rgb(var(--accent-rust)); font-weight: 500; }
+.hljs-string, .hljs-attribute, .hljs-template-string, .hljs-regexp, .hljs-addition { color: rgb(var(--accent-rust)); }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta,
+.hljs-selector-id, .hljs-selector-class, .hljs-selector-attr,
+.hljs-template-variable { color: rgb(var(--accent-orange)); }
+.hljs-title, .hljs-title.function_ { color: rgb(var(--accent-orange)); font-weight: 500; }
+.hljs-attr, .hljs-variable, .hljs-params, .hljs-property { color: rgb(var(--fg)); }
+.hljs-operator, .hljs-punctuation, .hljs-comment.hljs-doctag { color: rgb(var(--fg-faint)); }
+.hljs-deletion { color: rgb(var(--accent-pink)); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }

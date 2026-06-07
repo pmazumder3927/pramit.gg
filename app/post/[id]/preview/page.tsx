@@ -4,6 +4,7 @@ import PostContent from "../PostContent";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createMetadata } from "@/app/lib/metadata";
+import { Stamp } from "@/app/components/sketchbook";
 import { Metadata } from "next";
 
 interface PreviewPageProps {
@@ -56,16 +57,15 @@ export default async function PreviewPostPage({ params }: PreviewPageProps) {
 
   return (
     <div className="min-h-screen page-reveal">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      {/* Preview banner */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500/90 text-black text-center text-sm py-1 font-medium">
-        Draft Preview
+      {/* Draft banner — sketchbook chrome, theme-aware */}
+      <div className="fixed left-0 right-0 top-0 z-50 flex justify-center border-b border-accent-rust/20 bg-accent-rust/10 py-1.5 backdrop-blur-sm">
+        <Stamp tone="rust" rotate={0}>
+          draft preview
+        </Stamp>
       </div>
 
-      <main className="relative z-10 min-h-screen py-8 pt-14 md:py-16">
-        <PostContent post={post} />
+      <main className="post-reading relative z-10 min-h-screen py-8 pt-16 md:py-16">
+        <PostContent key={post.id} post={post} />
       </main>
     </div>
   );

@@ -18,6 +18,9 @@ import { useAlbumPalette, AlbumPalette } from "@/app/lib/use-album-palette";
 
 const W = 1600;
 const H = 900;
+// Geometry overshoots the viewport so the parallax sway never reveals an edge.
+const OS = 170; // horizontal overscan
+const BY = 260; // how far the silhouette extends below the bottom
 
 /* ----------------------------- determinism ----------------------------- */
 function fnv(str: string): number {
@@ -46,46 +49,53 @@ function finalize(pts: [number, number][]): Ridge {
     len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   }
   const r = (n: number) => Math.round(n * 10) / 10;
+  const x0 = r(pts[0][0]);
+  const x1 = r(pts[pts.length - 1][0]);
   return {
     top: pts.map((p) => `${r(p[0])},${r(p[1])}`).join(" "),
-    area: `M0 ${H} ` + pts.map((p) => `L${r(p[0])} ${r(p[1])}`).join(" ") + ` L${W} ${H} Z`,
+    area: `M${x0} ${H + BY} ` + pts.map((p) => `L${r(p[0])} ${r(p[1])}`).join(" ") + ` L${x1} ${H + BY} Z`,
     len: Math.round(len),
   };
 }
 
-// near ridge: one alpine peak per word, height from the word's letters
+// near ridge: one alpine peak per word, height from the word's letters. A little
+// seeded jitter on every point gives the line a hand-drawn waver (replaces the
+// SVG roughen filter, so the swaying layers stay cheap to composite).
 function wordRidge(words: string[], rand: () => number, baseY: number, amp: number): Ridge {
+  const j = (s: number) => (rand() - 0.5) * s;
   const toks = (words.length ? words : ["nothing"]).slice(0, 9);
   const n = toks.length;
-  const pts: [number, number][] = [[0, baseY]];
+  const pts: [number, number][] = [[-OS, baseY + j(8)]];
   for (let i = 0; i < n; i++) {
     const cx = (W * (i + 0.5)) / n;
     let cs = 0;
     for (let k = 0; k < toks[i].length; k++) cs += toks[i].charCodeAt(k);
     const norm = (cs % 97) / 97;
-    pts.push([cx, baseY - (0.4 + 0.6 * norm) * amp]);
-    if (i < n - 1) pts.push([(W * (i + 1)) / n, baseY - (0.06 + rand() * 0.12) * amp]);
+    pts.push([cx + j(10), baseY - (0.4 + 0.6 * norm) * amp + j(10)]);
+    if (i < n - 1) pts.push([(W * (i + 1)) / n + j(12), baseY - (0.06 + rand() * 0.12) * amp + j(10)]);
   }
-  pts.push([W, baseY]);
+  pts.push([W + OS, baseY + j(8)]);
   return finalize(pts);
 }
 
-// far / mid ridges: rolling skyline from a sum of seeded sine waves
+// far / mid ridges: rolling skyline from a sum of seeded sine waves, jittered
 function sineRidge(rand: () => number, baseY: number, amp: number, peak: number): Ridge {
   const p1 = rand() * 6.28;
   const p2 = rand() * 6.28;
   const p3 = rand() * 6.28;
-  const steps = 46;
+  const steps = 70;
+  const span = W + 2 * OS;
   const pts: [number, number][] = [];
   for (let i = 0; i <= steps; i++) {
-    const x = (W / steps) * i;
+    const x = -OS + (span / steps) * i;
     const t = i / steps;
     pts.push([
-      x,
+      x + (rand() - 0.5) * 5,
       baseY -
         Math.sin(t * 3.1 + p1) * amp * 0.5 -
         Math.sin(t * 7.4 + p2) * amp * (0.26 + peak * 0.2) -
-        Math.sin(t * 14.3 + p3) * amp * (0.13 + peak * 0.22),
+        Math.sin(t * 14.3 + p3) * amp * (0.13 + peak * 0.22) +
+        (rand() - 0.5) * 6,
     ]);
   }
   return finalize(pts);
@@ -207,26 +217,13 @@ export default function SongScape() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
       <svg className="h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" fill="none">
-        <defs>
-          {/* Three STATIC roughen variants (different turbulence seeds). Each is
-              computed once and cached; the "boil" comes from stepping which
-              variant is visible (cheap opacity compositing), not from animating
-              the filter itself — which would repaint the whole viewport 60×/s. */}
-          {[5, 17, 29].map((seed, v) => (
-            <filter key={v} id={`ss-rough-${v}`} x="-5%" y="-10%" width="110%" height="120%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed={seed} result="n" />
-              <feDisplacementMap in="SourceGraphic" in2="n" scale="7" />
-            </filter>
-          ))}
-        </defs>
-
         <AnimatePresence>
           <motion.g
             key={fingerprint}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.9, ease: "easeInOut" }}
+            transition={{ duration: 1.1, ease: "easeInOut" }}
           >
             <defs>
               <linearGradient id={`ss-sky-${scape.uid}`} x1="0" y1="0" x2="0" y2="1">
@@ -241,43 +238,27 @@ export default function SongScape() {
             </defs>
 
             {/* sky wash near the horizon */}
-            <rect x="0" y="280" width={W} height={H - 280} fill={`url(#ss-sky-${scape.uid})`} />
+            <rect x={-OS} y="280" width={W + 2 * OS} height={H - 280} fill={`url(#ss-sky-${scape.uid})`} />
 
-            {/* celestial body — sun by day, moon by night (glow unfiltered) */}
-            <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR * 3.4} fill={`url(#ss-glow-${scape.uid})`} />
-            <g filter="url(#ss-rough-0)">
-              <circle className="ss-body" cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} style={{ fill: c.body, fillOpacity: dark ? 0.85 : 0.8 }} />
-              <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} fill="none" style={{ stroke: c.ring, strokeWidth: 1.2 }} />
-            </g>
+            {/* celestial body — sun by day, moon by night; its glow softly breathes */}
+            <circle className="ss-glow-breathe" cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR * 3.4} fill={`url(#ss-glow-${scape.uid})`} />
+            <circle className="ss-body" cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} style={{ fill: c.body, fillOpacity: dark ? 0.85 : 0.8 }} />
+            <circle cx={scape.bodyX} cy={scape.bodyY} r={scape.bodyR} fill="none" style={{ stroke: c.ring, strokeWidth: 1.2 }} />
 
-            {/* ridges: far → near. The silhouette fill is static; the moonlit
-                ridge stroke is drawn three times (one per roughen variant) and
-                its layers flicker between them to "boil" like a living pencil. */}
+            {/* ridges: far → near. Each layer drifts on its own slow timer so the
+                range parallaxes with real depth — smooth, never flickering. */}
             {ridges.map((rg, i) => {
               const l = c.layers[i];
               return (
-                <g key={i}>
-                  <path className="ss-fill" d={rg.area} filter="url(#ss-rough-0)" style={{ fill: l.fill, fillOpacity: l.fillOp }} />
-                  {[0, 1, 2].map((v) => (
-                    <g key={v} className={`ss-boil ss-boil-${v}`}>
-                      <polyline
-                        className="ss-stroke"
-                        points={rg.top}
-                        filter={`url(#ss-rough-${v})`}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={
-                          {
-                            stroke: l.stroke,
-                            strokeOpacity: l.strokeOp,
-                            strokeWidth: l.sw,
-                            "--len": rg.len,
-                            "--delay": `${0.3 + i * 0.45}s`,
-                          } as React.CSSProperties
-                        }
-                      />
-                    </g>
-                  ))}
+                <g key={i} className={`ss-sway-${i}`}>
+                  <path className="ss-fill" d={rg.area} style={{ fill: l.fill, fillOpacity: l.fillOp }} />
+                  <polyline
+                    className="ss-stroke"
+                    points={rg.top}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ stroke: l.stroke, strokeOpacity: l.strokeOp, strokeWidth: l.sw }}
+                  />
                 </g>
               );
             })}
