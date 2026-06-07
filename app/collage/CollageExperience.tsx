@@ -454,6 +454,14 @@ function SketchTile({ sketch }: { sketch: SketchPreview }) {
           />
         )}
       </div>
+      {sketch.prompt && (
+        <figcaption
+          title={sketch.prompt}
+          className="mt-2 px-0.5 text-center text-[0.7rem] font-light leading-snug text-white/40 line-clamp-2"
+        >
+          {sketch.prompt}
+        </figcaption>
+      )}
     </figure>
   );
 }

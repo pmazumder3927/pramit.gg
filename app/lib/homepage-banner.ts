@@ -7,6 +7,7 @@ import {
   DRAWING_CANVAS_WIDTH,
   type DrawingStroke,
 } from "@/app/lib/confessional-captcha";
+import { createAdminClient } from "@/utils/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BANNER_BUCKET = "images";
@@ -126,16 +127,22 @@ export async function generateHomepageBanner(
   }
 
   // Attribute every sketch that hadn't yet been claimed to this banner so the
-  // collage page can render "the sketches behind it" per painting.
-  const { error: attributionError } = await supabase
+  // collage page can render "the sketches behind it" per painting. This runs
+  // through the service-role client because turtle_drawings RLS only grants
+  // INSERT/SELECT — an UPDATE via the authenticated user client silently
+  // matches zero rows, leaving new banners with no credits.
+  const admin = createAdminClient();
+  const { data: attributed, error: attributionError } = await admin
     .from("turtle_drawings")
     .update({ banner_id: inserted.id })
-    .is("banner_id", null);
+    .is("banner_id", null)
+    .select("id");
 
   if (attributionError) {
-    console.error(
-      "Sketch attribution failed:",
-      attributionError.message,
+    console.error("Sketch attribution failed:", attributionError.message);
+  } else {
+    console.log(
+      `Attributed ${attributed?.length ?? 0} sketches to banner ${inserted.id}`,
     );
   }
 
