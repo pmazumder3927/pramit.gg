@@ -2,6 +2,7 @@
 // Faint corner washes give the paper warmth; the SongScapeInk layer (sumi-no-mizu
 // calligraphy generated from whatever's playing) carries the real atmosphere in
 // both themes. Sits behind all content (z-0).
+import PaperSheet from "./PaperSheet";
 import SongScapeInk from "./SongScapeInk";
 
 export default function PaperBackground() {
@@ -53,7 +54,11 @@ export default function PaperBackground() {
         style={{ background: "rgb(var(--accent-rust) / 0.16)" }}
       />
 
-      {/* now-playing backdrop — sumi-no-mizu calligraphy (both themes) */}
+      {/* the "Deckle" paper ground — tooth, watermark + foxing (seeded per song),
+          deckle vignette — so the doodles rest on a real sheet, not in void */}
+      <PaperSheet />
+
+      {/* now-playing backdrop — visitors' confessional doodles, inked (both themes) */}
       <SongScapeInk />
     </div>
   );
