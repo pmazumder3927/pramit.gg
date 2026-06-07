@@ -13,7 +13,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "collage",
   description:
-    "every sketch left in the booth gets painted into one image overnight.",
+    "every sketch left in the confession booth gets painted into an image along with its peers",
 };
 
 type SketchPreview = {

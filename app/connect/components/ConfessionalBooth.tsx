@@ -163,8 +163,8 @@ export default function ConfessionalBooth() {
           draw me something, whisper something
         </h2>
         <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          anonymous. sketch on the page, drop a note, and the cat council
-          decides if it stays. say hi, leave feedback, whatever — it&apos;s your page too.
+          anonymous. sketch on the page, drop a note, and the council
+          decides if it stays. say hi, leave a burning rant or feedback, whatever u want dude.
         </p>
       </motion.div>
 

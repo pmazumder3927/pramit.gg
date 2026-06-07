@@ -4,7 +4,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
-import { motion } from "motion/react";
+import { motion, Reorder } from "motion/react";
 import { useAlbumColor } from "@/app/lib/use-album-color";
 import { hexToRgb } from "@/app/music/lib/chaotic-styles";
 import type {
@@ -26,6 +26,8 @@ type ManagerPlaylist = {
   hasSequence: boolean;
   lastSequencedAt: string | null;
   lastAppliedAt: string | null;
+  position: number | null;
+  pinned: boolean;
 };
 
 const fetcher = async <T,>(url: string) => {
@@ -58,10 +60,9 @@ export function MusicManagerHome() {
     "/api/spotify/review/status",
     fetcher
   );
-  const { data: playlistsResponse } = useSWR<{ playlists: ManagerPlaylist[] }>(
-    "/api/spotify/manage/playlists",
-    fetcher
-  );
+  const { data: playlistsResponse, mutate: mutatePlaylists } = useSWR<{
+    playlists: ManagerPlaylist[];
+  }>("/api/spotify/manage/playlists", fetcher);
   const { data: duplicates } = useSWR<ReviewDuplicatesSnapshot>(
     "/api/spotify/review/duplicates",
     fetcher
@@ -70,6 +71,43 @@ export function MusicManagerHome() {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const playlists = playlistsResponse?.playlists || [];
+
+  // Manual drag-to-reorder of the public /music page ordering
+  const [reorderMode, setReorderMode] = useState(false);
+  const [draftOrder, setDraftOrder] = useState<ManagerPlaylist[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+
+  const enterReorder = () => {
+    setOrderError(null);
+    // Only the public playlists are shown on /music, so only those are orderable
+    setDraftOrder(playlists.filter((p) => p.public));
+    setReorderMode(true);
+  };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    setOrderError(null);
+    try {
+      const response = await fetch("/api/spotify/manage/playlists/order", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: draftOrder.map((p) => p.id) }),
+      });
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to save order");
+      }
+      await mutatePlaylists();
+      setReorderMode(false);
+    } catch (error) {
+      setOrderError(
+        error instanceof Error ? error.message : "Failed to save order"
+      );
+    } finally {
+      setSavingOrder(false);
+    }
+  };
   const duplicatePlaylistMap = useMemo(
     () =>
       new Map(
@@ -362,14 +400,104 @@ export function MusicManagerHome() {
           <h2 className="text-[11px] uppercase tracking-[0.2em] text-white/25">
             Playlists
           </h2>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full max-w-[200px] rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 text-xs text-white outline-none backdrop-blur-sm placeholder:text-white/15 focus:border-white/[0.12] focus:bg-white/[0.05] sm:max-w-xs"
-          />
+          {reorderMode ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setReorderMode(false)}
+                disabled={savingOrder}
+                className="rounded-full px-4 py-1.5 text-xs text-white/45 transition hover:text-white/70 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveOrder}
+                disabled={savingOrder}
+                className="rounded-full px-4 py-1.5 text-xs font-medium text-pure-white transition-transform hover:scale-[1.03] active:scale-[0.98] disabled:opacity-40"
+                style={{ backgroundColor: accentColor }}
+              >
+                {savingOrder ? "Saving..." : "Save order"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={enterReorder}
+                className="glass rounded-full px-4 py-1.5 text-xs text-white/45 transition hover:text-white/70"
+              >
+                Reorder
+              </button>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full max-w-[200px] rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 text-xs text-white outline-none backdrop-blur-sm placeholder:text-white/15 focus:border-white/[0.12] focus:bg-white/[0.05] sm:max-w-xs"
+              />
+            </div>
+          )}
         </div>
 
+        {reorderMode ? (
+          <>
+            <p className="mt-3 text-[11px] font-light text-white/30">
+              Drag to set the order shown on your public music page. Only the
+              top {24} appear there; private playlists aren&apos;t listed.
+            </p>
+            {orderError && (
+              <p className="mt-2 text-[11px] text-red-400/80">{orderError}</p>
+            )}
+            <Reorder.Group
+              axis="y"
+              values={draftOrder}
+              onReorder={setDraftOrder}
+              className="mt-4 space-y-2"
+            >
+              {draftOrder.map((playlist, i) => (
+                <Reorder.Item
+                  key={playlist.id}
+                  value={playlist}
+                  className="flex cursor-grab items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 active:cursor-grabbing"
+                >
+                  <span className="w-6 flex-none text-center text-xs tabular-nums text-white/25">
+                    {i + 1}
+                  </span>
+                  <svg
+                    className="h-4 w-4 flex-none text-white/20"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle cx="9" cy="6" r="1.6" />
+                    <circle cx="15" cy="6" r="1.6" />
+                    <circle cx="9" cy="12" r="1.6" />
+                    <circle cx="15" cy="12" r="1.6" />
+                    <circle cx="9" cy="18" r="1.6" />
+                    <circle cx="15" cy="18" r="1.6" />
+                  </svg>
+                  <div className="relative h-10 w-10 flex-none overflow-hidden rounded-md ring-1 ring-white/[0.06]">
+                    {playlist.imageUrl ? (
+                      <Image
+                        src={playlist.imageUrl}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-white/[0.04]" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white/90">
+                      {playlist.name}
+                    </p>
+                    <p className="text-[11px] text-white/25">
+                      {playlist.trackCount} tracks
+                    </p>
+                  </div>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          </>
+        ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredPlaylists.map((playlist, i) => {
             const duplicateSummary = duplicatePlaylistMap.get(playlist.id);
@@ -473,6 +601,7 @@ export function MusicManagerHome() {
             </div>
           )}
         </div>
+        )}
       </motion.div>
     </main>
   );

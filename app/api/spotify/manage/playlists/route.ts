@@ -73,20 +73,30 @@ export async function GET() {
 
     const admin = createAdminClient();
     const playlistIds = ownedPlaylists.map((playlist) => playlist.id);
-    const { data: sequenceRows } = playlistIds.length
-      ? await admin
-          .from("spotify_playlist_sequences")
-          .select("playlist_id, last_generated_at, last_applied_at, updated_at")
-          .in("playlist_id", playlistIds)
-      : { data: [] as any[] };
+    const [{ data: sequenceRows }, { data: orderRows }] = await Promise.all([
+      playlistIds.length
+        ? admin
+            .from("spotify_playlist_sequences")
+            .select("playlist_id, last_generated_at, last_applied_at, updated_at")
+            .in("playlist_id", playlistIds)
+        : Promise.resolve({ data: [] as any[] }),
+      admin.from("spotify_playlist_order").select("playlist_id, position"),
+    ]);
 
     const sequenceMap = new Map(
       (sequenceRows || []).map((row: any) => [row.playlist_id as string, row])
+    );
+    const orderMap = new Map(
+      (orderRows || []).map((row: any) => [
+        row.playlist_id as string,
+        row.position as number,
+      ])
     );
 
     const playlists = ownedPlaylists
       .map((playlist) => {
         const sequence = sequenceMap.get(playlist.id);
+        const position = orderMap.get(playlist.id);
         return {
           id: playlist.id,
           name: playlist.name,
@@ -100,9 +110,17 @@ export async function GET() {
           hasSequence: Boolean(sequence),
           lastSequencedAt: sequence?.updated_at || null,
           lastAppliedAt: sequence?.last_applied_at || null,
+          position: position ?? null,
+          pinned: position !== undefined,
         };
       })
       .sort((a, b) => {
+        // Manually pinned playlists first, in their saved order
+        if (a.position !== null && b.position !== null)
+          return a.position - b.position;
+        if (a.position !== null) return -1;
+        if (b.position !== null) return 1;
+        // Unpinned: keep the existing sequence/public/name heuristic
         if (a.hasSequence !== b.hasSequence) return a.hasSequence ? -1 : 1;
         if (a.public !== b.public) return a.public ? 1 : -1;
         return a.name.localeCompare(b.name);

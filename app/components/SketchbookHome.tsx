@@ -13,7 +13,7 @@ import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 const CURRENTLY = [
   "rebuilding this site (again)",
   "climbing plastic",
-  "scoring my commute",
+  "learning guitar",
 ];
 
 function fmtDate(iso: string) {
@@ -40,7 +40,7 @@ function NowSpinningCard() {
           className="font-hand text-xl"
           style={{ color: "rgb(var(--album-rgb))" }}
         >
-          {playing ? "now spinning" : "last spun"}
+          {playing ? "now spinning" : "last tune"}
         </span>
         <span className="eq-bars">
           <span
@@ -125,7 +125,7 @@ function CollageCard({
           tonight&apos;s collage
         </span>
         <Stamp tone="orange" rotate={-4}>
-          {sketchCount > 0 ? `${sketchCount} hands` : "open"}
+          {sketchCount > 0 ? `${sketchCount} contributions` : "open"}
         </Stamp>
       </div>
       <div className="relative aspect-[16/10] overflow-hidden rounded-lg border border-ink/15 bg-paper-2">
@@ -139,7 +139,7 @@ function CollageCard({
               loading="lazy"
             />
             <span className="absolute bottom-1.5 left-1.5 rounded-full bg-paper/85 px-2.5 py-0.5 font-hand text-sm text-ink backdrop-blur-sm">
-              last night&apos;s painting
+              last painting
             </span>
           </>
         ) : (
@@ -151,7 +151,7 @@ function CollageCard({
         )}
       </div>
       <p className="mt-2.5 font-serif text-sm italic leading-snug text-ink-soft">
-        leave a little drawing — wake up to a painting.{" "}
+        leave a little drawing if you please{" "}
         <span className="text-accent-rust transition-colors group-hover:text-accent-orange">
           add yours →
         </span>
@@ -219,13 +219,12 @@ export default function SketchbookHome({
             <em className="italic text-accent-purple">experiences.</em>
           </p>
           <p className="mt-6 max-w-md text-base leading-relaxed text-ink-faint">
-            essays and journal notes, playlists made too late at night, climbing
-            logs, and small things i build.
+            the sights, songs, and ramblings of a life in progress
           </p>
 
           <div className="mt-7 flex flex-wrap gap-3.5">
             <a href="#table" className="btn-sketch btn-sketch-solid">
-              read the latest →
+              read latest post →
             </a>
             <Link href="/connect" className="btn-sketch">
               say hello
@@ -264,11 +263,10 @@ export default function SketchbookHome({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h2 className="font-serif text-3xl font-medium text-ink">
-              from the table
+              from the archives
             </h2>
             <span className="font-hand text-xl -rotate-2 text-accent-purple">
-              — {posts.length} {posts.length === 1 ? "page" : "pages"}, ink
-              still drying
+              — {posts.length} {posts.length === 1 ? "page" : "pages"}
             </span>
           </div>
           {/* filter chips */}

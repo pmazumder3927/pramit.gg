@@ -1,28 +1,29 @@
 "use client";
 
-// Songscape · Sumi-no-Mizu ("ink in the water") — an alternate now-playing
-// backdrop. The album's colours float in a still tank as a few sumi-e brush
-// gestures (a bold one + lighter accents), not as a widget.
-//   · shape  : each "drop" is a gestural brush stroke — a tapered ribbon
-//              (thin → swell → thin lift) over a gestural arc, with a denser
-//              inner core for ink value. Each word of "title artist" warps the
-//              centreline, so the song's hand is in the gesture.
-//   · colour : palette → vibrant warms the hero stroke, secondary cools the next;
-//              orange/purple are the warm/cool poles every song is nudged toward.
-//   · time   : the live playhead (progress/duration) DIFFUSES the ink — fresh at
-//              song-start (tight), softly spreading by the end (a natural lull).
-//   · change : the old strokes spread & thin and drift out while the new ones
-//              bloom in (fast-open, long-settle). Screen is never empty.
-//   · theme  : light = multiply ink on paper; dark = ink glowing in black water.
-// Compositor-only transforms/opacity/blend + one cached blur for the bleed.
+// Songscape · a scape made entirely of people's DOODLES from the confessional
+// booth. Each visitor who confesses also draws the captcha; those drawings
+// (`turtle_drawings`, fetched from /api/turtles) are re-inked here and scattered
+// across the page as a quiet constellation of strangers' sketches.
+//   · source  : real submitted strokes (480×320 canvas) → scaled into slots
+//               across the canvas (some mid, some margin; lighter in the centre).
+//   · ink     : each doodle is re-coloured in the now-playing palette (warm/cool
+//               poles = orange/purple). light = dark ink on paper; dark = aglow.
+//   · written : the scape assembles by "writing" each doodle in, line by line,
+//               via stroke-dashoffset (pure CSS — no masks/blend, so no flicker).
+//   · scroll  : each doodle swirls (rotate/parallax) as ONE unit by a smoothed
+//               scroll progress; the whole piece sways gently; a different set of
+//               doodles is chosen per song.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
 import { useAlbumPalette, AlbumPalette } from "@/app/lib/use-album-palette";
+import type { DrawingStroke } from "@/app/lib/drawing/types";
 
 const W = 1600;
 const H = 900;
+const SKETCH_CANVAS_W = 480; // the confessional booth's drawing canvas
+const SKETCH_CANVAS_H = 320;
 
 /* ----------------------------- determinism ----------------------------- */
 function fnv(str: string): number {
@@ -58,160 +59,174 @@ const cssRgb = (c: RGB, a = 1) =>
   `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a})`;
 const ORANGE = toRgb("#ff6b3d"); // grandpa's sunset — the warm pole
 const PURPLE = toRgb("#7c77c6"); // first crush's flower — the cool pole
-const INK: RGB = { r: 35, g: 32, b: 27 }; // warm black for paper-mode veins
+const INK: RGB = { r: 20, g: 17, b: 14 }; // near-black ink for paper mode
 
-/* ------------------------------ geometry ------------------------------- */
-// Each "drop" is a sumi-e brush GESTURE: a gestural arc centreline given a
-// tapered width profile (thin → swell → thin lift) and rendered as a filled
-// ribbon, with a denser inner core for ink value. Reads as confident calligraphy
-// rather than topographic contour rings.
-type Stroke = {
-  base: string; // full-width ribbon path
-  core: string; // narrower, denser inner ribbon path
-  warmth: number; // 1 = warm, -1 = cool, mixes between
-  dx: string; // drift target (user units, as a css length)
-  dy: string;
-  dr: string; // drift rotation (deg)
-  dur: string; // drift duration
-  delay: string;
-  bdur: string; // breathe duration
-  bdelay: string;
-  px: number; // disperse vector (where it flees on song change)
-  py: number;
-};
-
-const r1 = (v: number) => Math.round(v * 10) / 10;
-const poly = (p: [number, number][]) => "M" + p.map((q) => `${r1(q[0])} ${r1(q[1])}`).join("L");
-
-// brush pressure: enters thin, swells, lifts thin — with a faint living ripple
-function widthAt(t: number, wMax: number): number {
-  const up = Math.min(1, t / 0.16);
-  const down = Math.min(1, (1 - t) / 0.24);
-  return wMax * Math.pow(Math.min(up, down), 0.65) * (0.82 + 0.18 * Math.sin(t * 6 + 1));
-}
-
-// a gestural arc, word-warped, sampled densely
-function centerline(
-  cx: number, cy: number, R: number, a0: number, sweep: number,
-  harm: number[], amps: number[], phs: number[], squash: number
-): [number, number][] {
-  const N = 96;
-  const C: [number, number][] = [];
-  for (let i = 0; i <= N; i++) {
-    const a = a0 + sweep * (i / N);
-    let warp = 1;
-    for (let h = 0; h < harm.length; h++) warp += amps[h] * Math.sin(harm[h] * a + phs[h]);
-    const r = R * warp;
-    C.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * squash]);
-  }
-  return C;
-}
-
-// offset the centreline by ±width/2 along its normals → a closed brush ribbon
-function ribbon(C: [number, number][], wMax: number, wScale: number): string {
-  const L: [number, number][] = [];
-  const Rt: [number, number][] = [];
-  for (let i = 0; i < C.length; i++) {
-    const p = C[i];
-    const pa = C[Math.max(0, i - 1)];
-    const pb = C[Math.min(C.length - 1, i + 1)];
-    const tx = pb[0] - pa[0];
-    const ty = pb[1] - pa[1];
-    const ln = Math.hypot(tx, ty) || 1;
-    const nx = -ty / ln;
-    const ny = tx / ln;
-    const w = (widthAt(i / (C.length - 1), wMax) * wScale) / 2;
-    L.push([p[0] + nx * w, p[1] + ny * w]);
-    Rt.push([p[0] - nx * w, p[1] - ny * w]);
-  }
-  return poly(L) + "L" + poly(Rt.reverse()).slice(1) + "Z";
-}
-
-function makeInk(words: string[], seedStr: string, idle: boolean) {
-  const seed = fnv(seedStr);
-  const rand = mkRand(seed);
-
-  // word signatures → centreline warp frequencies (the song's hand in the gesture)
-  const sigs = (words.length ? words : ["nothing"]).slice(0, 6).map((w) => {
-    let s = 0;
-    for (let k = 0; k < w.length; k++) s += w.charCodeAt(k);
-    return s;
-  });
-  const freqs = sigs.map((s) => 2 + (s % 4));
-  while (freqs.length < 2) freqs.push(3);
-
-  const n = idle ? 2 : 2 + Math.floor(rand() * 2); // 2 idle, else 2..3 — calm
-  const drops: Stroke[] = [];
-  const base = rand() * Math.PI * 2;
-  for (let i = 0; i < n; i++) {
-    // sit each gesture on a soft annulus so the reading centre stays calm
-    const ang = base + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.5;
-    const rad = (0.18 + rand() * 0.16) * Math.min(W, H);
-    const cx = W / 2 + Math.cos(ang) * rad;
-    const cy = H / 2 + Math.sin(ang) * rad * 0.8;
-
-    const hero = i === 0; // first gesture is the bold one, rest are accents
-    const R = (hero ? 240 : 150) + rand() * (hero ? 110 : 120);
-    const a0 = rand() * Math.PI * 2;
-    const sweep = (0.6 + rand() * 1.15) * Math.PI * (rand() < 0.5 ? 1 : -1); // arc or near-ensō
-    const harm = freqs.slice(0, 2);
-    const amps = harm.map(() => 0.03 + rand() * 0.05);
-    const phs = harm.map(() => rand() * Math.PI * 2);
-    const squash = 0.82 + rand() * 0.22;
-    const wMax = R * ((hero ? 0.12 : 0.08) + rand() * 0.06);
-    const C = centerline(cx, cy, R, a0, sweep, harm, amps, phs, squash);
-
-    // warmth: first gesture warm, second cool, rest drift between the poles
-    const warmth = i === 0 ? 1 : i === 1 ? -1 : (rand() - 0.5) * 1.6;
-    const vx = (cx - W / 2) / W;
-    const vy = (cy - H / 2) / H;
-    const vlen = Math.hypot(vx, vy) || 1;
-    drops.push({
-      base: ribbon(C, wMax, 1),
-      core: ribbon(C, wMax, 0.5),
-      warmth,
-      dx: `${((rand() * 2 - 1) * 26).toFixed(1)}px`,
-      dy: `${((rand() * 2 - 1) * 20).toFixed(1)}px`,
-      dr: `${((rand() * 2 - 1) * 4).toFixed(2)}deg`,
-      dur: `${(46 + rand() * 30).toFixed(0)}s`,
-      delay: `-${(rand() * 40).toFixed(0)}s`,
-      bdur: `${(12 + rand() * 9).toFixed(0)}s`,
-      bdelay: `-${(rand() * 12).toFixed(0)}s`,
-      px: (vx / vlen) * 150,
-      py: (vy / vlen) * 150,
-    });
-  }
-  return { drops, uid: seed.toString(36) };
-}
-
-// the drop's hue, biased toward the warm (orange) / cool (purple) poles
+// the doodle's hue, biased toward the warm (orange) / cool (purple) poles
 function dropHue(p: AlbumPalette, warmth: number): RGB {
   const warm = mix(toRgb(p.vibrant), ORANGE, 0.22);
   const cool = mix(toRgb(p.secondary), PURPLE, 0.3);
   return mix(cool, warm, (warmth + 1) / 2);
 }
+// near-black hue-tinted ink on paper (light) / pale hue-lifted ink on black (dark)
+function inkColor(p: AlbumPalette, dark: boolean, hue: RGB): RGB {
+  return dark ? mix(hue, toRgb(p.light), 0.32) : mix(INK, hue, 0.34);
+}
 
-// Theme-aware brush fills → the soft outer ribbon + the denser inner core, which
-// together give the stroke real ink VALUE (darker spine, lighter edges) plus a
-// blurred bleed. The blend modes invert what reads: multiply (light) shows the
-// DARK ink, so we bias toward ink; screen (dark) shows only LIGHT, so we lift the
-// hue toward the album's light so the gesture glows in black water.
-function strokeFills(p: AlbumPalette, dark: boolean, hue: RGB): { base: string; core: string } {
-  if (dark) {
-    return {
-      base: cssRgb(mix(hue, toRgb(p.light), 0.12), 0.32),
-      core: cssRgb(mix(hue, toRgb(p.light), 0.5), 0.5), // brighter, denser spine
-    };
+/* ------------------------------ geometry ------------------------------- */
+type Hair = { d: string; op: number; sw: number; t0: number; t1: number }; // t0/t1 = write-in span
+type Stroke = {
+  hairs: Hair[]; // the doodle's brush lines
+  warmth: number; // 1 = warm, -1 = cool
+  ox: number; // centroid — scroll-swirl rotates around it
+  oy: number;
+  sdir: number; // scroll-swirl rotation direction/magnitude
+  depth: number; // scroll parallax depth
+  wt: number; // write-in duration (s)
+  dim: number; // opacity multiplier (doodles near the reading centre are dimmer)
+};
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const poly = (p: [number, number][]) => "M" + p.map((q) => `${r1(q[0])} ${r1(q[1])}`).join("L");
+
+function norms(C: [number, number][]): [number, number][] {
+  const N = C.length;
+  const nm: [number, number][] = [];
+  for (let i = 0; i < N; i++) {
+    const pa = C[Math.max(0, i - 1)];
+    const pb = C[Math.min(N - 1, i + 1)];
+    const tx = pb[0] - pa[0];
+    const ty = pb[1] - pa[1];
+    const ln = Math.hypot(tx, ty) || 1;
+    nm.push([-ty / ln, tx / ln]);
   }
-  return {
-    base: cssRgb(mix(INK, hue, 0.6), 0.3),
-    core: cssRgb(mix(INK, hue, 0.32), 0.5), // darker, inkier spine
-  };
+  return nm;
+}
+
+// thin at the ends, fuller in the middle → a brushed (calligraphic) weight
+const widthProf = (t: number) => 0.3 + 0.7 * Math.pow(Math.sin(Math.PI * clamp01(t)), 0.4);
+
+// one doodle stroke (its mapped points = centreline) → a small dry-brush bundle:
+// a dense central spine + a couple of frayed dry edges. Stroked paths, so each
+// still writes in via stroke-dashoffset.
+function brushHairs(C: [number, number][], wMax: number, rand: () => number): { d: string; op: number; sw: number }[] {
+  if (C.length < 2) {
+    const a = C[0] || [0, 0];
+    return [{ d: `M${r1(a[0])} ${r1(a[1])}L${r1(a[0] + 0.8)} ${r1(a[1] + 0.8)}`, op: 0.55, sw: Math.max(1.5, wMax * 0.6) }];
+  }
+  const nm = norms(C);
+  const K = Math.max(2, Math.min(5, Math.round(wMax / 2)));
+  const offs = K === 1 ? [0] : Array.from({ length: K }, (_, i) => (i / (K - 1)) * 2 - 1);
+  const out: { d: string; op: number; sw: number }[] = [];
+  for (const o of offs) {
+    const central = Math.abs(o) < 0.35;
+    const sw = central ? Math.max(1.4, wMax * 0.45) : 1.0 + rand() * 0.7;
+    const op = central ? 0.62 : 0.4;
+    const lift = !central && rand() < 0.5 ? 0.68 + rand() * 0.27 : 1; // dry edge lifts early
+    const pts: [number, number][] = [];
+    for (let i = 0; i < C.length; i++) {
+      const t = i / (C.length - 1);
+      if (t > lift) break;
+      const w = widthProf(t) * wMax;
+      pts.push([C[i][0] + nm[i][0] * o * w / 2, C[i][1] + nm[i][1] * o * w / 2]);
+    }
+    if (pts.length > 1) out.push({ d: poly(pts), op, sw });
+  }
+  return out;
+}
+
+// re-ink one drawing into a box centred at (cx,cy): brush each stroke, give each
+// stroke a write-in span (strokes draw in order), find the centroid for swirl.
+function buildSketchAt(
+  strokes: DrawingStroke[], cx: number, cy: number, box: number,
+  warmth: number, sdir: number, depth: number, dim: number, seedStr: string
+): Stroke | null {
+  const lines = (strokes || []).filter((s) => Array.isArray(s?.points) && s.points.length >= 1);
+  if (!lines.length) return null;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const s of lines) {
+    for (const p of s.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  if (!Number.isFinite(minX)) return null;
+  const bw = maxX - minX || SKETCH_CANVAS_W;
+  const bh = maxY - minY || SKETCH_CANVAS_H;
+  const scale = Math.min(box / bw, box / bh);
+  const map = (p: { x: number; y: number }): [number, number] => [
+    (p.x - minX - bw / 2) * scale + cx,
+    (p.y - minY - bh / 2) * scale + cy,
+  ];
+
+  const rand = mkRand(fnv(seedStr));
+  const M = lines.length;
+  const hairs: Hair[] = [];
+  lines.forEach((s, j) => {
+    const pts = s.points;
+    const step = pts.length > 48 ? 2 : 1; // decimate dense strokes
+    const C: [number, number][] = [];
+    for (let i = 0; i < pts.length; i += step) C.push(map(pts[i]));
+    if (C.length && (pts.length - 1) % step !== 0) C.push(map(pts[pts.length - 1]));
+    const wMax = Math.max(2, Math.min(8, (s.width ?? 4) * scale * 1.4));
+    const sa = (j / M) * 0.88;
+    const sb = Math.min(1, sa + 0.18);
+    for (const h of brushHairs(C, wMax, rand)) hairs.push({ ...h, t0: sa, t1: sb });
+  });
+  if (!hairs.length) return null;
+
+  return { hairs, warmth, ox: cx, oy: cy, sdir, depth, wt: 1.3, dim };
+}
+
+// compose the scape: scatter doodles NATURALLY (uneven, hand-placed) via rejection
+// sampling with a size-scaled min distance — varied local density, not a grid.
+// Doodles near the reading centre shrink + dim so text stays legible.
+function makeScape(sketches: DrawingStroke[][], seedStr: string) {
+  const seed = fnv(seedStr);
+  if (!sketches.length) return { drops: [] as Stroke[], uid: seed.toString(36) };
+  const rand = mkRand(seed);
+  const order = sketches.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+
+  const n = 6 + Math.floor(rand() * 4); // 6..9 doodles
+  const placed: { x: number; y: number; r: number }[] = [];
+  const drops: Stroke[] = [];
+  let tries = 0;
+  while (drops.length < n && tries < n * 50) {
+    tries++;
+    const x = 0.07 + rand() * 0.86;
+    const y = 0.1 + rand() * 0.8;
+    const centralness = clamp01(1 - Math.hypot(x - 0.5, (y - 0.5) * 1.1) / 0.5); // 0 edge → 1 dead-centre
+    const sBase = (0.12 + rand() * 0.23) * (1 - 0.45 * centralness); // wide variance; smaller in the middle
+    const rr = sBase * 0.58; // collision radius (allows some closeness → natural)
+    let ok = true;
+    for (const p of placed) {
+      if (Math.hypot(x - p.x, y - p.y) < (rr + p.r) * 0.85) { ok = false; break; }
+    }
+    if (!ok) continue;
+    placed.push({ x, y, r: rr });
+    const i = drops.length;
+    const st = buildSketchAt(
+      sketches[order[i % order.length]],
+      x * W, y * H, sBase * H,
+      i % 2 ? -0.6 : 0.6,
+      (i % 2 ? 1 : -1) * (0.7 + rand() * 0.5),
+      0.3 + rand() * 0.7,
+      1 - 0.4 * centralness, // dim toward the centre
+      seedStr + ":" + i
+    );
+    if (st) drops.push(st);
+  }
+  return { drops, uid: seed.toString(36) };
 }
 
 /* ----------------------------- playhead -------------------------------- */
-// Drive a single --t (0..1 song progress) onto the SVG root via one rAF loop,
-// interpolated client-side between the ~5s polls. No per-frame React renders.
 function useDiffuse(
   root: React.RefObject<SVGSVGElement | null>,
   track: ReturnType<typeof useNowPlayingContext>["track"],
@@ -226,8 +241,6 @@ function useDiffuse(
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
-    // reduced motion, nothing playing, or no playhead → set --t once, no rAF spin
     if (reduced) {
       el.style.setProperty("--t", "0.32");
       return;
@@ -258,31 +271,87 @@ function useDiffuse(
   }, [root, reduced, playing, duration, progress, serverNow, fetchedAt]);
 }
 
-/* ------------------------------ variants ------------------------------- */
+/* ------------------------------ scroll --------------------------------- */
+function useScrollSwirl(root: React.RefObject<SVGSVGElement | null>, reduced: boolean | null) {
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    if (reduced) {
+      el.style.setProperty("--scroll", "0");
+      return;
+    }
+    let target = 0;
+    let cur = 0;
+    let raf = 0;
+    let running = false;
+    const measure = () => {
+      const denom = Math.max(1, window.innerHeight * 1.3);
+      target = Math.min(1, Math.max(0, window.scrollY / denom));
+    };
+    const loop = () => {
+      cur += (target - cur) * 0.1;
+      el.style.setProperty("--scroll", cur.toFixed(4));
+      if (Math.abs(target - cur) > 0.0005) raf = requestAnimationFrame(loop);
+      else running = false;
+    };
+    const onScroll = () => {
+      measure();
+      if (!running) {
+        running = true;
+        raf = requestAnimationFrame(loop);
+      }
+    };
+    measure();
+    cur = target;
+    el.style.setProperty("--scroll", target.toFixed(4));
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [root, reduced]);
+}
+
+/* ------------------------------ sketches ------------------------------- */
+// Fetch recent confessional-booth drawings once on mount.
+function useSketches(): DrawingStroke[][] {
+  const [sketches, setSketches] = useState<DrawingStroke[][]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/turtles?limit=40")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data?.turtles) return;
+        const out = (data.turtles as { strokes?: DrawingStroke[] }[])
+          .map((t) => t.strokes)
+          .filter((s): s is DrawingStroke[] => Array.isArray(s) && s.length > 0);
+        setSketches(out);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return sketches;
+}
+
+/* ------------------------------ motion --------------------------------- */
+// Container staggers its doodles. Enter is carried by the per-hair write-in (CSS);
+// on song change each OLD doodle lifts away one-by-one (staggered fade + rise)
+// while the new ones write themselves in — a graceful hand-off, never a hard cut.
 const container: Variants = {
   enter: {},
-  show: { transition: { staggerChildren: 0.22 } },
-  leave: { transition: { staggerChildren: 0.12 } },
+  show: { transition: { staggerChildren: 0.05 } },
+  leave: { transition: { staggerChildren: 0.07, staggerDirection: -1 } },
 };
-// Strokes are drawn at absolute coords, so each scales around its OWN centre
-// (fill-box) — no x/y for placement. The brush blooms in (ink swelling, settling
-// long); on leave it spreads, thins, and drifts outward (disperse).
-const dropV: Variants = {
-  enter: { scale: 0.55, opacity: 0 },
-  show: { scale: 1, opacity: 1, transition: { duration: 1.7, ease: [0.16, 1, 0.3, 1] } },
-  leave: (d: Stroke) => ({
-    scale: 1.55,
-    opacity: 0,
-    x: d.px,
-    y: d.py,
-    transition: { duration: 1.25, ease: [0.4, 0, 0.6, 1] },
-  }),
+const doodleV: Variants = {
+  enter: { opacity: 1, y: 0 },
+  show: { opacity: 1, y: 0 },
+  leave: { opacity: 0, y: -16, transition: { duration: 0.6, ease: "easeOut" } },
 };
-const dropReduced: Variants = {
-  enter: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0.7 } },
-  leave: { opacity: 0, transition: { duration: 0.7 } },
-};
+const DOODLE_GAP = 0.22; // s between doodles (assembly order); per-doodle write time is `wt`
 
 /* ------------------------------ component ------------------------------ */
 export default function SongScapeInk() {
@@ -304,27 +373,14 @@ export default function SongScapeInk() {
     return () => obs.disconnect();
   }, []);
 
-  const idle = !track;
   const songKey = track ? track.trackId || `${track.title}${track.artist}${track.album}` : "—";
-  const words = useMemo(
-    () =>
-      track
-        ? `${track.title} ${track.artist}`
-            .toLowerCase()
-            .split(/[^a-z0-9]+/i)
-            .filter(Boolean)
-        : ["nothing"],
-    [track]
-  );
-  const ink = useMemo(() => makeInk(words, songKey, idle), [songKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sketches = useSketches();
+  const scape = useMemo(() => makeScape(sketches, songKey), [songKey, sketches]);
 
   useDiffuse(svgRef, track, reduced ?? null);
+  useScrollSwirl(svgRef, reduced ?? null);
 
   if (!mounted) return null;
-
-  const variants = reduced ? dropReduced : dropV;
-  // light: ink stains the paper (multiply); dark: ink glows in black water (screen)
-  const blend = dark ? "screen" : "multiply";
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -335,89 +391,72 @@ export default function SongScapeInk() {
         preserveAspectRatio="xMidYMid slice"
         fill="none"
       >
-        {/* surface light catching the water — a slow caustic sweep, dark mode only */}
+        {/* faint light pooling — dark mode only, very low so it never flickers */}
         {dark && (
-          <g className="ink-caustic" style={{ mixBlendMode: "screen" }}>
+          <g className="ink-caustic">
             <defs>
-              <radialGradient id={`ink-caustic-${ink.uid}`}>
-                <stop offset="0%" stopColor={cssRgb(mix(toRgb(palette.light), { r: 255, g: 255, b: 255 }, 0.3), 0.1)} />
+              <radialGradient id={`ink-glow-${scape.uid}`}>
+                <stop offset="0%" stopColor={cssRgb(mix(toRgb(palette.light), { r: 255, g: 255, b: 255 }, 0.3), 0.06)} />
                 <stop offset="100%" stopColor={cssRgb(toRgb(palette.light), 0)} />
               </radialGradient>
             </defs>
-            <ellipse cx={W * 0.5} cy={H * 0.42} rx={W * 0.7} ry={H * 0.6} fill={`url(#ink-caustic-${ink.uid})`} />
+            <ellipse cx={W * 0.5} cy={H * 0.42} rx={W * 0.66} ry={H * 0.58} fill={`url(#ink-glow-${scape.uid})`} />
           </g>
         )}
 
-        {/* the ink. one persistent diffuse layer (playhead-scaled), drops inside */}
-        <g
-          className="ink-diffuse"
-          style={{ mixBlendMode: blend as React.CSSProperties["mixBlendMode"] }}
-        >
-          <AnimatePresence>
-            <motion.g
-              key={songKey}
-              variants={container}
-              initial="enter"
-              animate="show"
-              exit="leave"
-            >
-              {ink.drops.map((d, i) => (
-                <motion.g
-                  key={i}
-                  custom={d}
-                  variants={variants}
-                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
-                >
-                  {/* strokes are at absolute coords; the motion.g scales each one
-                      around its own centre (fill-box) for the bloom/disperse */}
-                  <g
-                    className="ink-drift"
-                    style={
-                      {
-                        "--dx": d.dx,
-                        "--dy": d.dy,
-                        "--dr": d.dr,
-                        "--dur": d.dur,
-                        "--delay": d.delay,
-                        transformBox: "fill-box",
-                        transformOrigin: "center",
-                      } as React.CSSProperties
-                    }
-                  >
-                    <g
-                      className="ink-breathe"
-                      style={
-                        {
-                          "--bdur": d.bdur,
-                          "--bdelay": d.bdelay,
-                          transformBox: "fill-box",
-                          transformOrigin: "center",
-                        } as React.CSSProperties
-                      }
-                    >
-                      {/* static, blur-softened layer → cached as one composited
-                          raster; the drift/breathe/diffuse transforms above just
-                          move it, so the soft ink bleed stays cheap. */}
-                      <g className="ink-soft">
-                        {(() => {
-                          const hue = dropHue(palette, d.warmth);
-                          const f = strokeFills(palette, dark, hue);
-                          return (
-                            <g className="ink-stroke">
-                              {/* full-width ink ribbon */}
-                              <path d={d.base} fill={f.base} stroke="none" />
-                              {/* denser inner core → brush value (dark spine) */}
-                              <path d={d.core} fill={f.core} stroke="none" />
-                            </g>
-                          );
-                        })()}
+        {/* the whole piece breathes as ONE (subtle sway) */}
+        <g className="ink-sway">
+          {/* playhead very gently spreads the ink as the song ages (--t) */}
+          <g className="ink-diffuse">
+            <AnimatePresence>
+              <motion.g key={songKey} variants={container} initial="enter" animate="show" exit="leave">
+                {scape.drops.map((d, i) => {
+                  const col = inkColor(palette, dark, dropHue(palette, d.warmth));
+                  const start = i * DOODLE_GAP; // assembly order
+                  return (
+                    // outer = exit lift (Motion); inner = scroll-swirl (CSS) — kept
+                    // on separate elements so the two transforms never conflict.
+                    <motion.g key={i} variants={doodleV}>
+                      <g
+                        className="ink-stroke-wrap"
+                        style={{
+                          "--sdir": d.sdir.toFixed(2),
+                          "--depth": d.depth.toFixed(2),
+                          transformBox: "view-box",
+                          transformOrigin: `${d.ox.toFixed(1)}px ${d.oy.toFixed(1)}px`,
+                        } as React.CSSProperties}
+                      >
+                        <g className="ink-stroke">
+                          {d.hairs.map((hr, k) => {
+                            const delay = start + hr.t0 * d.wt;
+                            const dur = Math.max(0.2, (hr.t1 - hr.t0) * d.wt);
+                            return (
+                              <path
+                                key={k}
+                                d={hr.d}
+                                pathLength={1}
+                                fill="none"
+                                stroke={cssRgb(col, hr.op * d.dim * (dark ? 0.92 : 0.96))}
+                                strokeWidth={hr.sw}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={reduced ? undefined : "ink-write"}
+                                style={
+                                  reduced
+                                    ? undefined
+                                    : ({ "--wdur": `${dur.toFixed(2)}s`, "--wdelay": `${delay.toFixed(2)}s` } as React.CSSProperties)
+                                }
+                              />
+                            );
+                          })}
+                        </g>
                       </g>
-                    </g>
-                  </g>
-                </motion.g>
-              ))}
-            </motion.g>
-          </AnimatePresence>
+                    </motion.g>
+                  );
+                })}
+              </motion.g>
+            </AnimatePresence>
+          </g>
         </g>
       </svg>
     </div>

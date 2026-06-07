@@ -92,7 +92,7 @@ EMAIL:${contactInfo.email}
 URL:${contactInfo.website}
 TITLE:${contactInfo.title}
 ORG:pramit.gg
-NOTE:Living journal of interests, projects, and experiences
+NOTE:pramit mazumder that one really cool guy with a blog
 END:VCARD`;
 
     return new Blob([vCard], { type: "text/vcard;charset=utf-8" });
@@ -151,9 +151,7 @@ END:VCARD`;
               </h1>
 
               <p className="mt-7 max-w-xl font-serif text-lg italic leading-relaxed text-ink-soft">
-                if you&apos;re reading this, we&apos;re pen-pals now. pull up a
-                chair — this corner of the internet is a little sketchbook i keep,
-                and you&apos;re welcome to scribble in it.
+                if ur reading this we&apos;re best friends now
               </p>
             </motion.div>
           </div>
@@ -260,7 +258,7 @@ END:VCARD`;
                   <div className="mt-2 space-y-3 font-serif text-base leading-relaxed text-ink-soft">
                     <p>
                       this is a place where i share things i think are cool. i
-                      believe in building things that feel personal and alive —
+                      believe in building things that feel personal and alive;
                       this whole site is an experiment in that philosophy.
                     </p>
                     <p className="text-ink-faint">

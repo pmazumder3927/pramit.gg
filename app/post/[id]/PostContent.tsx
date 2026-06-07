@@ -110,33 +110,77 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
   }, [headings.length]);
 
   // Reading progress → a single --read scalar (0..1) on <html>, read by the
-  // ink-fill margin rule + the nib + the sub-lg hairline. rAF-throttled, no
-  // React re-render per frame so the long essay never janks.
+  // ink-fill margin rule + the nib + the sub-lg hairline. A rAF loop eases the
+  // value toward the true scroll position each frame so the nib glides (and
+  // trails like wet ink) instead of teleporting between discrete scroll events.
+  // No React re-render per frame, so the long essay never janks.
   useEffect(() => {
     const el = sheetRef.current;
     if (!el) return;
+    const root = document.documentElement;
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
     let raf = 0;
-    const update = () => {
-      raf = 0;
+    let running = false;
+    let current = 0;
+
+    const targetOf = () => {
       const rect = el.getBoundingClientRect();
       const vh = window.innerHeight || document.documentElement.clientHeight;
       const scrollable = rect.height - vh;
-      let p: number;
-      if (scrollable <= 0) p = rect.top <= 0 ? 1 : 0;
-      else p = Math.min(1, Math.max(0, -rect.top / scrollable));
-      document.documentElement.style.setProperty("--read", p.toFixed(4));
+      if (scrollable <= 0) return rect.top <= 0 ? 1 : 0;
+      return Math.min(1, Math.max(0, -rect.top / scrollable));
     };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
+
+    // the nib travels the margin rule, which is inset 24px (inset-y-6) top &
+    // bottom of the sheet — expose its pixel height so the nib can ride it on a
+    // GPU transform instead of animating `top`.
+    const measureRail = () => {
+      root.style.setProperty(
+        "--rail-h",
+        `${Math.max(0, el.clientHeight - 48)}px`
+      );
     };
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
+
+    const tick = () => {
+      const target = targetOf();
+      // ease toward target; snap instantly when motion is unwelcome
+      current += (target - current) * (reduce ? 1 : 0.18);
+      const settled = Math.abs(target - current) < 0.0006;
+      if (settled) current = target;
+      root.style.setProperty("--read", current.toFixed(4));
+      if (settled) {
+        running = false;
+        raf = 0;
+      } else {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    const start = () => {
+      if (!running) {
+        running = true;
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    const onResize = () => {
+      measureRail();
+      start();
+    };
+
+    measureRail();
+    current = targetOf();
+    root.style.setProperty("--read", current.toFixed(4));
+    window.addEventListener("scroll", start, { passive: true });
+    window.addEventListener("resize", onResize, { passive: true });
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("scroll", start);
+      window.removeEventListener("resize", onResize);
       if (raf) cancelAnimationFrame(raf);
-      document.documentElement.style.removeProperty("--read");
+      root.style.removeProperty("--read");
+      root.style.removeProperty("--rail-h");
     };
   }, [post.content]);
 
@@ -606,7 +650,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
             draw={endSeen}
           />
           <p className="font-hand text-2xl text-ink">
-            that&apos;s the end of this one — thanks for reading{" "}
+            that&apos;s the end. thanks for reading{" "}
             <span className="text-accent-orange">✦</span>
           </p>
           <p className="font-hand text-lg text-ink-faint">
@@ -680,12 +724,12 @@ function InkRule() {
         }}
       />
       <svg
-        className="ink-nib absolute -left-[5px] h-[11px] w-[11px] text-accent-rust"
+        className="ink-nib absolute -left-[5px] top-0 h-[11px] w-[11px] text-accent-rust will-change-transform"
         viewBox="0 0 12 12"
         fill="none"
         style={{
-          top: "calc(var(--read,0) * 100%)",
-          transform: "translateY(-50%)",
+          transform:
+            "translate3d(0, calc(var(--read,0) * var(--rail-h,0px) - 50%), 0)",
         }}
       >
         <path d="M2 2 L10 2 L6 11 Z" fill="currentColor" />

@@ -6,7 +6,7 @@ const siteConfig = {
     "a living, evolving journal of interests, projects, and experiences",
   url: "https://pramit.gg",
   ogImage: "/og-image.jpg",
-  creator: "@pramitmazumder",
+  creator: "@PramitMazumder",
   keywords: ["pramit", "mazumder", "blog", "portfolio", "music", "technology"],
 };
 

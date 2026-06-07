@@ -81,7 +81,7 @@ export default function GraveyardPage() {
           </span>
         </h1>
         <p className="mt-2 text-sm font-light text-white/30">
-          songs that lost their home — an archive of evolving taste
+          songs that lost their home
         </p>
       </motion.div>
 

@@ -300,7 +300,7 @@ export default function MusicClient() {
         <div className="max-w-4xl mx-auto px-4 md:px-8 pb-28 md:pb-16 mt-6 md:mt-10">
           {visitedTabs.has("recent") && (
             <div className={selectedTab === "recent" ? "" : "hidden"}>
-              <SheetHeading label="the rotation" sub="lately on repeat" />
+              <SheetHeading label="the rotation" sub="recently played" />
               <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
                 {recentTracks.map((track, index) => (
                   <ChaoticTrackCard
@@ -322,7 +322,7 @@ export default function MusicClient() {
 
           {visitedTabs.has("top") && (
             <div className={selectedTab === "top" ? "" : "hidden"}>
-              <SheetHeading label="heavy hitters" sub="my top of the moment" />
+              <SheetHeading label="heavy hitters" sub="top of the moment" />
               <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
                 {topTracks?.tracks.map((track, index) => (
                   <ChaoticTrackCard
@@ -341,7 +341,7 @@ export default function MusicClient() {
 
           {visitedTabs.has("playlists") && (
             <div className={selectedTab === "playlists" ? "" : "hidden"}>
-              <SheetHeading label="the mixtape wall" sub="playlists i keep coming back to" />
+              <SheetHeading label="my playlists" sub="curated personally, constantly" />
               <motion.div
                 className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
                 style={{ x: listPX, y: listPY }}

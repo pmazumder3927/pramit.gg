@@ -1,8 +1,8 @@
 // Sketchbook paper backdrop. Pure CSS, theme-aware.
-// Faint corner washes give the paper warmth; the SongScape layer (a landscape
-// generated from whatever's playing) carries the real atmosphere in both
-// themes. Sits behind all content (z-0).
-import SongScapeSwitch from "./SongScapeSwitch";
+// Faint corner washes give the paper warmth; the SongScapeInk layer (sumi-no-mizu
+// calligraphy generated from whatever's playing) carries the real atmosphere in
+// both themes. Sits behind all content (z-0).
+import SongScapeInk from "./SongScapeInk";
 
 export default function PaperBackground() {
   return (
@@ -53,9 +53,8 @@ export default function PaperBackground() {
         style={{ background: "rgb(var(--accent-rust) / 0.16)" }}
       />
 
-      {/* backdrop generated from the now-playing track (both themes).
-          mountain by default; ?scape=ink switches to the Sumi-no-Mizu variant. */}
-      <SongScapeSwitch />
+      {/* now-playing backdrop — sumi-no-mizu calligraphy (both themes) */}
+      <SongScapeInk />
     </div>
   );
 }

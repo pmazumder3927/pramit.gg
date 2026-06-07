@@ -84,11 +84,10 @@ export default function TurtleGallery() {
           <Doodle name="star" tone="orange" className="h-5 w-5" strokeWidth={2} />
         </div>
         <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
-          what other pen-pals left behind
+          what other adventurers left behind
         </h2>
         <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          every note comes with a sketch. these are theirs — taped up just like
-          yours will be.
+          sketches from previous visitors.
         </p>
       </motion.div>
 
