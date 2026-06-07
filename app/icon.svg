@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="10" y1="6" x2="90" y2="94">
+      <stop offset="0" stop-color="#ff6b3d"/>
+      <stop offset="0.55" stop-color="#e0653f"/>
+      <stop offset="1" stop-color="#7c77c6"/>
+    </linearGradient>
+  </defs>
+  <!-- squircle in the brand gradient -->
+  <rect x="3" y="3" width="94" height="94" rx="26" fill="url(#g)"/>
+  <!-- lowercase p: stem + bowl, with the counter punched out to the gradient -->
+  <rect x="32" y="26" width="12.5" height="55" rx="6.25" fill="#f7f0e2"/>
+  <circle cx="51.5" cy="45.5" r="19.5" fill="#f7f0e2"/>
+  <circle cx="54" cy="45.5" r="8.6" fill="url(#g)"/>
+  <!-- the period -->
+  <circle cx="70.5" cy="74.5" r="6.2" fill="#f7f0e2"/>
+</svg>

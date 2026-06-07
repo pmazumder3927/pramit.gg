@@ -70,11 +70,7 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon-16x16.png",
-    apple: "/apple-touch-icon.png",
-  },
+  // Icons are provided by file conventions: app/icon.svg, app/favicon.ico, app/apple-icon.png
   manifest: "/site.webmanifest",
 };
 
