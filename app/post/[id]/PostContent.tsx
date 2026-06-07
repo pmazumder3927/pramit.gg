@@ -13,7 +13,6 @@ import { Post, analyzeContent } from "@/app/lib/supabase";
 import { POST_TYPE_META } from "@/app/lib/postTypes";
 import Link from "next/link";
 import { formatDistanceToNow, format } from "date-fns";
-import Image from "next/image";
 import { useViewCount, ViewCount } from "./ViewCountTracker";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
@@ -90,7 +89,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
     const root = sheetRef.current;
     if (!root) return;
     const nodes = Array.from(
-      root.querySelectorAll<HTMLElement>(".prose :is(h1,h2,h3)[id]"),
+      root.querySelectorAll<HTMLElement>(".prose :is(h2,h3,h4)[id]"),
     );
     const hs = nodes.map((n) => ({
       id: n.id,
@@ -98,14 +97,14 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
       depth: Number(n.tagName.charAt(1)),
     }));
     setHeadings(hs);
-    setActiveId((current) => current ?? hs[0]?.id ?? null);
+    setActiveId(hs[0]?.id ?? null);
   }, [post.content]);
 
   // Open the inline (mobile/tablet) TOC by default on tablets only.
   useEffect(() => {
     if (detailsRef.current) {
       detailsRef.current.open = window.matchMedia(
-        "(min-width: 640px) and (max-width: 1023px)",
+        "(min-width: 640px) and (max-width: 1279px)",
       ).matches;
     }
   }, [headings.length]);
@@ -147,7 +146,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
     const root = sheetRef.current;
     if (!root) return;
     const nodes = Array.from(
-      root.querySelectorAll<HTMLElement>(".prose :is(h1,h2,h3)[id]"),
+      root.querySelectorAll<HTMLElement>(".prose :is(h2,h3,h4)[id]"),
     );
     if (!nodes.length) return;
     const visible = new Set<string>();
@@ -203,9 +202,9 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
     <>
       {hasToc && <ProgressHairline />}
 
-      <div className="mx-auto w-full max-w-[40rem] px-4 sm:max-w-[44rem] sm:px-6 lg:grid lg:max-w-[84rem] lg:grid-cols-[minmax(0,1fr)_minmax(0,46rem)_minmax(0,1fr)] lg:items-start lg:gap-x-8 lg:px-8 xl:gap-x-12 2xl:max-w-[92rem] 2xl:gap-x-16">
+      <div className="mx-auto w-full max-w-[40rem] px-4 sm:max-w-[44rem] sm:px-6 xl:grid xl:max-w-[84rem] xl:grid-cols-[minmax(0,1fr)_minmax(0,46rem)_minmax(0,1fr)] xl:items-start xl:gap-x-12 xl:px-8 2xl:max-w-[92rem] 2xl:gap-x-16">
         {/* ---------- LEFT MARGIN: back-link + table of contents ---------- */}
-        <aside className="hidden self-start lg:sticky lg:top-20 lg:block">
+        <aside className="hidden self-start xl:sticky xl:top-20 xl:block">
           <div className="rise d1">
             <BackLink />
             {hasToc && (
@@ -221,7 +220,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
 
         {/* ---------- CENTER: the journal sheet ---------- */}
         <div className="min-w-0">
-          <div className="lg:hidden">
+          <div className="xl:hidden">
             <BackLink />
           </div>
 
@@ -251,10 +250,10 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                   })}
                 </span>
                 {/* reading-time + reads live in the right margin on lg+ */}
-                <span className="font-hand text-lg text-ink-faint lg:hidden">
+                <span className="font-hand text-lg text-ink-faint xl:hidden">
                   ~ {readingTime} min
                 </span>
-                <span className="lg:hidden">
+                <span className="xl:hidden">
                   <ViewCount count={views} />
                 </span>
               </div>
@@ -338,37 +337,40 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                 ]}
                 components={{
                   ...({} as any),
+                  // Markdown headings are demoted one level (# -> h2, ## -> h3,
+                  // ...) so the post title stays the page's only <h1>; the
+                  // visual scale is preserved via classNames.
                   h1: ({ children, id }: any) => (
-                    <h1
-                      id={id}
-                      className="scroll-mt-24 font-serif text-2xl md:text-3xl font-medium mt-16 mb-6 text-ink tracking-tight first:mt-0 lg:scroll-mt-28"
-                    >
-                      {children}
-                    </h1>
-                  ),
-                  h2: ({ children, id }: any) => (
                     <h2
                       id={id}
-                      className="scroll-mt-24 font-serif text-xl md:text-2xl font-medium mt-14 mb-5 text-ink tracking-tight first:mt-0 lg:scroll-mt-28"
+                      className="scroll-mt-24 break-words font-serif text-2xl md:text-3xl font-medium mt-16 mb-6 text-ink tracking-tight first:mt-0 lg:scroll-mt-28"
                     >
                       {children}
                     </h2>
                   ),
-                  h3: ({ children, id }: any) => (
+                  h2: ({ children, id }: any) => (
                     <h3
                       id={id}
-                      className="scroll-mt-24 font-serif text-lg md:text-xl font-medium mt-10 mb-4 text-ink first:mt-0 lg:scroll-mt-28"
+                      className="scroll-mt-24 break-words font-serif text-xl md:text-2xl font-medium mt-14 mb-5 text-ink tracking-tight first:mt-0 lg:scroll-mt-28"
                     >
                       {children}
                     </h3>
                   ),
-                  h4: ({ children, id }: any) => (
+                  h3: ({ children, id }: any) => (
                     <h4
                       id={id}
-                      className="scroll-mt-24 font-serif text-base md:text-lg font-semibold mt-8 mb-3 text-ink first:mt-0 lg:scroll-mt-28"
+                      className="scroll-mt-24 break-words font-serif text-lg md:text-xl font-medium mt-10 mb-4 text-ink first:mt-0 lg:scroll-mt-28"
                     >
                       {children}
                     </h4>
+                  ),
+                  h4: ({ children, id }: any) => (
+                    <h5
+                      id={id}
+                      className="scroll-mt-24 break-words font-serif text-base md:text-lg font-semibold mt-8 mb-3 text-ink first:mt-0 lg:scroll-mt-28"
+                    >
+                      {children}
+                    </h5>
                   ),
                   p: ({ children, node }: any) => {
                     const blockTags = [
@@ -391,7 +393,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                       if (hasBlockElement) return <>{children}</>;
                     }
                     return (
-                      <p className="text-ink-soft text-base md:text-lg leading-[1.75] md:leading-[1.8] mb-7 tracking-[0.01em]">
+                      <p className="text-ink-soft text-base md:text-lg leading-[1.75] md:leading-[1.8] mb-7 tracking-[0.01em] break-words">
                         {children}
                       </p>
                     );
@@ -402,13 +404,15 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                       <span className="my-10 block md:my-12">
                         <span className="block rounded-md border border-line bg-card p-3 shadow-paper dark:shadow-paper-lg">
                           <span className="block overflow-hidden rounded bg-paper-2 dark:[box-shadow:inset_0_1px_0_rgb(var(--fg)/0.06)]">
-                            <Image
+                            {/* author images come from arbitrary hosts; a plain
+                                lazy <img> avoids next/image remotePatterns 500s */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
                               src={typeof src === "string" ? src : ""}
                               alt={typeof alt === "string" ? alt : ""}
-                              width={800}
-                              height={600}
+                              loading="lazy"
+                              decoding="async"
                               className="block h-auto w-full object-cover"
-                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 800px"
                             />
                           </span>
                         </span>
@@ -444,7 +448,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                       return (
                         <a
                           href={h}
-                          className="text-accent-orange underline decoration-accent-orange/40 underline-offset-2 transition-colors duration-200 hover:text-accent-purple hover:decoration-accent-purple/60"
+                          className="break-words text-accent-orange underline decoration-accent-orange/40 underline-offset-2 transition-colors duration-200 hover:text-accent-purple hover:decoration-accent-purple/60"
                         >
                           {children}
                         </a>
@@ -453,7 +457,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                     return (
                       <a
                         href={h}
-                        className="text-accent-orange underline decoration-accent-orange/40 underline-offset-2 transition-colors duration-200 hover:text-accent-purple hover:decoration-accent-purple/60"
+                        className="break-words text-accent-orange underline decoration-accent-orange/40 underline-offset-2 transition-colors duration-200 hover:text-accent-purple hover:decoration-accent-purple/60"
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -474,7 +478,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                       );
                     }
                     return (
-                      <code className="rounded bg-accent-orange/10 px-1.5 py-0.5 font-mono text-[0.9em] text-accent-orange">
+                      <code className="rounded bg-ink/[0.06] px-1.5 py-0.5 font-mono text-[0.9em] text-accent-rust break-words">
                         {children}
                       </code>
                     );
@@ -487,7 +491,6 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                       <CodeCard
                         lang={getLang(codeNode)}
                         code={codeNode ? hastText(codeNode) : ""}
-                        tone={tone}
                       >
                         {children}
                       </CodeCard>
@@ -515,7 +518,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                     </ol>
                   ),
                   li: ({ children }) => (
-                    <li className="text-ink-soft text-base leading-[1.75] md:text-lg">
+                    <li className="text-ink-soft text-base leading-[1.75] md:text-lg break-words">
                       {children}
                     </li>
                   ),
@@ -587,17 +590,14 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
         </div>
 
         {/* ---------- RIGHT MARGIN: field notes ---------- */}
-        <aside className="hidden self-start lg:sticky lg:top-20 lg:block">
+        <aside className="hidden self-start xl:sticky xl:top-20 xl:block">
           <MarginMeta tone={tone} readingTime={readingTime} views={views} />
         </aside>
       </div>
 
       {/* ---------- closing flourish + onward ---------- */}
-      <footer className="mx-auto mt-12 w-full max-w-[40rem] px-4 sm:max-w-[44rem] sm:px-6 lg:mt-16 lg:max-w-[84rem] lg:px-8 2xl:max-w-[92rem]">
-        <div
-          ref={endRef}
-          className={`flex flex-col items-center gap-3 text-center ${endSeen ? "rise" : "opacity-0"}`}
-        >
+      <footer className="mx-auto mt-12 w-full max-w-[40rem] px-4 sm:max-w-[44rem] sm:px-6 xl:mt-16 xl:max-w-[84rem] xl:px-8 2xl:max-w-[92rem]">
+        <div ref={endRef} className="flex flex-col items-center gap-3 text-center">
           <Doodle
             name="divider"
             tone="rust"
@@ -698,7 +698,7 @@ function ProgressHairline() {
   return (
     <div
       aria-hidden
-      className="fixed inset-x-0 top-[88px] z-30 h-[3px] bg-line/40 md:top-14 lg:hidden"
+      className="fixed inset-x-0 top-[88px] z-30 h-[3px] bg-line/40 md:top-14 xl:hidden"
     >
       <div
         className="h-full origin-left bg-accent-orange will-change-transform"
@@ -780,7 +780,7 @@ function TocDetails({
   return (
     <details
       ref={detailsRef}
-      className="group mb-10 rounded-md border border-dashed border-line bg-paper-2/40 px-5 py-3 lg:hidden"
+      className="group mb-10 rounded-md border border-dashed border-line bg-paper-2/40 px-5 py-3 xl:hidden"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between font-hand text-xl text-accent-purple [&::-webkit-details-marker]:hidden">
         in this entry —
@@ -869,12 +869,10 @@ function NavCard({ post, dir }: { post: PostNav; dir: "newer" | "older" }) {
 function CodeCard({
   lang,
   code,
-  tone,
   children,
 }: {
   lang: string;
   code: string;
-  tone: Tone;
   children: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
@@ -889,16 +887,18 @@ function CodeCard({
   };
   return (
     <div className="group relative my-10 md:my-12">
-      <Tape tone={tone} rotate={-4} className="-top-3 left-7" width={66} />
       <div className="overflow-hidden rounded-md border border-line bg-paper-2 shadow-paper">
         <div className="flex items-center justify-between gap-3 border-b border-line/70 px-4 py-2">
           <span className="font-mono text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-ink-faint">
             {lang || "code"}
           </span>
+          <span role="status" aria-live="polite" className="sr-only">
+            {copied ? "Code copied to clipboard" : ""}
+          </span>
           <button
             type="button"
             onClick={copy}
-            aria-label="Copy code"
+            aria-label={copied ? "Code copied to clipboard" : "Copy code"}
             className="font-hand text-base leading-none text-ink-faint transition-colors hover:text-accent-orange focus-visible:text-accent-orange lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
             style={
               copied ? { color: "rgb(var(--accent-orange))", opacity: 1 } : undefined

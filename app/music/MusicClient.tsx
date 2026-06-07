@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import useSWR, { preload } from "swr";
 import { useAlbumColor, preloadColors } from "@/app/lib/use-album-color";
@@ -25,6 +25,23 @@ interface SpotifyTrack {
   playedAt?: string;
   duration?: number;
   popularity?: number;
+  repeatCount?: number;
+}
+
+// Spotify's recently-played is reverse-chronological, so a song left on loop
+// shows up as a run of identical consecutive entries. Collapse each run into a
+// single row carrying how many times it spun — the card stamps it with an ×N.
+function collapseConsecutive(tracks: SpotifyTrack[]): SpotifyTrack[] {
+  const out: SpotifyTrack[] = [];
+  for (const t of tracks) {
+    const last = out[out.length - 1];
+    if (last && last.id === t.id) {
+      last.repeatCount = (last.repeatCount || 1) + 1;
+    } else {
+      out.push({ ...t, repeatCount: 1 });
+    }
+  }
+  return out;
 }
 
 interface SpotifyPlaylist {
@@ -110,6 +127,12 @@ export default function MusicClient() {
     { refreshInterval: 600000 }
   );
 
+  // Collapse on-loop runs so a song played 10× in a row is one row, not ten.
+  const recentTracks = useMemo(
+    () => collapseConsecutive(recentlyPlayed?.tracks ?? []),
+    [recentlyPlayed]
+  );
+
   // Extract color from now playing album art - this drives the page's accent color
   const nowPlayingColor = useAlbumColor(nowPlaying?.albumImageUrl || null);
 
@@ -165,7 +188,7 @@ export default function MusicClient() {
     {
       id: "recent" as const,
       label: "recently played",
-      count: recentlyPlayed?.tracks.length || 0,
+      count: recentTracks.length || 0,
     },
     {
       id: "top" as const,
@@ -279,14 +302,15 @@ export default function MusicClient() {
             <div className={selectedTab === "recent" ? "" : "hidden"}>
               <SheetHeading label="the rotation" sub="lately on repeat" />
               <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
-                {recentlyPlayed?.tracks.map((track, index) => (
+                {recentTracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id + index}
                     track={track}
                     index={index}
+                    repeatCount={track.repeatCount}
                   />
                 ))}
-                {(!recentlyPlayed || recentlyPlayed.tracks.length === 0) && (
+                {recentTracks.length === 0 && (
                   <EmptyState
                     emoji="🎵"
                     message="No recently played tracks found."
