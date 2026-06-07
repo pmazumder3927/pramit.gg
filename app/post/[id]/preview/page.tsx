@@ -64,10 +64,8 @@ export default async function PreviewPostPage({ params }: PreviewPageProps) {
         Draft Preview
       </div>
 
-      <main className="relative z-10 min-h-screen px-5 py-8 sm:px-6 md:px-8 md:py-16 pt-14">
-        <article className="max-w-2xl md:max-w-3xl lg:max-w-5xl mx-auto">
-          <PostContent post={post} />
-        </article>
+      <main className="relative z-10 min-h-screen py-8 pt-14 md:py-16">
+        <PostContent post={post} />
       </main>
     </div>
   );

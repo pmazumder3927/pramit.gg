@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "motion/react";
+import { motion } from "motion/react";
 import Image from "next/image";
 import { generateChaoticStyle, seededRandom, hexToRgb } from "../lib/chaotic-styles";
 import { useAlbumColor } from "../lib/use-album-color";
@@ -26,8 +21,6 @@ interface SpotifyPlaylist {
 interface ChaoticPlaylistCardProps {
   playlist: SpotifyPlaylist;
   index: number;
-  mouseX: ReturnType<typeof useMotionValue<number>>;
-  mouseY: ReturnType<typeof useMotionValue<number>>;
 }
 
 const TAPE_TONES = ["orange", "purple", "rust"] as const;
@@ -35,19 +28,11 @@ const TAPE_TONES = ["orange", "purple", "rust"] as const;
 export function ChaoticPlaylistCard({
   playlist,
   index,
-  mouseX,
-  mouseY,
 }: ChaoticPlaylistCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const style = useMemo(() => generateChaoticStyle(index + 50), [index]);
   const albumColor = useAlbumColor(playlist.imageUrl);
   const rgb = hexToRgb(albumColor);
-
-  const parallaxStrength = 10;
-  const x = useTransform(mouseX, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const y = useTransform(mouseY, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const springX = useSpring(x, { stiffness: 100, damping: 20 });
-  const springY = useSpring(y, { stiffness: 100, damping: 20 });
 
   // Size variants for the mixtape wall
   const sizeVariant = useMemo(() => {
@@ -82,11 +67,7 @@ export function ChaoticPlaylistCard({
         duration: 0.4,
         ease: [0.34, 1.56, 0.64, 1],
       }}
-      style={{
-        x: springX,
-        y: springY,
-        zIndex: isHovered ? 50 : 1,
-      }}
+      style={{ zIndex: isHovered ? 50 : 1 }}
       whileHover={{ scale: 1.04, rotate: 0, zIndex: 50 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

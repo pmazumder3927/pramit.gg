@@ -19,6 +19,10 @@ import sharp from "sharp";
 const DRAWING_CANVAS_WIDTH = 480;
 const DRAWING_CANVAS_HEIGHT = 320;
 
+// Keep in sync with app/lib/homepage-banner.ts — faint, overlapping reference so
+// the image-conditioned edit weaves the doodles instead of tracing them.
+const REFERENCE_STROKE_OPACITY = 0.55;
+
 type DrawingPoint = { x: number; y: number };
 type DrawingStroke = { points: DrawingPoint[]; color?: string; width?: number };
 
@@ -419,18 +423,22 @@ async function composeReferenceScattered(
     const row = Math.floor(i / cols);
     let x = Math.round(col * cellW + (cellW - targetW) / 2);
     let y = Math.round(row * cellH + (cellH - targetH) / 2);
-    const jitterX = Math.round((Math.random() - 0.5) * cellW * 0.6);
-    const jitterY = Math.round((Math.random() - 0.5) * cellH * 0.6);
+    const jitterX = Math.round((Math.random() - 0.5) * cellW * 0.9);
+    const jitterY = Math.round((Math.random() - 0.5) * cellH * 0.9);
     x = clamp(x + jitterX, 8, canvasWidth - targetW - 8);
     y = clamp(y + jitterY, 8, canvasHeight - targetH - 8);
 
-    // Light overlap check — nudge if too close to a previously placed sketch.
-    for (let attempt = 0; attempt < 6; attempt++) {
+    // Allow generous overlap (test only the inner ~30% cores) so the doodles
+    // intermingle into one field rather than reading as separated objects.
+    const inset = (r: { x: number; y: number; w: number; h: number }) => ({
+      x: r.x + r.w * 0.35,
+      y: r.y + r.h * 0.35,
+      w: r.w * 0.3,
+      h: r.h * 0.3,
+    });
+    for (let attempt = 0; attempt < 4; attempt++) {
       const conflict = usedRects.find((r) =>
-        rectsOverlap(
-          { x, y, w: targetW, h: targetH },
-          { x: r.x - 24, y: r.y - 24, w: r.w + 48, h: r.h + 48 },
-        ),
+        rectsOverlap(inset({ x, y, w: targetW, h: targetH }), inset(r)),
       );
       if (!conflict) break;
       x = clamp(
@@ -540,7 +548,7 @@ function strokesToSvg(strokes: DrawingStroke[]) {
           : 5;
       if (points.length === 1) {
         const p = points[0];
-        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}"/>`;
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}" fill-opacity="${REFERENCE_STROKE_OPACITY}"/>`;
       }
       const d = points
         .map((point, index) => {
@@ -548,7 +556,7 @@ function strokesToSvg(strokes: DrawingStroke[]) {
           return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
         })
         .join(" ");
-      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-opacity="${REFERENCE_STROKE_OPACITY}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     })
     .filter(Boolean)
     .join("");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, useMotionValue } from "motion/react";
+import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import useSWR, { preload } from "swr";
 import { useAlbumColor, preloadColors } from "@/app/lib/use-album-color";
 import {
@@ -65,6 +65,14 @@ export default function MusicClient() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
+
+  // Parallax is applied once per list (not per card): every card in a list used
+  // the same strength, so a single container transform reproduces the exact
+  // drift while running one spring instead of dozens. Hidden tabs don't paint.
+  const trackPX = useSpring(useTransform(mouseX, [0, 1], [-6, 6]), { stiffness: 150, damping: 20 });
+  const trackPY = useSpring(useTransform(mouseY, [0, 1], [-6, 6]), { stiffness: 150, damping: 20 });
+  const listPX = useSpring(useTransform(mouseX, [0, 1], [-10, 10]), { stiffness: 100, damping: 20 });
+  const listPY = useSpring(useTransform(mouseY, [0, 1], [-10, 10]), { stiffness: 100, damping: 20 });
   const [selectedTab, setSelectedTab] = useState<
     "recent" | "top" | "playlists"
   >("recent");
@@ -270,14 +278,12 @@ export default function MusicClient() {
           {visitedTabs.has("recent") && (
             <div className={selectedTab === "recent" ? "" : "hidden"}>
               <SheetHeading label="the rotation" sub="lately on repeat" />
-              <div className="space-y-2.5 md:space-y-3">
+              <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
                 {recentlyPlayed?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id + index}
                     track={track}
                     index={index}
-                    mouseX={mouseX}
-                    mouseY={mouseY}
                   />
                 ))}
                 {(!recentlyPlayed || recentlyPlayed.tracks.length === 0) && (
@@ -286,42 +292,41 @@ export default function MusicClient() {
                     message="No recently played tracks found."
                   />
                 )}
-              </div>
+              </motion.div>
             </div>
           )}
 
           {visitedTabs.has("top") && (
             <div className={selectedTab === "top" ? "" : "hidden"}>
               <SheetHeading label="heavy hitters" sub="my top of the moment" />
-              <div className="space-y-2.5 md:space-y-3">
+              <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
                 {topTracks?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id}
                     track={track}
                     index={index}
                     isTopTrack
-                    mouseX={mouseX}
-                    mouseY={mouseY}
                   />
                 ))}
                 {(!topTracks || topTracks.tracks.length === 0) && (
                   <EmptyState emoji="🏆" message="No top tracks found." />
                 )}
-              </div>
+              </motion.div>
             </div>
           )}
 
           {visitedTabs.has("playlists") && (
             <div className={selectedTab === "playlists" ? "" : "hidden"}>
               <SheetHeading label="the mixtape wall" sub="playlists i keep coming back to" />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]">
+              <motion.div
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
+                style={{ x: listPX, y: listPY }}
+              >
                 {playlists?.playlists.map((playlist, index) => (
                   <ChaoticPlaylistCard
                     key={playlist.id}
                     playlist={playlist}
                     index={index}
-                    mouseX={mouseX}
-                    mouseY={mouseY}
                   />
                 ))}
                 {(!playlists || playlists.playlists.length === 0) && (
@@ -329,7 +334,7 @@ export default function MusicClient() {
                     <EmptyState emoji="📀" message="No playlists found." />
                   </div>
                 )}
-              </div>
+              </motion.div>
             </div>
           )}
         </div>

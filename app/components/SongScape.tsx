@@ -208,11 +208,11 @@ export default function SongScape() {
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
       <svg className="h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" fill="none">
         <defs>
-          {/* hand-drawn roughen with a slow living boil */}
+          {/* hand-drawn roughen — static, so the browser computes it once and
+              caches it (an animated turbulence here repaints the whole viewport
+              every frame, which is far too expensive for a global backdrop) */}
           <filter id="ss-rough" x="-5%" y="-10%" width="110%" height="120%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="5" result="n">
-              <animate attributeName="baseFrequency" dur="12s" values="0.011;0.016;0.011" repeatCount="indefinite" />
-            </feTurbulence>
+            <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="5" result="n" />
             <feDisplacementMap in="SourceGraphic" in2="n" scale="7" />
           </filter>
         </defs>
@@ -250,7 +250,7 @@ export default function SongScape() {
               {ridges.map((rg, i) => {
                 const l = c.layers[i];
                 return (
-                  <g key={i} className={i === 0 ? "ss-drift" : undefined}>
+                  <g key={i}>
                     <path className="ss-fill" d={rg.area} style={{ fill: l.fill, fillOpacity: l.fillOp }} />
                     <polyline
                       className="ss-stroke"

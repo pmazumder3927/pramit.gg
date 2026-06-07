@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
-import PostContent from "./PostContent";
+import PostContent, { type PostNav } from "./PostContent";
 import { createPublicClient } from "@/utils/supabase/server";
 import { createMetadata } from "@/app/lib/metadata";
 import { Metadata } from "next";
@@ -32,6 +32,37 @@ const fetchPost = cache(async (identifier: string): Promise<Post | null> => {
     return null;
   }
 });
+
+// Adjacent published posts (one newer, one older) for end-of-entry navigation.
+const fetchNeighbors = cache(
+  async (
+    createdAt: string,
+  ): Promise<{ prev: PostNav | null; next: PostNav | null }> => {
+    try {
+      const supabase = createPublicClient();
+      const [{ data: newer }, { data: older }] = await Promise.all([
+        supabase
+          .from("posts")
+          .select("slug,title,type")
+          .eq("is_draft", false)
+          .gt("created_at", createdAt)
+          .order("created_at", { ascending: true })
+          .limit(1),
+        supabase
+          .from("posts")
+          .select("slug,title,type")
+          .eq("is_draft", false)
+          .lt("created_at", createdAt)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ]);
+      return { prev: newer?.[0] ?? null, next: older?.[0] ?? null };
+    } catch (error) {
+      console.error("Error fetching neighbors:", error);
+      return { prev: null, next: null };
+    }
+  },
+);
 
 // Pre-render all published posts at build time
 export async function generateStaticParams() {
@@ -93,12 +124,12 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
+  const { prev, next } = await fetchNeighbors(post.created_at);
+
   return (
     <div className="min-h-screen page-reveal">
-      <main className="relative z-10 min-h-screen px-4 py-10 pb-28 sm:px-6 md:px-8 md:py-16 md:pb-16">
-        <article className="mx-auto max-w-3xl">
-          <PostContent post={post} />
-        </article>
+      <main className="relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
+        <PostContent post={post} prev={prev} next={next} />
       </main>
     </div>
   );

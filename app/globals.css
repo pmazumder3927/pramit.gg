@@ -348,7 +348,33 @@
     --tw-prose-pre-bg: rgb(var(--surface-2));
     --tw-prose-th-borders: rgb(var(--line));
     --tw-prose-td-borders: rgb(var(--line) / 0.6);
+    hanging-punctuation: first last;
   }
+
+  /* Drop cap — wide screens only (protects the tighter mobile measure), and only
+     on a true leading paragraph: the p-renderer unwraps block-first content, so
+     media/heading/quote-first posts simply have no leading <p> to cap. */
+  @media (min-width: 1024px) {
+    .prose > p:first-of-type::first-letter {
+      float: left;
+      margin: 0.02em 0.09em 0 0;
+      font-family: var(--font-fraunces), Georgia, serif;
+      font-weight: 500;
+      font-size: 3.5em;
+      line-height: 0.74;
+      color: rgb(var(--accent-rust));
+    }
+  }
+
+  /* contents disclosure chevron */
+  .toc-chevron { transition: transform 0.2s ease; }
+  details[open] .toc-chevron { transform: rotate(180deg); }
+
+  /* the reading nib only "writes" when motion is welcome */
+  @media (prefers-reduced-motion: reduce) {
+    .ink-nib { display: none; }
+  }
+
   .prose table { background: rgb(var(--surface) / 0.6) !important; border: 1px solid rgb(var(--line)) !important; border-radius: 1rem !important; overflow: hidden !important; }
   .prose table th { background: rgb(var(--fg) / 0.06) !important; color: rgb(var(--fg)) !important; font-weight: 600 !important; border-bottom: 1px solid rgb(var(--line)) !important; }
   .prose table td { border-bottom: 1px solid rgb(var(--line) / 0.6) !important; color: rgb(var(--fg-soft)) !important; }

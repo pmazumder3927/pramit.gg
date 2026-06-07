@@ -1,9 +1,9 @@
 // ---- Post taxonomy: single source of truth ----
-// Four content forms that span the table. Each maps to one of the sketchbook
-// stamp tones (orange | purple | rust | ink), so badges, stamps, and tape all
-// stay in sync. Stored values are singular; filters show plurals.
+// Three content forms that span the table. Each maps to one of the sketchbook
+// stamp tones, so badges, stamps, and tape stay in sync. Stored values are
+// singular; filters show plurals.
 
-export const POST_TYPES = ["build", "study", "musing", "note"] as const;
+export const POST_TYPES = ["musing", "journey", "note"] as const;
 export type PostType = (typeof POST_TYPES)[number];
 
 export type PostTypeTone = "orange" | "purple" | "rust" | "ink";
@@ -18,26 +18,19 @@ export const POST_TYPE_META: Record<
     blurb: string; // one-line description (dashboard hint / tooltips)
   }
 > = {
-  build: {
-    label: "build",
-    plural: "builds",
-    tone: "orange",
-    badge: "bg-accent-orange/15 text-accent-orange",
-    blurb: "things i made — projects & implementation logs",
-  },
-  study: {
-    label: "study",
-    plural: "studies",
-    tone: "rust",
-    badge: "bg-accent-rust/15 text-accent-rust",
-    blurb: "explainers, teaching & research deep-dives",
-  },
   musing: {
     label: "musing",
     plural: "musings",
     tone: "purple",
     badge: "bg-accent-purple/15 text-accent-purple",
     blurb: "reflective, opinion & whimsical writing",
+  },
+  journey: {
+    label: "journey",
+    plural: "journeys",
+    tone: "orange",
+    badge: "bg-accent-orange/15 text-accent-orange",
+    blurb: "building & figuring things out — projects, deep-dives, logs",
   },
   note: {
     label: "note",

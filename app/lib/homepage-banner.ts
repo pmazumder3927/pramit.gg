@@ -3,6 +3,16 @@ import { toFile } from "openai/uploads";
 import sharp from "sharp";
 
 import {
+  analyzeNight,
+  assemblePrompt,
+  directNight,
+  parseRecentFamilies,
+  pickLens,
+  renderDeterministicProse,
+  stripLensTag,
+  type DirectorOut,
+} from "@/app/lib/banner-art-director";
+import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
   type DrawingStroke,
@@ -19,6 +29,11 @@ const DEFAULT_BANNER_QUALITY = "medium";
 // Cap how many sketches we feed into the reference grid; gpt-image-2 doesn't
 // need every last one, and the input image gets large fast.
 const MAX_REFERENCE_SKETCHES = 36;
+
+// The reference is deliberately faint so the image-conditioned edit reads the
+// doodles as a gestural score to weave, not a crisp stencil to trace. This is
+// the single highest-leverage lever for clean, abstract incorporation.
+const REFERENCE_STROKE_OPACITY = 0.55;
 
 export type SketchRecord = {
   id: string;
@@ -59,24 +74,43 @@ export async function generateHomepageBanner(
     bannerWidth,
     bannerHeight,
   );
-  const promptText = buildBannerPrompt(sketches);
 
   const client = new OpenAI({ apiKey });
+
+  // Pull the last few banners for two reasons: (1) the medium-family anti-repeat
+  // reads their hidden [lens:*] tags so we never repeat a genre three nights
+  // running, and (2) the same-day re-roll salt makes a manual "regenerate" land
+  // on a different lens while re-rendering an existing /collage row stays stable.
+  const recent = await fetchAllHomepageBanners(supabase, 8);
+  const today = new Date().toISOString().slice(0, 10);
+  const reRollSalt = recent.filter(
+    (b) => b.created_at?.slice(0, 10) === today,
+  ).length;
+
+  const promptText = await buildBannerPrompt(sketches, {
+    client,
+    recentPrompts: recent.map((b) => b.prompt),
+    reRollSalt,
+  });
+  // The [lens:*] tag is bookkeeping for tomorrow's anti-repeat — never send it
+  // to the image model.
+  const imagePrompt = stripLensTag(promptText);
 
   const referenceFile = await toFile(referencePng, "sketches.png", {
     type: "image/png",
   });
 
-  // The reference is a scattered (non-grid) layout of the contributor sketches
-  // on a pure-black canvas matching the output dimensions. The prompt asks the
-  // model to weave the subjects into a single cohesive constellation scene —
-  // pinpoint stars + ultra-thin hairlines on pure black, suitable for the
-  // screen-blend overlay in the procedural sky.
+  // The reference is a softened, overlapping scatter of the contributor sketches
+  // on a pure-black canvas matching the output dimensions — faint enough that the
+  // image-conditioned edit reads it as a gestural score, not a stencil to trace.
+  // buildBannerPrompt picks a fresh medium / composition / mood lens each night
+  // (see banner-art-director.ts), so the genre and palette vary instead of
+  // collapsing to one repeated nocturne.
   const response = await client.images.edit(
     {
       model: process.env.OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL,
       image: referenceFile,
-      prompt: promptText,
+      prompt: imagePrompt,
       size: (process.env.OPENAI_IMAGE_SIZE?.trim() ||
         DEFAULT_BANNER_SIZE) as "1536x1024",
       quality: (process.env.OPENAI_IMAGE_QUALITY?.trim() ||
@@ -200,33 +234,40 @@ async function fetchSketches(
   return (data ?? []) as SketchRecord[];
 }
 
-function buildBannerPrompt(sketches: SketchRecord[]) {
-  const subjects = Array.from(
-    new Set(
-      sketches
-        .map((s) => s.prompt?.trim())
-        .filter((p): p is string => Boolean(p && p.length > 0)),
-    ),
-  ).slice(0, 18);
+// Build the night's gpt-image-2 prompt via the "night curator" pipeline
+// (banner-art-director.ts): read deterministic signals from the doodles, lock a
+// curated medium x composition x mood x abstraction lens (seeded, signal-biased,
+// with a hard anti-repeat on recent nights), then either let a constrained
+// gpt-5.5 director write the night's fusion prose or fall back to deterministic
+// on-brand prose. Returns the FULL prompt *including* the hidden
+// [lens:*] tag; the caller strips it before the image call and stores the tagged
+// string so tomorrow can read the family back out.
+//
+// The art-director is on by default; set BANNER_ART_DIRECTOR=0 to ship the
+// deterministic deck alone (no extra LLM call).
+async function buildBannerPrompt(
+  sketches: SketchRecord[],
+  opts?: {
+    client?: OpenAI | null;
+    recentPrompts?: (string | null)[];
+    date?: Date;
+    reRollSalt?: number;
+  },
+): Promise<string> {
+  const date = opts?.date ?? new Date();
+  const analysis = analyzeNight(sketches);
+  const recentFamilies = parseRecentFamilies(opts?.recentPrompts ?? []);
+  const lens = pickLens(analysis, date, opts?.reRollSalt ?? 0, recentFamilies);
 
-  const subjectLine =
-    subjects.length > 0
-      ? `Subjects to incorporate (one per contributor): ${subjects.join("; ")}.`
-      : "";
+  const directorEnabled = process.env.BANNER_ART_DIRECTOR?.trim() !== "0";
 
-  // Painterly nocturne for the dedicated /collage page. The reference is a
-  // scattered (not gridded) layout of every contributor sketch on pure black.
-  // The model paints a cinematic moonlit landscape *around* those sketches,
-  // preserving their exact silhouettes and idiosyncrasies — the cat keeps its
-  // raised paw, the eye keeps its eyelashes and pink tear, etc. The scene
-  // wraps the contributors' actual marks rather than replacing them with
-  // polished stock illustrations.
-  return [
-    "A wide cinematic moonlit nocturne — one cohesive painted scene that incorporates every sketched subject from the reference as a natural element of the landscape.",
-    subjectLine,
-    "CRITICAL: each subject's silhouette must match the contributor's reference sketch as closely as possible — the SAME pose, SAME proportions, SAME quirky details. Do not normalize the cat into a stock cat; if the contributor drew it sitting upright with one paw raised and uneven whiskers, draw THAT cat. If the umbrella has a wobbly handle in the sketch, keep the wobbly handle. The scene should feel like the contributors' drawings have stepped into a painted world, retaining their personality.",
-    "Style: refined ink-and-watercolor wash. Deep indigo and midnight teal sky, soft amber moonlight, restrained palette. Atmospheric, late-night, intimate, slightly mysterious. Not cute, not children's-book — Apple-restrained painting craft.",
-  ].join(" ");
+  let out: DirectorOut | null = null;
+  if (directorEnabled && opts?.client) {
+    out = await directNight(analysis, lens, opts.client, recentFamilies);
+  }
+  if (!out) out = renderDeterministicProse(analysis, lens);
+
+  return assemblePrompt(out, lens);
 }
 
 async function composeReferenceScattered(
@@ -271,17 +312,18 @@ async function composeReferenceScattered(
     const row = Math.floor(i / cols);
     let x = Math.round(col * cellW + (cellW - targetW) / 2);
     let y = Math.round(row * cellH + (cellH - targetH) / 2);
-    const jitterX = Math.round((Math.random() - 0.5) * cellW * 0.6);
-    const jitterY = Math.round((Math.random() - 0.5) * cellH * 0.6);
+    const jitterX = Math.round((Math.random() - 0.5) * cellW * 0.9);
+    const jitterY = Math.round((Math.random() - 0.5) * cellH * 0.9);
     x = clamp(x + jitterX, 8, canvasWidth - targetW - 8);
     y = clamp(y + jitterY, 8, canvasHeight - targetH - 8);
 
-    for (let attempt = 0; attempt < 6; attempt++) {
+    // Allow generous overlap so the doodles intermingle into one field — only
+    // nudge apart when two sketches would almost completely stack (reads as a
+    // single blob). Each rect is inset to its inner ~30% core before testing,
+    // so partial overlap is permitted by design and the marks weave together.
+    for (let attempt = 0; attempt < 4; attempt++) {
       const conflict = usedRects.find((r) =>
-        rectsOverlap(
-          { x, y, w: targetW, h: targetH },
-          { x: r.x - 24, y: r.y - 24, w: r.w + 48, h: r.h + 48 },
-        ),
+        rectsOverlap(insetRect({ x, y, w: targetW, h: targetH }), insetRect(r)),
       );
       if (!conflict) break;
       x = clamp(
@@ -331,6 +373,17 @@ function rectsOverlap(
   );
 }
 
+// Shrink a rect to its inner ~30% core so the overlap test only fires on heavy
+// stacking — partial overlap between sketches is allowed (and desired).
+function insetRect(r: { x: number; y: number; w: number; h: number }) {
+  return {
+    x: r.x + r.w * 0.35,
+    y: r.y + r.h * 0.35,
+    w: r.w * 0.3,
+    h: r.h * 0.3,
+  };
+}
+
 function strokesToSvg(strokes: DrawingStroke[]) {
   const paths = strokes
     .map((stroke) => {
@@ -344,7 +397,7 @@ function strokesToSvg(strokes: DrawingStroke[]) {
 
       if (points.length === 1) {
         const p = points[0];
-        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}"/>`;
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(width / 2).toFixed(1)}" fill="${color}" fill-opacity="${REFERENCE_STROKE_OPACITY}"/>`;
       }
 
       const d = points
@@ -354,7 +407,7 @@ function strokesToSvg(strokes: DrawingStroke[]) {
         })
         .join(" ");
 
-      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="${d}" stroke="${color}" stroke-width="${width}" stroke-opacity="${REFERENCE_STROKE_OPACITY}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     })
     .filter(Boolean)
     .join("");

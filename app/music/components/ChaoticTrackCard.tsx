@@ -1,12 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "motion/react";
+import { memo, useState, useMemo } from "react";
+import { motion } from "motion/react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -32,8 +27,6 @@ interface ChaoticTrackCardProps {
   track: SpotifyTrack;
   index: number;
   isTopTrack?: boolean;
-  mouseX: ReturnType<typeof useMotionValue<number>>;
-  mouseY: ReturnType<typeof useMotionValue<number>>;
 }
 
 function formatTime(ms: number): string {
@@ -43,23 +36,15 @@ function formatTime(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
-export function ChaoticTrackCard({
+function ChaoticTrackCardImpl({
   track,
   index,
   isTopTrack = false,
-  mouseX,
-  mouseY,
 }: ChaoticTrackCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const style = useMemo(() => generateChaoticStyle(index), [index]);
   const albumColor = useAlbumColor(track.albumImageUrl);
   const rgb = hexToRgb(albumColor);
-
-  const parallaxStrength = 6;
-  const x = useTransform(mouseX, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const y = useTransform(mouseY, [0, 1], [-parallaxStrength, parallaxStrength]);
-  const springX = useSpring(x, { stiffness: 150, damping: 20 });
-  const springY = useSpring(y, { stiffness: 150, damping: 20 });
 
   // a liner-note tracklist row — every row is numbered, slightly rotated, on paper
   const num = (index + 1).toString().padStart(2, "0");
@@ -79,11 +64,7 @@ export function ChaoticTrackCard({
         duration: 0.4,
         ease: [0.34, 1.56, 0.64, 1],
       }}
-      style={{
-        x: springX,
-        y: springY,
-        zIndex: isHovered ? 50 : 1,
-      }}
+      style={{ zIndex: isHovered ? 50 : 1 }}
       whileHover={{ scale: 1.02, rotate: 0, zIndex: 50 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
