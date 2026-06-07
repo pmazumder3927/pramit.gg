@@ -6,39 +6,76 @@
   <title>Swerve Visualization</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Caveat:wght@500;600&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* ============================================================
+       Theme tokens — mirror pramit.gg's sketchbook palette.
+       :root = light (warm paper).  [data-theme="dark"] = night.
+       The iframe reads the parent page's .dark class at runtime
+       and flips data-theme to stay in sync with the site toggle.
+       ============================================================ */
     :root {
-      --bg: #000000;
-      --bg-secondary: #0a0a0a;
-      --grid: rgba(255, 255, 255, 0.06);
-      --grid-major: rgba(255, 255, 255, 0.12);
-      --chassis: rgba(255, 255, 255, 0.08);
-      --chassis-fill: rgba(10, 10, 12, 0.95);
-      --wheel: rgba(255, 255, 255, 0.06);
-      --wheel-stroke: rgba(255, 255, 255, 0.12);
-      --trail: rgba(255, 107, 61, 0.15);
-      --trans: #ff6b3d;
-      --rot: #7c77c6;
-      --meas: #4a9eff;
-      --skid: #ff375f;
-      --text: #52525b;
-      --text-light: #a1a1aa;
-      --glass-bg: rgba(0, 0, 0, 0.6);
-      --glass-border: rgba(255, 255, 255, 0.08);
+      --bg: #f4ecd8;            /* paper                */
+      --panel-bg: rgba(251, 246, 233, 0.82);
+      --panel-border: rgba(35, 32, 27, 0.14);
+      --panel-shadow: 4px 10px 28px -12px rgba(35, 32, 27, 0.30);
+      --tape: rgba(199, 86, 35, 0.18);
+      --tape-edge: rgba(199, 86, 35, 0.34);
+      --text: #7a7264;         /* ink-faint            */
+      --text-soft: #46413a;    /* ink-soft             */
+      --text-strong: #23201b;  /* ink                  */
+      --accent: #c75623;       /* burnt orange         */
+      --accent-soft: rgba(199, 86, 35, 0.16);
+      --skid-good: #c75623;
+      --skid-bad: #c0264a;
+      --track: rgba(35, 32, 27, 0.10);
+      --track-hover: rgba(35, 32, 27, 0.16);
+      --thumb-from: #fbf6e9;
+      --thumb-to: #e4d8ba;
+      --thumb-ring: rgba(35, 32, 27, 0.28);
+      --over-orange: rgba(199, 86, 35, 0.05);
+      --over-purple: rgba(91, 86, 168, 0.05);
+      --grain-opacity: 0.04;
+      --grain-blend: multiply;
+    }
+
+    [data-theme="dark"] {
+      --bg: #100f17;           /* deep indigo night    */
+      --panel-bg: rgba(33, 29, 32, 0.7);
+      --panel-border: rgba(242, 235, 222, 0.12);
+      --panel-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.6);
+      --tape: rgba(255, 140, 86, 0.14);
+      --tape-edge: rgba(255, 140, 86, 0.30);
+      --text: #8f877e;         /* fg-faint             */
+      --text-soft: #c7beb0;    /* fg-soft              */
+      --text-strong: #f2ebde;  /* chalk/cream          */
+      --accent: #ff8c56;       /* ember glow           */
+      --accent-soft: rgba(255, 140, 86, 0.18);
+      --skid-good: #ff8c56;
+      --skid-bad: #ff476b;
+      --track: rgba(242, 235, 222, 0.10);
+      --track-hover: rgba(242, 235, 222, 0.16);
+      --thumb-from: #efe7d6;
+      --thumb-to: #c8bca6;
+      --thumb-ring: rgba(0, 0, 0, 0.45);
+      --over-orange: rgba(255, 140, 86, 0.06);
+      --over-purple: rgba(171, 160, 247, 0.08);
+      --grain-opacity: 0.02;
+      --grain-blend: screen;
     }
 
     html, body {
       height: 100%;
       overflow: hidden;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      transition: background 0.5s ease;
     }
 
     .container {
@@ -47,12 +84,12 @@
       position: relative;
     }
 
-    /* Gradient overlays like homepage */
+    /* Soft accent wash, like the site body's themed radial overlays */
     .container::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 20% 30%, rgba(124, 119, 198, 0.04), transparent 50%);
+      background: radial-gradient(1100px 720px at 14% -8%, var(--over-orange), transparent 60%);
       pointer-events: none;
       z-index: 1;
     }
@@ -61,25 +98,20 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 80% 70%, rgba(255, 107, 61, 0.03), transparent 50%);
+      background: radial-gradient(1000px 700px at 92% 108%, var(--over-purple), transparent 62%);
       pointer-events: none;
       z-index: 1;
     }
 
-    /* Grain texture - hidden on mobile for performance */
+    /* Fine paper grain, blend mode flips by theme */
     .grain {
       position: fixed;
       inset: 0;
-      opacity: 0;
+      opacity: var(--grain-opacity);
       z-index: 100;
       pointer-events: none;
-      background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
-    }
-
-    @media (min-width: 768px) {
-      .grain {
-        opacity: 0.015;
-      }
+      mix-blend-mode: var(--grain-blend);
+      background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E");
     }
 
     canvas {
@@ -90,110 +122,203 @@
       z-index: 2;
     }
 
+    /* ---- Annotation panels: taped-in field-journal notes ---- */
     .legend {
       position: absolute;
-      bottom: 20px;
-      left: 20px;
+      bottom: 22px;
+      left: 22px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 9px;
       font-size: 12px;
       pointer-events: none;
       z-index: 10;
+      transform: rotate(-1deg);
     }
 
     .legend-item {
       display: flex;
       align-items: center;
       gap: 10px;
-      color: var(--text-light);
-      font-weight: 300;
-      letter-spacing: 0.01em;
+      color: var(--text-soft);
     }
 
     .legend-line {
-      width: 24px;
-      height: 2px;
-      border-radius: 1px;
-      box-shadow: 0 0 8px currentColor;
+      width: 26px;
+      height: 2.5px;
+      border-radius: 2px;
     }
 
     .legend-item .katex {
-      font-size: 13px;
-      opacity: 0.9;
+      font-size: 14px;
+      color: var(--text-soft);
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+    }
+
+    /* little strip of washi tape on the corner of taped notes */
+    .panel.taped::before {
+      content: '';
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      width: 60px;
+      height: 17px;
+      transform: translateX(-50%) rotate(-3deg);
+      background: var(--tape);
+      border-left: 1px dashed var(--tape-edge);
+      border-right: 1px dashed var(--tape-edge);
+      border-radius: 1px;
+      pointer-events: none;
     }
 
     .skid-badge {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.85);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 16px 20px;
+      top: 26px;
+      right: 24px;
+      padding: 16px 22px 14px;
       text-align: center;
       z-index: 10;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    }
-
-    @media (min-width: 768px) {
-      .skid-badge {
-        background: var(--glass-bg);
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-      }
+      transform: rotate(1.5deg);
     }
 
     .skid-value {
-      font-family: 'JetBrains Mono', 'SF Mono', monospace;
-      font-size: 32px;
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 34px;
       font-weight: 500;
       line-height: 1;
       letter-spacing: -0.02em;
+      transition: color 0.3s ease, text-shadow 0.3s ease;
     }
 
-    .skid-value.good {
-      color: var(--trans);
-      text-shadow: 0 0 20px rgba(255, 107, 61, 0.4);
-    }
-    .skid-value.bad {
-      color: var(--skid);
-      text-shadow: 0 0 20px rgba(255, 55, 95, 0.4);
-    }
+    .skid-value.good { color: var(--skid-good); }
+    .skid-value.bad  { color: var(--skid-bad); }
+    [data-theme="dark"] .skid-value.good { text-shadow: 0 0 22px rgba(255, 140, 86, 0.35); }
+    [data-theme="dark"] .skid-value.bad  { text-shadow: 0 0 22px rgba(255, 71, 107, 0.40); }
 
     .skid-label {
-      font-size: 10px;
+      font-family: 'Caveat', cursive;
+      font-size: 17px;
       color: var(--text);
-      margin-top: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      font-weight: 500;
+      margin-top: 4px;
+      letter-spacing: 0.01em;
     }
 
-    /* Sandbox controls */
+    /* ---- Sandbox controls ---- */
     .controls {
       position: absolute;
-      bottom: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.85);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 18px 20px;
+      bottom: 22px;
+      right: 22px;
+      padding: 14px 18px 16px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
       min-width: 200px;
       z-index: 10;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: min-width 0.25s ease, padding 0.25s ease;
     }
 
-    @media (min-width: 768px) {
-      .controls {
-        background: var(--glass-bg);
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-      }
+    .controls.collapsed {
+      min-width: 0;
+      padding: 10px 12px;
+      gap: 0;
     }
+
+    .controls.collapsed .controls-body { display: none; }
+
+    .controls-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .controls-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 2px;
+    }
+
+    .controls-title {
+      font-family: 'Caveat', cursive;
+      font-size: 19px;
+      color: var(--accent);
+      line-height: 1;
+      transform: rotate(-1.5deg);
+      transform-origin: left center;
+    }
+
+    .controls-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      flex: none;
+      border-radius: 7px;
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .controls-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .controls-toggle svg { transition: transform 0.25s ease; }
+    .controls.collapsed .controls-toggle svg { transform: rotate(180deg); }
+
+    /* one-tap presets — little washi-tape tags */
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 4px;
+    }
+
+    .preset {
+      font-family: 'Caveat', cursive;
+      font-size: 16px;
+      line-height: 1;
+      color: var(--text-soft);
+      background: var(--accent-soft);
+      border: 1px dashed var(--tape-edge);
+      border-radius: 7px;
+      padding: 5px 10px 4px;
+      cursor: pointer;
+      transition: transform 0.12s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .preset:hover { transform: translateY(-1px) rotate(-1.2deg); color: var(--accent); border-color: var(--accent); }
+    .preset:active { transform: translateY(0) scale(0.95); }
+
+    /* drag-to-drive hint — a hand-scrawled note */
+    .hint {
+      position: absolute;
+      top: 26px;
+      left: 26px;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      gap: 7px;
+      font-family: 'Caveat', cursive;
+      font-size: 19px;
+      color: var(--text);
+      pointer-events: none;
+      transform: rotate(-1.5deg);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .hint.hidden { opacity: 0; transform: translateY(-6px) rotate(-1.5deg); }
+
+    .hint svg { color: var(--accent); flex: none; }
 
     .control-row {
       display: flex;
@@ -202,69 +327,72 @@
     }
 
     .control-label {
-      font-size: 12px;
-      color: var(--text-light);
-      min-width: 50px;
-      font-weight: 300;
-    }
-
-    .control-label .katex {
-      font-size: 13px;
+      font-family: 'Caveat', cursive;
+      font-size: 17px;
+      line-height: 1;
+      color: var(--text-soft);
+      min-width: 54px;
     }
 
     input[type="range"] {
       flex: 1;
       -webkit-appearance: none;
+      appearance: none;
       height: 3px;
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--track);
       border-radius: 2px;
       outline: none;
       transition: background 0.2s ease;
     }
 
-    input[type="range"]:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
+    input[type="range"]:hover { background: var(--track-hover); }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       width: 16px;
       height: 16px;
-      background: linear-gradient(135deg, #fff 0%, #e0e0e0 100%);
+      background: linear-gradient(135deg, var(--thumb-from) 0%, var(--thumb-to) 100%);
+      border: 1px solid var(--panel-border);
       border-radius: 50%;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 2px 6px var(--thumb-ring);
       transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
 
-    input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.1);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    input[type="range"]::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      background: linear-gradient(135deg, var(--thumb-from) 0%, var(--thumb-to) 100%);
+      border: 1px solid var(--panel-border);
+      border-radius: 50%;
+      cursor: pointer;
     }
 
-    input[type="range"]::-webkit-slider-thumb:active {
-      transform: scale(0.95);
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.12);
+      box-shadow: 0 4px 10px var(--thumb-ring);
     }
+
+    input[type="range"]::-webkit-slider-thumb:active { transform: scale(0.95); }
 
     .control-value {
-      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: var(--text-light);
-      min-width: 48px;
+      color: var(--text);
+      min-width: 56px;
       text-align: right;
-      font-weight: 400;
       letter-spacing: -0.01em;
     }
 
     /* Animations */
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(10px) rotate(var(--r, 0deg)); }
+      to   { opacity: 1; }
     }
 
-    .legend, .skid-badge, .controls {
-      animation: fadeIn 0.6s ease-out;
-    }
+    .legend     { animation: fadeIn 0.6s ease-out backwards; --r: -1deg; }
+    .skid-badge { animation: fadeIn 0.6s ease-out 0.1s backwards; --r: 1.5deg; }
+    .controls   { animation: fadeIn 0.6s ease-out 0.15s backwards; }
   </style>
 </head>
 <body>
@@ -272,14 +400,125 @@
     <div class="grain"></div>
     <canvas id="canvas"></canvas>
     <div class="legend" id="legend"></div>
-    <div class="skid-badge" id="skidBadge" style="display: none;">
+    <div class="skid-badge panel taped" id="skidBadge" style="display: none;">
       <div class="skid-value good" id="skidValue">1.00</div>
-      <div class="skid-label">Skid Ratio</div>
+      <div class="skid-label">skid ratio</div>
     </div>
-    <div class="controls" id="controls" style="display: none;"></div>
+    <div class="controls panel" id="controls" style="display: none;"></div>
+    <div class="hint" id="hint">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>
+      </svg>
+      drag the robot to drive it
+    </div>
   </div>
 
   <script>
+    // ============================================
+    // Theme sync — same-origin iframe reads the host
+    // page's .dark class; falls back to localStorage
+    // and OS preference when standalone.
+    // ============================================
+    const ThemeSync = {
+      current: 'light',
+      listeners: [],
+      onChange(fn) { this.listeners.push(fn); },
+      _emit() { this.listeners.forEach(fn => fn(this.current)); },
+      _resolve() {
+        // 1) host page (same-origin parent)
+        try {
+          if (window.parent && window.parent !== window) {
+            return window.parent.document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+          }
+        } catch (e) { /* cross-origin — fall through */ }
+        // 2) shared localStorage key used by the site
+        try {
+          const t = localStorage.getItem('theme');
+          if (t === 'dark' || t === 'light') return t;
+        } catch (e) {}
+        // 3) OS preference
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      },
+      _set(t) {
+        if (t === this.current) return;
+        this.current = t;
+        document.documentElement.setAttribute('data-theme', t);
+        this._emit();
+      },
+      init() {
+        this.current = this._resolve();
+        document.documentElement.setAttribute('data-theme', this.current);
+        // Live-track the host's <html> class toggling.
+        try {
+          if (window.parent && window.parent !== window) {
+            const root = window.parent.document.documentElement;
+            new MutationObserver(() => this._set(this._resolve()))
+              .observe(root, { attributes: true, attributeFilter: ['class'] });
+          }
+        } catch (e) {}
+        // Fallbacks for the standalone case.
+        window.addEventListener('storage', e => { if (e.key === 'theme') this._set(this._resolve()); });
+        window.matchMedia('(prefers-color-scheme: dark)')
+          .addEventListener('change', () => this._set(this._resolve()));
+      }
+    };
+
+    // ============================================
+    // Canvas palettes (mirror the CSS tokens above)
+    // ============================================
+    const PALETTES = {
+      light: {
+        bg: '#f4ecd8',
+        gridMinor: 'rgba(166, 150, 116, 0.28)',
+        gridMajor: 'rgba(150, 134, 102, 0.40)',
+        axis: 'rgba(122, 114, 100, 0.42)',
+        chassisFrom: 'rgba(251, 246, 233, 0.96)',
+        chassisTo: 'rgba(232, 222, 198, 0.96)',
+        chassisStroke: 'rgba(35, 32, 27, 0.50)',
+        chassisShadow: 'rgba(35, 32, 27, 0.18)',
+        wheelFrom: 'rgba(239, 229, 205, 0.96)',
+        wheelTo: 'rgba(222, 209, 178, 0.96)',
+        wheelStroke: 'rgba(35, 32, 27, 0.38)',
+        wheelText: 'rgba(35, 32, 27, 0.62)',
+        trans: '#c75623',
+        rot: '#5b56a8',
+        meas: '#2f6fd0',
+        skid: '#c0264a',
+        trail: [
+          [0.0, 'rgba(199, 86, 35, 0)'],
+          [0.3, 'rgba(199, 86, 35, 0.10)'],
+          [1.0, 'rgba(199, 86, 35, 0.40)']
+        ],
+        direction: 'rgba(199, 86, 35, 0.85)',
+        glow: false
+      },
+      dark: {
+        bg: '#100f17',
+        gridMinor: 'rgba(255, 255, 255, 0.045)',
+        gridMajor: 'rgba(255, 255, 255, 0.09)',
+        axis: 'rgba(255, 255, 255, 0.12)',
+        chassisFrom: 'rgba(38, 34, 50, 0.96)',
+        chassisTo: 'rgba(22, 22, 30, 0.96)',
+        chassisStroke: 'rgba(242, 235, 222, 0.14)',
+        chassisShadow: 'rgba(0, 0, 0, 0.45)',
+        wheelFrom: 'rgba(44, 40, 56, 0.95)',
+        wheelTo: 'rgba(28, 26, 38, 0.95)',
+        wheelStroke: 'rgba(242, 235, 222, 0.16)',
+        wheelText: 'rgba(242, 235, 222, 0.55)',
+        trans: '#ff8c56',
+        rot: '#aba0f7',
+        meas: '#4a9eff',
+        skid: '#ff476b',
+        trail: [
+          [0.0, 'rgba(255, 140, 86, 0)'],
+          [0.3, 'rgba(255, 140, 86, 0.14)'],
+          [1.0, 'rgba(255, 140, 86, 0.5)']
+        ],
+        direction: 'rgba(255, 140, 86, 0.78)',
+        glow: true
+      }
+    };
+
     // ============================================
     // Scene configurations
     // ============================================
@@ -345,13 +584,18 @@
         this.trail = [];
         this.maxTrail = this.isMobile ? 250 : 300;
 
-        // Pre-cached gradients (created once in setup)
+        // Pre-cached gradients (created once per theme/resize)
         this.chassisGradient = null;
         this.wheelGradients = {};
 
         // Visibility state for pausing when off-screen
         this.isVisible = true;
         this.isPaused = false;
+
+        // Direct-manipulation state (sandbox only)
+        this.interactive = !!this.scene.showControls;
+        this.drag = null;       // active pointer drag
+        this.dragKnob = null;   // joystick knob position for rendering
 
         this.modules = [
           { id: 'FL', x: -1, y: -1 },
@@ -360,17 +604,36 @@
           { id: 'BR', x: 1, y: 1 }
         ];
 
+        // Theme-driven palette + vector colors
+        this.palette = PALETTES[ThemeSync.current];
         this.colors = {
-          trans: '#ff6b3d',
-          rot: '#7c77c6',
-          meas: '#4a9eff',
-          skid: '#ff375f'
+          trans: this.palette.trans,
+          rot: this.palette.rot,
+          meas: this.palette.meas,
+          skid: this.palette.skid
         };
+        ThemeSync.onChange(t => this.applyTheme(t));
 
         this.setup();
         this.buildLegend();
         this.buildControls();
         this.animate();
+      }
+
+      applyTheme(t) {
+        this.palette = PALETTES[t] || PALETTES.light;
+        this.colors = {
+          trans: this.palette.trans,
+          rot: this.palette.rot,
+          meas: this.palette.meas,
+          skid: this.palette.skid
+        };
+        this.createCachedGradients();
+        // Recolor the legend swatches to match the new palette.
+        this.scene.vectors.forEach(v => {
+          const line = document.querySelector(`#legend-line-${v}`);
+          if (line) line.style.background = this.colors[v];
+        });
       }
 
       setup() {
@@ -379,6 +642,7 @@
           const rect = this.canvas.getBoundingClientRect();
           this.canvas.width = rect.width * dpr;
           this.canvas.height = rect.height * dpr;
+          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
           this.ctx.scale(dpr, dpr);
           this.width = rect.width;
           this.height = rect.height;
@@ -390,6 +654,16 @@
 
         if (this.scene.showSkid) {
           document.getElementById('skidBadge').style.display = 'block';
+        }
+
+        // Direct manipulation: grab + drag the robot like a joystick.
+        if (this.interactive) {
+          this.attachDrag();
+          const hint = document.getElementById('hint');
+          if (hint) {
+            hint.style.display = 'flex';
+            setTimeout(() => this.hideHint(), 6500);
+          }
         }
 
         // Pause when tab is hidden
@@ -412,23 +686,112 @@
         }
       }
 
+      attachDrag() {
+        const c = this.canvas;
+        c.style.cursor = 'grab';
+        c.style.touchAction = 'none';
+
+        const pos = e => {
+          const r = c.getBoundingClientRect();
+          return { x: e.clientX - r.left, y: e.clientY - r.top };
+        };
+        const down = e => {
+          c.setPointerCapture?.(e.pointerId);
+          c.style.cursor = 'grabbing';
+          this.drag = true;
+          this.applyDrag(pos(e));
+          this.hideHint();
+          e.preventDefault();
+        };
+        const move = e => {
+          if (!this.drag) return;
+          this.applyDrag(pos(e));
+          e.preventDefault();
+        };
+        const up = () => {
+          this.drag = null;
+          this.dragKnob = null;
+          c.style.cursor = 'grab';
+        };
+        c.addEventListener('pointerdown', down);
+        c.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      }
+
+      applyDrag(point) {
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+        const dx = point.x - cx;
+        const dy = point.y - cy;
+        const maxR = 120;   // full-tilt radius in px
+        const maxV = 3;     // matches the slider range
+        const d = Math.hypot(dx, dy);
+        const clamp = d > maxR ? maxR / d : 1;
+
+        this.dragKnob = { x: cx + dx * clamp, y: cy + dy * clamp };
+        this.robot.vx = (dx * clamp / maxR) * maxV;
+        this.robot.vy = (dy * clamp / maxR) * maxV;
+        this.reflectControls();
+      }
+
+      hideHint() {
+        const h = document.getElementById('hint');
+        if (h) h.classList.add('hidden');
+      }
+
+      // Push current robot state back into the sliders + readouts.
+      reflectControls() {
+        if (!this.scene.showControls) return;
+        const set = (id, key, scale) => {
+          const sl = document.getElementById(`sl-${id}`);
+          const val = document.getElementById(`val-${id}`);
+          if (!sl || !val) return;
+          sl.value = Math.round(this.robot[key] / scale);
+          val.textContent = this.robot[key].toFixed(1);
+        };
+        set('vx', 'vx', 0.03);
+        set('vy', 'vy', 0.03);
+        set('omega', 'omega', 0.025);
+
+        const sl = document.getElementById('sl-slip');
+        const val = document.getElementById('val-slip');
+        if (sl && val) {
+          const v = Math.round(this.robot.slip);
+          sl.value = v;
+          val.textContent = v === 0 ? '0%' : (v > 0 ? `+${v}% drag` : `${v}% slip`);
+        }
+      }
+
+      applyPreset(name) {
+        const r = this.robot;
+        if (name === 'spin')        { r.vx = 0;   r.vy = 0; r.omega = 1.8; r.slip = 0; }
+        else if (name === 'strafe') { r.vx = 2.2; r.vy = 0; r.omega = 0;   r.slip = 0; }
+        else if (name === 'drift')  { r.vx = 2.2; r.vy = 0; r.omega = 0;   r.slip = 55; }
+        else if (name === 'reset')  { r.vx = 0; r.vy = 0; r.omega = 0; r.slip = 0; r.x = 0; r.y = 0; r.angle = 0; this.trail = []; }
+        this.reflectControls();
+        this.hideHint();
+      }
+
       createCachedGradients() {
         const { ctx } = this;
+        const p = this.palette;
         const half = 35;
 
         // Chassis gradient (static, doesn't change)
         this.chassisGradient = ctx.createLinearGradient(-half, -half, half, half);
-        this.chassisGradient.addColorStop(0, 'rgba(20, 20, 25, 0.95)');
-        this.chassisGradient.addColorStop(1, 'rgba(10, 10, 12, 0.95)');
+        this.chassisGradient.addColorStop(0, p.chassisFrom);
+        this.chassisGradient.addColorStop(1, p.chassisTo);
 
         // Wheel gradients for each module
+        this.wheelGradients = {};
         this.modules.forEach(m => {
           const rx = m.x * 28;
           const ry = m.y * 28;
           const r = 10;
           const grad = ctx.createRadialGradient(rx, ry, 0, rx, ry, r);
-          grad.addColorStop(0, 'rgba(40, 40, 50, 0.9)');
-          grad.addColorStop(1, 'rgba(25, 25, 32, 0.95)');
+          grad.addColorStop(0, p.wheelFrom);
+          grad.addColorStop(1, p.wheelTo);
           this.wheelGradients[m.id] = grad;
         });
       }
@@ -446,7 +809,7 @@
           if (labels[v]) {
             items.push(`
               <div class="legend-item">
-                <div class="legend-line" style="background: ${this.colors[v]}"></div>
+                <div class="legend-line" id="legend-line-${v}" style="background: ${this.colors[v]}"></div>
                 <span id="legend-${v}"></span>
               </div>
             `);
@@ -472,33 +835,55 @@
         controls.style.display = 'flex';
 
         controls.innerHTML = `
-          <div class="control-row">
-            <span class="control-label" id="lbl-vx"></span>
-            <input type="range" id="sl-vx" min="-100" max="100" value="50">
-            <span class="control-value" id="val-vx">1.5</span>
+          <div class="controls-head">
+            <div class="controls-title">playground</div>
+            <button class="controls-toggle" id="ctrlToggle" aria-label="collapse controls">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
           </div>
-          <div class="control-row">
-            <span class="control-label" id="lbl-vy"></span>
-            <input type="range" id="sl-vy" min="-100" max="100" value="0">
-            <span class="control-value" id="val-vy">0.0</span>
-          </div>
-          <div class="control-row">
-            <span class="control-label" id="lbl-omega"></span>
-            <input type="range" id="sl-omega" min="-100" max="100" value="20">
-            <span class="control-value" id="val-omega">0.5</span>
-          </div>
-          <div class="control-row">
-            <span class="control-label">slip</span>
-            <input type="range" id="sl-slip" min="-100" max="100" value="0">
-            <span class="control-value" id="val-slip">0%</span>
+          <div class="controls-body" id="ctrlBody">
+            <div class="preset-row">
+              <button class="preset" data-preset="spin">spin ↻</button>
+              <button class="preset" data-preset="strafe">strafe →</button>
+              <button class="preset" data-preset="drift">drift ~</button>
+              <button class="preset" data-preset="reset">reset ↺</button>
+            </div>
+            <div class="control-row">
+              <span class="control-label">x&nbsp;→</span>
+              <input type="range" id="sl-vx" min="-100" max="100" value="50">
+              <span class="control-value" id="val-vx">1.5</span>
+            </div>
+            <div class="control-row">
+              <span class="control-label">y&nbsp;↓</span>
+              <input type="range" id="sl-vy" min="-100" max="100" value="0">
+              <span class="control-value" id="val-vy">0.0</span>
+            </div>
+            <div class="control-row">
+              <span class="control-label">turn ↻</span>
+              <input type="range" id="sl-omega" min="-100" max="100" value="20">
+              <span class="control-value" id="val-omega">0.5</span>
+            </div>
+            <div class="control-row">
+              <span class="control-label">FR slip</span>
+              <input type="range" id="sl-slip" min="-100" max="100" value="0">
+              <span class="control-value" id="val-slip">0%</span>
+            </div>
           </div>
         `;
 
-        requestAnimationFrame(() => {
-          katex.render('v_x', document.getElementById('lbl-vx'));
-          katex.render('v_y', document.getElementById('lbl-vy'));
-          katex.render('\\omega', document.getElementById('lbl-omega'));
-        });
+        controls.querySelectorAll('.preset').forEach(b =>
+          b.addEventListener('click', () => this.applyPreset(b.dataset.preset))
+        );
+
+        // Collapse/expand so the panel doesn't crowd the robot.
+        const toggle = document.getElementById('ctrlToggle');
+        const setCollapsed = (c) => {
+          controls.classList.toggle('collapsed', c);
+          toggle.setAttribute('aria-label', c ? 'expand controls' : 'collapse controls');
+        };
+        toggle.addEventListener('click', () => setCollapsed(!controls.classList.contains('collapsed')));
+        // Start collapsed on small embeds where space is tight.
+        setCollapsed(this.isMobile || window.innerWidth < 640);
 
         const bind = (id, key, scale, suffix, isInt) => {
           const sl = document.getElementById(`sl-${id}`);
@@ -607,11 +992,12 @@
 
       render() {
         const { ctx, width, height } = this;
+        const p = this.palette;
         const cx = width / 2;
         const cy = height / 2;
 
-        // Clear to pure black
-        ctx.fillStyle = '#000000';
+        // Clear to themed paper/night
+        ctx.fillStyle = p.bg;
         ctx.fillRect(0, 0, width, height);
 
         // Camera follows robot - offset everything by robot position
@@ -675,9 +1061,7 @@
               cx + tailPt.x - camX, cy + tailPt.y - camY,
               cx + headPt.x - camX, cy + headPt.y - camY
             );
-            grad.addColorStop(0, 'rgba(255, 107, 61, 0)');
-            grad.addColorStop(0.3, 'rgba(255, 107, 61, 0.15)');
-            grad.addColorStop(1, 'rgba(255, 107, 61, 0.5)');
+            p.trail.forEach(([stop, color]) => grad.addColorStop(stop, color));
 
             ctx.fillStyle = grad;
             ctx.fill();
@@ -706,6 +1090,34 @@
           this.drawModuleVectors(m, screenX, screenY);
         });
 
+        // Joystick overlay while dragging the robot
+        if (this.dragKnob) {
+          ctx.save();
+          ctx.globalAlpha = 1;
+          // tilt-range ring
+          ctx.strokeStyle = p.axis;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 5]);
+          ctx.beginPath();
+          ctx.arc(cx, cy, 120, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // stick
+          ctx.strokeStyle = this.colors.trans;
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(this.dragKnob.x, this.dragKnob.y);
+          ctx.stroke();
+          // knob
+          ctx.fillStyle = this.colors.trans;
+          ctx.beginPath();
+          ctx.arc(this.dragKnob.x, this.dragKnob.y, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
         // Update skid badge
         if (this.scene.showSkid) {
           const ratio = this.calcSkidRatio(modules);
@@ -717,10 +1129,11 @@
 
       drawGrid(cx, cy) {
         const { ctx, width, height } = this;
+        const p = this.palette;
         const size = 60;
 
         // Batch all minor grid lines in a single path for performance
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.strokeStyle = p.gridMinor;
         ctx.lineWidth = 1;
         ctx.beginPath();
 
@@ -734,8 +1147,8 @@
         }
         ctx.stroke();
 
-        // Major axes - more prominent
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        // Major axes - more prominent (field-frame reference)
+        ctx.strokeStyle = p.axis;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(cx, 0);
@@ -747,28 +1160,29 @@
 
       drawChassis() {
         const { ctx } = this;
+        const p = this.palette;
         const size = 70;
         const half = size / 2;
 
         // Shadow - only on desktop
         if (this.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          ctx.fillStyle = p.chassisShadow;
           ctx.beginPath();
           ctx.roundRect(-half + 4, -half + 4, size, size, 10);
           ctx.fill();
         }
 
         // Main chassis with cached gradient
-        ctx.fillStyle = this.chassisGradient || 'rgba(15, 15, 18, 0.95)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 1;
+        ctx.fillStyle = this.chassisGradient || p.chassisFrom;
+        ctx.strokeStyle = p.chassisStroke;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.roundRect(-half, -half, size, size, 10);
         ctx.fill();
         ctx.stroke();
 
-        // Direction indicator - subtle accent
-        ctx.fillStyle = 'rgba(255, 107, 61, 0.6)';
+        // Direction indicator - accent triangle
+        ctx.fillStyle = p.direction;
         ctx.beginPath();
         ctx.moveTo(0, -half + 12);
         ctx.lineTo(-5, -half + 20);
@@ -779,18 +1193,19 @@
 
       drawWheel(m) {
         const { ctx } = this;
+        const p = this.palette;
         const r = 10;
 
-        // Glow for slipping wheel - only on desktop
-        if (m.isSlipping && this.enableShadows) {
+        // Glow for slipping wheel - only on desktop + dark theme
+        if (m.isSlipping && this.enableShadows && p.glow) {
           ctx.shadowColor = this.colors.skid;
           ctx.shadowBlur = 12;
         }
 
         // Use cached gradient
-        ctx.fillStyle = this.wheelGradients[m.id] || 'rgba(32, 32, 40, 0.95)';
-        ctx.strokeStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.12)';
-        ctx.lineWidth = m.isSlipping ? 2 : 1;
+        ctx.fillStyle = this.wheelGradients[m.id] || p.wheelFrom;
+        ctx.strokeStyle = m.isSlipping ? this.colors.skid : p.wheelStroke;
+        ctx.lineWidth = m.isSlipping ? 2 : 1.2;
         ctx.beginPath();
         ctx.arc(m.rx, m.ry, r, 0, Math.PI * 2);
         ctx.fill();
@@ -798,8 +1213,8 @@
 
         ctx.shadowBlur = 0;
 
-        ctx.fillStyle = m.isSlipping ? this.colors.skid : 'rgba(255, 255, 255, 0.5)';
-        ctx.font = '500 8px Inter';
+        ctx.fillStyle = m.isSlipping ? this.colors.skid : p.wheelText;
+        ctx.font = "600 8px 'Work Sans', sans-serif";
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(m.id, m.rx, m.ry);
@@ -813,14 +1228,14 @@
 
         // Translation vectors are already in global frame
         if (vectors.includes('trans') && Math.hypot(m.transVx, m.transVy) > 0.05) {
-          this.drawArrow(screenX, screenY, screenX + m.transVx * scale, screenY + m.transVy * scale, this.colors.trans, 2.5, 0.75);
+          this.drawArrow(screenX, screenY, screenX + m.transVx * scale, screenY + m.transVy * scale, this.colors.trans, 2.5, 0.78);
         }
 
         // Rotation vectors need to be transformed from robot-local to global frame
         if (vectors.includes('rot') && Math.hypot(m.rotVx, m.rotVy) > 0.05) {
           const globalRotVx = m.rotVx * cos - m.rotVy * sin;
           const globalRotVy = m.rotVx * sin + m.rotVy * cos;
-          this.drawArrow(screenX, screenY, screenX + globalRotVx * scale, screenY + globalRotVy * scale, this.colors.rot, 2.5, 0.75);
+          this.drawArrow(screenX, screenY, screenX + globalRotVx * scale, screenY + globalRotVy * scale, this.colors.rot, 2.5, 0.78);
         }
 
         // Measured = trans (global) + rot (transformed to global)
@@ -857,8 +1272,8 @@
         ctx.save();
         ctx.globalAlpha = alpha;
 
-        // Subtle glow - only on desktop
-        if (this.enableShadows) {
+        // Subtle glow - only on desktop + dark theme (clean ink on paper)
+        if (this.enableShadows && this.palette.glow) {
           ctx.shadowColor = color;
           ctx.shadowBlur = 8;
         }
@@ -901,6 +1316,7 @@
     }
 
     // Initialize with URL param
+    ThemeSync.init();
     const scene = new URLSearchParams(window.location.search).get('scene') || 'combined';
     document.addEventListener('DOMContentLoaded', () => new SwerveVis(scene));
   </script>

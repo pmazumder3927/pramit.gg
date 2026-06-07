@@ -1,9 +1,8 @@
 // Sketchbook paper backdrop. Pure CSS, theme-aware.
-// Light: two soft drifting watercolor washes (sunset orange + flower purple).
-// Dark: the washes recede to a faint warm/cool glow and a hand-drawn
-// constellation sketch (NightSketch) carries the nighttime atmosphere instead.
-// Sits behind all content (z-0).
-import NightSketch from "./NightSketch";
+// Faint corner washes give the paper warmth; the SongScape layer (a landscape
+// generated from whatever's playing) carries the real atmosphere in both
+// themes. Sits behind all content (z-0).
+import SongScape from "./SongScape";
 
 export default function PaperBackground() {
   return (
@@ -32,8 +31,8 @@ export default function PaperBackground() {
         style={{ background: "rgb(var(--accent-rust) / 0.16)" }}
       />
 
-      {/* nighttime constellation sketch (dark mode only) */}
-      <NightSketch />
+      {/* landscape generated from the now-playing track (both themes) */}
+      <SongScape />
     </div>
   );
 }
