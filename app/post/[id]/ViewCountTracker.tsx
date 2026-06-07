@@ -1,48 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-interface ViewCountTrackerProps {
-  postId: string;
-  initialViewCount: number;
-}
-
-export default function ViewCountTracker({
-  postId,
-  initialViewCount,
-}: ViewCountTrackerProps) {
+/**
+ * Increments the view count exactly once per page load and returns the live
+ * count. Kept as a hook so the number can be displayed in more than one place
+ * (header on mobile, margin on desktop) without firing the increment twice.
+ */
+export function useViewCount(postId: string, initialViewCount: number) {
   const [viewCount, setViewCount] = useState(initialViewCount);
-  const [hasIncremented, setHasIncremented] = useState(false);
+  const incremented = useRef(false);
 
   useEffect(() => {
-    // Only increment once per page load
-    if (hasIncremented) return;
+    if (incremented.current) return;
+    incremented.current = true;
 
-    const incrementViewCount = async () => {
+    const increment = async () => {
       try {
         const response = await fetch(`/api/posts/${postId}/increment-view`, {
           method: "POST",
         });
-
         if (response.ok) {
           const data = await response.json();
           setViewCount(data.view_count);
-          setHasIncremented(true);
         }
       } catch (error) {
         console.error("Error incrementing view count:", error);
       }
     };
 
-    // Use requestIdleCallback to fire when browser is idle, with setTimeout fallback
+    // Fire when the browser is idle, with a setTimeout fallback.
     if ("requestIdleCallback" in window) {
-      const id = requestIdleCallback(incrementViewCount);
+      const id = requestIdleCallback(increment);
       return () => cancelIdleCallback(id);
-    } else {
-      const timer = setTimeout(incrementViewCount, 200);
-      return () => clearTimeout(timer);
     }
-  }, [postId, hasIncremented]);
+    const timer = setTimeout(increment, 200);
+    return () => clearTimeout(timer);
+  }, [postId]);
 
-  return <span className="text-sm text-gray-500">{viewCount || 0} views</span>;
+  return viewCount;
+}
+
+/** Presentational view-count label (handwritten, theme-aware). */
+export function ViewCount({
+  count,
+  className = "",
+}: {
+  count: number;
+  className?: string;
+}) {
+  return (
+    <span className={`font-hand text-lg text-ink-faint ${className}`}>
+      {count || 0} {count === 1 ? "read" : "reads"}
+    </span>
+  );
 }

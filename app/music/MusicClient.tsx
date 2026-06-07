@@ -50,13 +50,16 @@ interface NowPlayingTrack {
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Preload all Spotify data as soon as this module is imported (i.e. when Next.js
-// prefetches the music page on link hover). This means the SWR cache is already
-// warm by the time the component mounts.
-preload("/api/spotify/now-playing", fetcher);
-preload("/api/spotify/recently-played", fetcher);
-preload("/api/spotify/top-tracks", fetcher);
-preload("/api/spotify/playlists", fetcher);
+// Preload all Spotify data as soon as this module is imported on the client
+// (i.e. when Next.js prefetches the music page on link hover) so the SWR cache
+// is already warm by the time the component mounts. Guarded to the browser —
+// on the server these relative URLs can't be parsed and would throw.
+if (typeof window !== "undefined") {
+  preload("/api/spotify/now-playing", fetcher);
+  preload("/api/spotify/recently-played", fetcher);
+  preload("/api/spotify/top-tracks", fetcher);
+  preload("/api/spotify/playlists", fetcher);
+}
 
 export default function MusicClient() {
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/client";
+import type { PostType } from "./postTypes";
 
 // Export the client creation function
 export const supabase = createClient();
@@ -18,7 +19,7 @@ export type Post = {
   updated_at: string;
   title: string;
   content: string;
-  type: "music" | "climb" | "note";
+  type: PostType;
   media_url?: string;
   tags: string[];
   accent_color: string;

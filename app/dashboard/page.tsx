@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { supabase, Post } from "@/app/lib/supabase";
+import {
+  POST_TYPES,
+  POST_TYPE_META,
+  PostType,
+  TONE_BUTTON_STYLES,
+  TONE_TEXT,
+} from "@/app/lib/postTypes";
 import { useRouter, useSearchParams } from "next/navigation";
 import EnhancedMarkdownEditor from "@/app/components/EnhancedMarkdownEditor";
 import SpotifyConnection from "@/app/components/SpotifyConnection";
@@ -23,7 +30,7 @@ function DashboardContent() {
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    type: "note" as "music" | "climb" | "note",
+    type: "note" as PostType,
     media_url: "",
     tags: "",
     is_draft: false,
@@ -203,14 +210,10 @@ function DashboardContent() {
     }
   };
 
+  // Media no longer drives the post type — the player auto-detects audio vs
+  // video from the URL, so a build/study can embed a video freely.
   const detectMediaType = (url: string) => {
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      setFormData({ ...formData, media_url: url, type: "climb" });
-    } else if (url.includes("soundcloud.com")) {
-      setFormData({ ...formData, media_url: url, type: "music" });
-    } else {
-      setFormData({ ...formData, media_url: url });
-    }
+    setFormData({ ...formData, media_url: url });
   };
 
   if (loading) {
@@ -482,35 +485,22 @@ function DashboardContent() {
                   </label>
                 </div>
 
-                <div className="flex gap-2">
-                  {(["note", "music", "climb"] as const).map((type) => {
-                    const styles = {
-                      note: {
-                        active: "bg-accent-orange text-pure-white border-accent-orange",
-                        idle: "bg-accent-orange/10 text-accent-orange border-accent-orange/30 hover:bg-accent-orange/20",
-                      },
-                      music: {
-                        active: "bg-accent-purple text-pure-white border-accent-purple",
-                        idle: "bg-accent-purple/10 text-accent-purple border-accent-purple/30 hover:bg-accent-purple/20",
-                      },
-                      climb: {
-                        active: "bg-accent-rust text-pure-white border-accent-rust",
-                        idle: "bg-accent-rust/10 text-accent-rust border-accent-rust/30 hover:bg-accent-rust/20",
-                      },
-                    }[type];
+                <div className="flex flex-wrap gap-2">
+                  {POST_TYPES.map((type) => {
+                    const meta = POST_TYPE_META[type];
+                    const styles = TONE_BUTTON_STYLES[meta.tone];
                     const active = formData.type === type;
                     return (
                       <button
                         key={type}
                         type="button"
-                        onClick={() =>
-                          setFormData({ ...formData, type: type as any })
-                        }
+                        title={meta.blurb}
+                        onClick={() => setFormData({ ...formData, type })}
                         className={`px-3 py-1 rounded-full text-sm transition-all border ${
                           active ? styles.active : styles.idle
                         }`}
                       >
-                        {type}
+                        {meta.label}
                       </button>
                     );
                   })}
@@ -537,11 +527,7 @@ function DashboardContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {posts.map((post, i) => {
             const typeColor =
-              post.type === "music"
-                ? "text-accent-purple"
-                : post.type === "climb"
-                ? "text-accent-rust"
-                : "text-accent-orange";
+              TONE_TEXT[(POST_TYPE_META[post.type] ?? POST_TYPE_META.note).tone];
             return (
             <motion.div
               key={post.id}

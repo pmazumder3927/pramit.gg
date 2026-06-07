@@ -2,6 +2,12 @@ import { createAdminClient } from "@/utils/supabase/admin";
 
 const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
 
+// In-memory cache of the access token for this server instance. The token is
+// valid for ~1h, so this lets getAccessToken() skip the Supabase read on the
+// overwhelming majority of calls (now-playing is polled every few seconds).
+let cachedToken: { access_token: string; expires_at_ms: number } | null = null;
+const TOKEN_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
+
 interface SpotifyTokens {
   access_token: string;
   refresh_token: string;
@@ -115,6 +121,13 @@ async function refreshAccessToken(
  * This is the main function to use in API routes
  */
 export async function getAccessToken(): Promise<string> {
+  const nowMs = Date.now();
+
+  // Fast path: a still-valid token cached in this server instance — no DB hit.
+  if (cachedToken && cachedToken.expires_at_ms - TOKEN_BUFFER_MS > nowMs) {
+    return cachedToken.access_token;
+  }
+
   const stored = await getStoredTokens();
 
   if (!stored) {
@@ -123,12 +136,12 @@ export async function getAccessToken(): Promise<string> {
     );
   }
 
-  // Check if token is expired (with 5 minute buffer)
-  const now = new Date();
-  const bufferMs = 5 * 60 * 1000; // 5 minutes
-  const isExpired = stored.expires_at.getTime() - bufferMs < now.getTime();
-
-  if (!isExpired) {
+  // Stored token still valid — cache it in memory and return.
+  if (stored.expires_at.getTime() - TOKEN_BUFFER_MS > nowMs) {
+    cachedToken = {
+      access_token: stored.access_token,
+      expires_at_ms: stored.expires_at.getTime(),
+    };
     return stored.access_token;
   }
 
@@ -146,6 +159,11 @@ export async function getAccessToken(): Promise<string> {
     refresh_token: tokenResponse.refresh_token || stored.refresh_token,
     expires_at,
   });
+
+  cachedToken = {
+    access_token: tokenResponse.access_token,
+    expires_at_ms: expires_at.getTime(),
+  };
 
   return tokenResponse.access_token;
 }
@@ -194,6 +212,11 @@ export async function exchangeCodeForTokens(
     refresh_token: tokenResponse.refresh_token,
     expires_at,
   });
+
+  cachedToken = {
+    access_token: tokenResponse.access_token,
+    expires_at_ms: expires_at.getTime(),
+  };
 }
 
 /**
@@ -212,6 +235,7 @@ export async function isSpotifyConnected(): Promise<boolean> {
  * Disconnect Spotify (remove stored credentials)
  */
 export async function disconnectSpotify(): Promise<void> {
+  cachedToken = null;
   const supabase = createAdminClient();
   await supabase.from("spotify_credentials").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 }

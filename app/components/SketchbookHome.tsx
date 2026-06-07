@@ -4,22 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Post, analyzeContent } from "@/app/lib/supabase";
+import { POST_TYPE_META, POST_TYPE_FILTERS } from "@/app/lib/postTypes";
 import { useNowPlayingContext } from "@/app/components/NowPlayingContext";
 import { ChaosDecor, Tape, Stamp, Doodle } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
-
-const TYPE_META: Record<Post["type"], { label: string; cls: string }> = {
-  note: { label: "note", cls: "bg-accent-orange/15 text-accent-orange" },
-  music: { label: "music", cls: "bg-accent-purple/15 text-accent-purple" },
-  climb: { label: "climb", cls: "bg-accent-rust/15 text-accent-rust" },
-};
-
-const FILTERS: { key: "all" | Post["type"]; label: string }[] = [
-  { key: "all", label: "everything" },
-  { key: "note", label: "writing" },
-  { key: "music", label: "sound" },
-  { key: "climb", label: "climbing" },
-];
 
 // evergreen, owner-editable
 const CURRENTLY = [
@@ -285,7 +273,7 @@ export default function SketchbookHome({
           </div>
           {/* filter chips */}
           <div className="flex flex-wrap gap-2.5">
-            {FILTERS.map((f) => {
+            {POST_TYPE_FILTERS.map((f) => {
               const active = filter === f.key;
               return (
                 <button
@@ -311,7 +299,7 @@ export default function SketchbookHome({
         ) : (
           <div className="mt-9 grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((post) => {
-              const meta = TYPE_META[post.type] ?? TYPE_META.note;
+              const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
               const { readingTime, previewText } = analyzeContent(
                 post.content || "",
               );
@@ -331,7 +319,7 @@ export default function SketchbookHome({
                     <ChaosDecor chaos={c} />
                     <div className="mb-2.5 flex items-center justify-between gap-2">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.cls}`}
+                        className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
                       >
                         {meta.label}
                       </span>

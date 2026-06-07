@@ -7,6 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import { Post } from "@/app/lib/supabase";
+import { POST_TYPE_META } from "@/app/lib/postTypes";
 import Link from "next/link";
 import { formatDistanceToNow, format } from "date-fns";
 import Image from "next/image";
@@ -33,14 +34,9 @@ interface PostContentProps {
   post: Post;
 }
 
-const TYPE_TONE: Record<Post["type"], "orange" | "purple" | "rust"> = {
-  note: "orange",
-  music: "purple",
-  climb: "rust",
-};
-
 export default function PostContent({ post }: PostContentProps) {
-  const tone = TYPE_TONE[post.type] ?? "orange";
+  const tone = (POST_TYPE_META[post.type] ?? POST_TYPE_META.note).tone;
+  const isAudio = !!post.media_url && /soundcloud\.com/.test(post.media_url);
 
   return (
     <div>
@@ -95,7 +91,7 @@ export default function PostContent({ post }: PostContentProps) {
           <div className="relative mb-14 rounded-md border border-line bg-paper-2/70 p-3 shadow-paper">
             <Tape tone={tone} rotate={-5} className="-top-3 left-8" />
             <Tape tone={tone} rotate={5} className="-top-3 right-8" />
-            {post.type === "music" ? (
+            {isAudio ? (
               <ReactPlayer
                 url={post.media_url}
                 width="100%"
@@ -107,11 +103,11 @@ export default function PostContent({ post }: PostContentProps) {
                   },
                 }}
               />
-            ) : post.type === "climb" ? (
+            ) : (
               <div className="relative aspect-video overflow-hidden rounded">
                 <ReactPlayer url={post.media_url} width="100%" height="100%" controls playing={false} />
               </div>
-            ) : null}
+            )}
           </div>
         )}
 

@@ -11,7 +11,18 @@ const CACHE_HEADERS = {
   "Cache-Control": "public, s-maxage=3, stale-while-revalidate=8",
 };
 
+// Now-playing reflects a single (the owner's) account, so it's the same for
+// every visitor. A short in-memory cache coalesces many clients polling every
+// few seconds into roughly one upstream Spotify call per TTL window, instead of
+// one per request — the clients interpolate the playhead locally between fetches.
+const NOW_PLAYING_TTL_MS = 4000;
+let payloadCache: { at: number; body: Record<string, unknown> } | null = null;
+
 export async function GET() {
+  if (payloadCache && Date.now() - payloadCache.at < NOW_PLAYING_TTL_MS) {
+    return NextResponse.json(payloadCache.body, { headers: CACHE_HEADERS });
+  }
+
   try {
     const access_token = await getAccessToken();
 
@@ -28,21 +39,20 @@ export async function GET() {
       const nowPlaying = await nowPlayingResponse.json();
 
       if (nowPlaying.is_playing) {
-        return NextResponse.json(
-          {
-            isPlaying: true,
-            title: nowPlaying.item.name,
-            artist: nowPlaying.item.artists
-              .map((artist: any) => artist.name)
-              .join(", "),
-            album: nowPlaying.item.album.name,
-            albumImageUrl: nowPlaying.item.album.images[0]?.url,
-            songUrl: nowPlaying.item.external_urls.spotify,
-            progress: nowPlaying.progress_ms,
-            duration: nowPlaying.item.duration_ms,
-          },
-          { headers: CACHE_HEADERS }
-        );
+        const body = {
+          isPlaying: true,
+          title: nowPlaying.item.name,
+          artist: nowPlaying.item.artists
+            .map((artist: any) => artist.name)
+            .join(", "),
+          album: nowPlaying.item.album.name,
+          albumImageUrl: nowPlaying.item.album.images[0]?.url,
+          songUrl: nowPlaying.item.external_urls.spotify,
+          progress: nowPlaying.progress_ms,
+          duration: nowPlaying.item.duration_ms,
+        };
+        payloadCache = { at: Date.now(), body };
+        return NextResponse.json(body, { headers: CACHE_HEADERS });
       }
     }
 
@@ -59,36 +69,38 @@ export async function GET() {
       const lastTrack = recentlyPlayed.items[0];
 
       if (lastTrack) {
-        return NextResponse.json(
-          {
-            isPlaying: false,
-            title: lastTrack.track.name,
-            artist: lastTrack.track.artists
-              .map((artist: any) => artist.name)
-              .join(", "),
-            album: lastTrack.track.album.name,
-            albumImageUrl: lastTrack.track.album.images[0]?.url,
-            songUrl: lastTrack.track.external_urls.spotify,
-            playedAt: lastTrack.played_at,
-          },
-          { headers: CACHE_HEADERS }
-        );
+        const body = {
+          isPlaying: false,
+          title: lastTrack.track.name,
+          artist: lastTrack.track.artists
+            .map((artist: any) => artist.name)
+            .join(", "),
+          album: lastTrack.track.album.name,
+          albumImageUrl: lastTrack.track.album.images[0]?.url,
+          songUrl: lastTrack.track.external_urls.spotify,
+          playedAt: lastTrack.played_at,
+        };
+        payloadCache = { at: Date.now(), body };
+        return NextResponse.json(body, { headers: CACHE_HEADERS });
       }
     }
 
-    return NextResponse.json(
-      {
-        isPlaying: false,
-        title: "nothing",
-        artist: "",
-        album: "",
-        albumImageUrl: null,
-        songUrl: null,
-      },
-      { headers: CACHE_HEADERS }
-    );
+    const body = {
+      isPlaying: false,
+      title: "nothing",
+      artist: "",
+      album: "",
+      albumImageUrl: null,
+      songUrl: null,
+    };
+    payloadCache = { at: Date.now(), body };
+    return NextResponse.json(body, { headers: CACHE_HEADERS });
   } catch (error) {
     console.error("Spotify API error:", error);
+    // Don't cache errors — serve the last good payload if we have one.
+    if (payloadCache) {
+      return NextResponse.json(payloadCache.body, { headers: CACHE_HEADERS });
+    }
     return NextResponse.json(
       {
         isPlaying: false,
