@@ -3,7 +3,7 @@
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import Image from "next/image";
 import { hexToRgb, adjustBrightness } from "../lib/chaotic-styles";
-import { Doodle, HandNote } from "@/app/components/sketchbook";
+import { Doodle } from "@/app/components/sketchbook";
 
 interface NowPlayingTrack {
   isPlaying: boolean;
@@ -65,21 +65,19 @@ export function ChaoticNowPlaying({
       style={{ x: springX, y: springY }}
       className="relative mx-auto mb-16 max-w-3xl md:mb-24"
     >
-      {/* handwritten margin label */}
-      <HandNote tone="purple" rotate={-8} className="absolute -left-1 -top-7 z-30 text-2xl md:-left-5 md:text-3xl">
-        on the deck —
-      </HandNote>
-
-      {/* pop-art starburst badge */}
-      <div className="absolute -right-3 -top-7 z-30 h-[5.5rem] w-[5.5rem] rotate-6 md:-right-7 md:h-24 md:w-24">
+      {/* pop-art starburst badge — the single status label */}
+      <div className="absolute -right-4 -top-9 z-30 h-24 w-24 rotate-6 md:-right-8 md:-top-10 md:h-28 md:w-28">
         <svg viewBox="-50 -50 100 100" className="h-full w-full" style={{ filter: "drop-shadow(2px 3px 0 rgb(var(--fg) / 0.5))" }}>
           <polygon points={BURST} fill={accentColor} stroke="rgb(var(--fg))" strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
-        <span
-          className="absolute inset-0 grid -rotate-3 place-items-center px-2 text-center font-mono text-[0.5rem] font-bold uppercase leading-[1.15] tracking-wider md:text-[0.6rem]"
-          style={{ color: onAlbum }}
-        >
-          {nowPlaying.isPlaying ? "now playing" : "last played"}
+        {/* label is held to the burst's inner circle so it never hits a spike */}
+        <span className="absolute inset-0 grid place-items-center">
+          <span
+            className="block w-[56%] -rotate-3 text-center font-mono text-[0.58rem] font-extrabold uppercase leading-[1.05] tracking-tight md:text-[0.72rem]"
+            style={{ color: onAlbum }}
+          >
+            {nowPlaying.isPlaying ? "now playing" : "last played"}
+          </span>
         </span>
       </div>
 
@@ -136,21 +134,16 @@ export function ChaoticNowPlaying({
 
           {/* Track info */}
           <div className="flex flex-1 flex-col text-center md:text-left">
-            <div className="mb-2 flex items-center justify-center gap-2.5 md:justify-start">
-              {nowPlaying.isPlaying ? (
+            {nowPlaying.isPlaying && (
+              <div className="mb-3 flex justify-center md:justify-start">
                 <span className="eq-bars" aria-label="now playing">
                   <span style={{ animationDelay: "0s", background: accentColor }} />
                   <span style={{ animationDelay: "0.2s", background: accentColor }} />
                   <span style={{ animationDelay: "0.4s", background: accentColor }} />
                   <span style={{ animationDelay: "0.15s", background: accentColor }} />
                 </span>
-              ) : (
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(var(--fg-faint))" }} />
-              )}
-              <span className="font-hand text-xl -rotate-1" style={{ color: accentColor }}>
-                {nowPlaying.isPlaying ? "spinning right now" : "last on the deck"}
-              </span>
-            </div>
+              </div>
+            )}
 
             <motion.h2
               className="font-serif text-3xl font-semibold leading-[0.98] tracking-tight text-ink md:text-[2.7rem]"

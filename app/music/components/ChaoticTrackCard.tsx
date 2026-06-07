@@ -116,7 +116,8 @@ function getTrackSkin(seed: string, albumColor: string): Skin {
       bgImage: `linear-gradient(115deg, rgba(${rgb.r},${rgb.g},${rgb.b},0.24), transparent 60%, rgb(var(--accent-purple) / 0.10))`,
       borderClass: "border", borderColor: LINE, text: INK, sub: SUB, faint: FAINT,
       shadowRest: SOFT_REST, shadowHover: SOFT_HOVER,
-      spine: true, hoverAccent: albumColor, artBorder: LINE, texture: true,
+      // no paper texture here — its backgroundImage would clobber the gradient
+      spine: true, hoverAccent: albumColor, artBorder: LINE, texture: false,
     };
   }
   // notebook — dashed, untextured-paper feel, no shadow
@@ -194,10 +195,13 @@ function ChaoticTrackCardImpl({
         <div
           className={`relative overflow-hidden rounded-[3px] px-3 py-3 pl-4 transition-all duration-300 md:px-5 md:py-4 md:pl-6 ${skin.borderClass}`}
           style={{
-            background: skin.bg,
-            backgroundImage: skin.bgImage,
-            borderColor: skin.borderColor,
+            backgroundColor: skin.bg,
+            // exactly one of these sets backgroundImage (gradient OR texture),
+            // never both — mixing them with `background` triggers React's
+            // shorthand/longhand conflict warning.
+            ...(skin.bgImage ? { backgroundImage: skin.bgImage } : {}),
             ...(skin.texture ? paperTextureStyle(chaosFor(seed).paper) : {}),
+            borderColor: skin.borderColor,
             boxShadow: isHovered ? skin.shadowHover : skin.shadowRest,
           }}
         >

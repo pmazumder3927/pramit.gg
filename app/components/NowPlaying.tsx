@@ -53,8 +53,9 @@ export default function NowPlaying() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [expanded]);
 
-  // homepage shows its own "now spinning" card; nothing to show without a track
-  if (pathname === "/" || !track) return null;
+  // homepage and /music both show their own now-playing UI, so the floating
+  // pill would just duplicate it there; nothing to show without a track either.
+  if (pathname === "/" || pathname.startsWith("/music") || !track) return null;
 
   const onAlbum = onColor(albumColor);
   const elapsed = track.isPlaying ? tick - baseRef.current.at : 0;

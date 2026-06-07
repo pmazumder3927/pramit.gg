@@ -2,7 +2,7 @@
 // Faint corner washes give the paper warmth; the SongScape layer (a landscape
 // generated from whatever's playing) carries the real atmosphere in both
 // themes. Sits behind all content (z-0).
-import SongScape from "./SongScape";
+import SongScapeSwitch from "./SongScapeSwitch";
 
 export default function PaperBackground() {
   return (
@@ -53,8 +53,9 @@ export default function PaperBackground() {
         style={{ background: "rgb(var(--accent-rust) / 0.16)" }}
       />
 
-      {/* landscape generated from the now-playing track (both themes) */}
-      <SongScape />
+      {/* backdrop generated from the now-playing track (both themes).
+          mountain by default; ?scape=ink switches to the Sumi-no-Mizu variant. */}
+      <SongScapeSwitch />
     </div>
   );
 }
