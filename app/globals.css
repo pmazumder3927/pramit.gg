@@ -37,32 +37,38 @@
   color-scheme: light;
 }
 
+/* -------------------------------------------------------------------------
+   NIGHTTIME — "Midnight studio": warm sketchbook seen by lamplight at night.
+   The deep canvas cools to indigo-night so the page reads as a dark sky;
+   cards stay warm so they float like lamplit paper on the desk; accents
+   glow like embers (orange) and moonlight (lavender).
+   ------------------------------------------------------------------------- */
 .dark {
-  --bg: 26 22 19;             /* #1a1613 warm near-black  */
-  --surface: 38 32 27;        /* #26201b warm card        */
-  --surface-2: 32 27 22;      /* #201b16                  */
-  --fg: 240 233 218;          /* #f0e9da chalk/cream      */
-  --fg-soft: 200 190 172;     /* #c8beac                  */
-  --fg-faint: 150 140 124;    /* #968c7c                  */
-  --line: 70 61 50;           /* #463d32 warm line        */
-  --accent-orange: 255 122 69;/* #ff7a45 glowing sunset   */
-  --accent-purple: 155 149 230;/*#9b95e6 glowing flower   */
-  --accent-rust: 224 122 78;  /* #e07a4e                  */
+  --bg: 16 15 23;             /* #100f17 deep indigo night      */
+  --surface: 33 29 32;        /* #211d20 warm lamplit card      */
+  --surface-2: 24 22 30;      /* #16161e cool recessed surface  */
+  --fg: 242 235 222;          /* #f2ebde chalk/cream            */
+  --fg-soft: 199 190 176;     /* #c7beb0                        */
+  --fg-faint: 143 135 126;    /* #8f877e                        */
+  --line: 64 58 68;           /* #3a3a44 cool violet hairline   */
+  --accent-orange: 255 140 86;/* #ff8c56 ember glow             */
+  --accent-purple: 171 160 247;/*#aba0f7 moonlight lavender     */
+  --accent-rust: 232 132 90;  /* #e8845a                        */
   --album-rgb: var(--accent-orange);
 
-  --gray-50: 240 233 218;
-  --gray-100: 240 233 218;
-  --gray-200: 221 213 197;
-  --gray-300: 200 190 172;
-  --gray-400: 169 159 141;
-  --gray-500: 138 128 113;
-  --gray-600: 107 98 83;
-  --gray-700: 77 69 57;
-  --gray-800: 50 44 36;
-  --gray-900: 34 29 24;
-  --gray-950: 22 19 16;
+  --gray-50: 242 235 222;
+  --gray-100: 234 227 214;
+  --gray-200: 215 207 195;
+  --gray-300: 195 187 175;
+  --gray-400: 165 156 147;
+  --gray-500: 134 126 118;
+  --gray-600: 103 96 92;
+  --gray-700: 73 68 70;
+  --gray-800: 47 43 48;
+  --gray-900: 30 27 33;
+  --gray-950: 19 18 25;
 
-  --grain-opacity: 0.05;
+  --grain-opacity: 0.055;
   color-scheme: dark;
 }
 
@@ -93,6 +99,17 @@
       radial-gradient(1100px 640px at 92% 108%, rgb(var(--accent-purple) / 0.06), transparent 62%);
     background-attachment: fixed;
     transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  /* Nighttime: a desk-lamp glow spilling from the top, an answering purple
+     pool at the lower right, and a vignette that lets the night close in at
+     the edges so the page feels lit rather than merely dark. */
+  .dark body {
+    background-image:
+      radial-gradient(1200px 760px at 50% -14%, rgb(var(--accent-orange) / 0.085), transparent 56%),
+      radial-gradient(960px 640px at 6% 2%, rgb(var(--accent-orange) / 0.05), transparent 60%),
+      radial-gradient(1100px 760px at 96% 106%, rgb(var(--accent-purple) / 0.10), transparent 60%),
+      radial-gradient(150% 130% at 50% 38%, transparent 52%, rgb(6 6 11 / 0.6) 100%);
   }
 
   ::selection { @apply bg-accent-orange/25 text-ink; }
@@ -179,6 +196,23 @@
     transform: translateY(-4px) rotate(0deg);
     box-shadow: 4px 10px 24px -8px rgb(var(--fg) / 0.28);
     border-color: rgb(var(--fg) / 0.22);
+  }
+  /* At night a light-colored shadow only hazes the card — give it a real
+     drop-shadow into the dark, a faint warm rim along the top edge so it
+     catches the lamp, and an ember glow when lifted. */
+  .dark .sketch-card {
+    border-color: rgb(var(--line) / 0.85);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--fg) / 0.045),
+      0 2px 8px -6px rgb(0 0 0 / 0.6),
+      0 12px 30px -14px rgb(0 0 0 / 0.75);
+  }
+  .dark .sketch-card:hover {
+    border-color: rgb(var(--fg) / 0.2);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--fg) / 0.07),
+      0 18px 44px -18px rgb(0 0 0 / 0.85),
+      0 0 34px -12px rgb(var(--accent-orange) / 0.22);
   }
 
   /* a strip of "tape" for taped cards */

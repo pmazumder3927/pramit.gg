@@ -196,11 +196,11 @@ export default function MusicClient() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <span className="inline-block -rotate-2 font-hand text-2xl text-accent-purple md:text-3xl">
+              <span className="block -rotate-2 font-hand text-2xl text-accent-purple md:text-3xl">
                 what i&apos;m listening to
               </span>
 
-              <div className="relative mx-auto mt-1 inline-block">
+              <div className="relative mx-auto mt-2 inline-block">
                 <h1 className="font-serif text-6xl font-medium tracking-tight text-ink md:text-8xl">
                   music
                 </h1>

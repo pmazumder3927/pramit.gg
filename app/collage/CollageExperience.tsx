@@ -151,7 +151,7 @@ export default function CollageExperience({
             className="absolute right-2 -top-4 h-6 w-6 md:right-10"
             strokeWidth={2}
           />
-          <span className="mb-1 inline-block -rotate-2 font-hand text-2xl text-accent-rust">
+          <span className="mb-1 block -rotate-2 font-hand text-2xl text-accent-rust">
             pinned to the wall —
           </span>
           <h1 className="relative inline-block font-serif text-5xl md:text-7xl lg:text-8xl font-medium tracking-tight text-ink">
