@@ -37,7 +37,11 @@ function NowSpinningCard() {
   const playing = track?.isPlaying;
 
   return (
-    <div className="relative rounded-xl border border-line bg-card p-4 shadow-paper" style={{ rotate: "1.2deg" }}>
+    <Link
+      href="/music"
+      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1"
+      style={{ rotate: "1.2deg" }}
+    >
       <Tape tone="orange" rotate={-6} className="-top-3 left-6" width={64} />
       <div className="mb-3 flex items-center justify-between">
         <span className="font-hand text-xl" style={{ color: "rgb(var(--album-rgb))" }}>
@@ -70,7 +74,10 @@ function NowSpinningCard() {
           </div>
         </div>
       </div>
-    </div>
+      <span className="mt-3 flex items-center justify-end gap-1 font-hand text-base text-ink-faint transition-colors group-hover:text-accent-rust">
+        wander into the music →
+      </span>
+    </Link>
   );
 }
 
