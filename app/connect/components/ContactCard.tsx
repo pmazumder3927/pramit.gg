@@ -53,21 +53,21 @@ END:VCARD`;
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
-        className="glass-dark backdrop-blur-3xl border border-white/10 rounded-3xl p-8 md:p-12 mb-8"
+        className="tape sketch-card relative -rotate-[0.6deg] p-8 md:p-12 mb-8 [--tape-rot:4deg]"
       >
         <div className="text-center mb-8">
-          <div className="w-24 h-24 md:w-32 md:h-32 mx-auto mb-6 rounded-full bg-gradient-to-br from-accent-orange/20 to-accent-purple/20 border border-white/10 flex items-center justify-center">
-            <span className="text-4xl md:text-5xl font-light">PM</span>
+          <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-[42%_58%_55%_45%/52%_45%_55%_48%] border-[1.8px] border-ink/70 bg-gradient-to-br from-accent-orange/20 to-accent-purple/20 shadow-[3px_4px_0_rgb(var(--accent-orange)/0.35)] md:h-32 md:w-32">
+            <span className="font-serif text-4xl font-medium text-ink md:text-5xl">PM</span>
           </div>
 
-          <h2 className="text-2xl md:text-3xl font-light text-white mb-2">
+          <h2 className="font-serif text-2xl md:text-3xl font-medium text-ink mb-2">
             {contactInfo.name}
           </h2>
-          <p className="text-gray-400 text-lg font-light mb-4">
+          <p className="font-hand text-xl text-accent-rust mb-4">
             {contactInfo.title}
           </p>
 
-          <div className="space-y-3 text-gray-300">
+          <div className="space-y-3 text-ink-soft">
             <div className="flex items-center justify-center gap-3">
               <svg
                 className="w-5 h-5 text-accent-orange"
@@ -108,7 +108,7 @@ END:VCARD`;
         <div className="flex justify-center mb-8">
           <motion.button
             onClick={() => setShowQRCode(!showQRCode)}
-            className="glass backdrop-blur-3xl border border-white/10 rounded-2xl p-4 text-white font-light hover:bg-white/5 transition-all duration-300 hover:scale-105"
+            className="rounded-xl border-[1.6px] border-line bg-card p-4 font-serif text-ink shadow-paper transition-all duration-300 hover:border-accent-orange/50 hover:shadow-paper-lg"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -152,7 +152,7 @@ END:VCARD`;
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="text-center text-gray-500 text-sm font-light mt-4"
+                className="mt-4 text-center font-hand text-base text-ink-faint"
               >
                 scan to share this page
               </motion.p>
@@ -164,7 +164,7 @@ END:VCARD`;
         <motion.button
           onClick={downloadVCard}
           disabled={isDownloading}
-          className="w-full glass backdrop-blur-3xl border border-white/20 rounded-2xl p-4 text-white font-light hover:bg-white/10 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-sketch btn-sketch-solid w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
@@ -200,7 +200,7 @@ END:VCARD`;
                 />
               </svg>
             )}
-            <span>{isDownloading ? "Downloading..." : "Download Contact"}</span>
+            <span>{isDownloading ? "downloading..." : "download contact"}</span>
           </div>
         </motion.button>
       </motion.div>
@@ -210,7 +210,7 @@ END:VCARD`;
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
-        className="text-center text-gray-400 text-sm font-light"
+        className="text-center font-hand text-lg text-ink-faint"
       >
         <p>download to instantly add me to your contacts on any device</p>
       </motion.div>

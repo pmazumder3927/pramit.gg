@@ -67,7 +67,7 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-8"
+            className="sketch-card p-8"
           >
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="w-16 h-16 relative">
@@ -86,17 +86,17 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
                 </svg>
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-light text-white mb-2">
-                  {title || "Interactive Plotly Graph"}
+                <h3 className="font-serif text-lg font-medium text-ink mb-2">
+                  {title || "interactive plotly graph"}
                 </h3>
-                <p className="text-sm text-gray-400 mb-4">
-                  Click to load interactive visualization
+                <p className="text-sm text-ink-soft mb-4">
+                  click to load interactive visualization
                 </p>
                 <button
                   onClick={() => setShowGraph(true)}
-                  className="px-6 py-2 bg-accent-orange/20 hover:bg-accent-orange/30 text-accent-orange rounded-full transition-colors duration-200 font-medium"
+                  className="px-6 py-2 bg-accent-orange/15 hover:bg-accent-orange/25 text-accent-orange border border-accent-orange/30 rounded-full transition-colors duration-200 font-medium"
                 >
-                  Load Graph
+                  load graph
                 </button>
               </div>
             </div>
@@ -109,21 +109,21 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="bg-gradient-to-br from-charcoal-black/90 to-void-black/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden relative"
+          className="sketch-card overflow-hidden relative"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-white/10">
-            <h3 className="text-sm font-medium text-gray-300">
-              {title || "Plotly Visualization"}
+          <div className="flex items-center justify-between p-4 border-b border-line">
+            <h3 className="text-sm font-medium text-ink-soft">
+              {title || "plotly visualization"}
             </h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsExpanded(true)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 hover:bg-ink/10 rounded-lg transition-colors"
                 title="Enter fullscreen"
               >
                 <svg
-                  className="w-5 h-5 text-gray-400"
+                  className="w-5 h-5 text-ink-soft"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -143,19 +143,19 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
           <div className="relative" style={{ height }}>
             {/* Loading overlay */}
             {!isIframeLoaded && !error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+              <div className="absolute inset-0 flex items-center justify-center bg-pure-white z-10">
                 <div className="text-center">
                   <div className="w-12 h-12 border-4 border-accent-orange/30 border-t-accent-orange rounded-full animate-spin mb-4"></div>
-                  <p className="text-gray-600">Loading visualization...</p>
+                  <p className="text-[#6b5d52]">loading visualization...</p>
                 </div>
               </div>
             )}
 
             {error ? (
-              <div className="flex items-center justify-center h-full p-8">
+              <div className="flex items-center justify-center h-full p-8 bg-card">
                 <div className="text-center">
                   <svg
-                    className="w-12 h-12 text-red-500 mx-auto mb-4"
+                    className="w-12 h-12 text-accent-rust mx-auto mb-4"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -167,14 +167,14 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
                       d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <p className="text-gray-400">Failed to load graph</p>
+                  <p className="text-ink-soft">failed to load graph</p>
                 </div>
               </div>
             ) : (
               <iframe
                 ref={iframeRef}
                 src={getProxyUrl(src)}
-                className="w-full h-full border-0 bg-white"
+                className="w-full h-full border-0 bg-pure-white"
                 onLoad={handleLoad}
                 onError={handleError}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -202,20 +202,20 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-4 z-[9999] bg-gradient-to-br from-charcoal-black to-void-black border border-white/10 rounded-2xl overflow-hidden flex flex-col"
+            className="fixed inset-4 z-[9999] bg-card border border-line rounded-2xl overflow-hidden flex flex-col shadow-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
-              <h3 className="text-sm font-medium text-gray-300">
-                {title || "Plotly Visualization"}
+            <div className="flex items-center justify-between p-4 border-b border-line shrink-0">
+              <h3 className="text-sm font-medium text-ink-soft">
+                {title || "plotly visualization"}
               </h3>
               <button
                 onClick={() => setIsExpanded(false)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 hover:bg-ink/10 rounded-lg transition-colors"
                 title="Exit fullscreen"
               >
                 <svg
-                  className="w-5 h-5 text-gray-400"
+                  className="w-5 h-5 text-ink-soft"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -233,10 +233,10 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
             {/* Graph Container */}
             <div className="relative flex-1 min-h-0">
               {error ? (
-                <div className="flex items-center justify-center h-full p-8">
+                <div className="flex items-center justify-center h-full p-8 bg-card">
                   <div className="text-center">
                     <svg
-                      className="w-12 h-12 text-red-500 mx-auto mb-4"
+                      className="w-12 h-12 text-accent-rust mx-auto mb-4"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -248,13 +248,13 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
                         d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    <p className="text-gray-400">Failed to load graph</p>
+                    <p className="text-ink-soft">failed to load graph</p>
                   </div>
                 </div>
               ) : (
                 <iframe
                   src={getProxyUrl(src)}
-                  className="w-full h-full border-0 bg-white"
+                  className="w-full h-full border-0 bg-pure-white"
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                   title={title || "Plotly Graph"}
                 />

@@ -23,7 +23,7 @@ export default function LoadingSpinner({
   if (!shouldShow) return null;
 
   const containerClass = fullscreen
-    ? "fixed inset-0 bg-gradient-to-br from-void-black via-charcoal-black to-void-black flex items-center justify-center z-50"
+    ? "fixed inset-0 bg-gradient-to-br from-paper via-paper-2 to-paper flex items-center justify-center z-50"
     : "flex items-center justify-center relative";
 
   return (

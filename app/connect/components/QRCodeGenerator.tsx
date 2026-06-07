@@ -47,13 +47,13 @@ export default function QRCodeGenerator({
   if (isLoading) {
     return (
       <div
-        className={`${className} flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl`}
+        className={`${className} flex items-center justify-center rounded-xl border-[1.6px] border-line bg-card`}
         style={{ width: size, height: size }}
       >
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full"
+          className="h-6 w-6 rounded-full border-2 border-accent-orange/60 border-t-transparent"
         />
       </div>
     );
@@ -64,7 +64,7 @@ export default function QRCodeGenerator({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
-      className={`${className} overflow-hidden rounded-2xl border border-white/10`}
+      className={`${className} overflow-hidden rounded-xl border-[1.6px] border-ink/70 bg-pure-white p-1.5 shadow-paper`}
       style={{ width: size, height: size }}
     >
       {qrCodeDataUrl ? (
@@ -73,12 +73,12 @@ export default function QRCodeGenerator({
           alt="QR Code"
           width={size}
           height={size}
-          className="w-full h-full object-cover"
+          className="h-full w-full object-cover"
           style={{ imageRendering: "pixelated" }}
         />
       ) : (
-        <div className="w-full h-full bg-white/5 flex items-center justify-center">
-          <span className="text-gray-500 text-xs">QR Error</span>
+        <div className="flex h-full w-full items-center justify-center bg-card">
+          <span className="text-xs text-ink-faint">QR Error</span>
         </div>
       )}
     </motion.div>

@@ -50,66 +50,75 @@ export function generateChaoticStyle(index: number): ChaoticStyle {
   return { rotation, offsetX, offsetY, variant, scale };
 }
 
-// Get variant styles based on accent color
+// Get variant styles based on accent color.
+// All variants render as warm "sketch cards" that read in both light + dark.
+// The album-derived accentColor is used only as a personal tint, never as the
+// card surface, so contrast holds regardless of theme.
 export function getVariantStyles(variant: CardVariant, accentColor: string) {
   const rgb = hexToRgb(accentColor);
-  const rgbaLight = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
-  const rgbaMed = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
+  const rgbaTint = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.10)`;
+  const rgbaTintHover = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`;
+  const rgbaBorder = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.45)`;
+
+  // Shared sketchbook surface: warm raised card on paper, ink-wash border.
+  const paperShadow = "2px 5px 16px -6px rgb(var(--fg) / 0.30)";
+  const paperShadowHover = "6px 12px 30px -10px rgb(var(--fg) / 0.32)";
 
   switch (variant) {
     case "neon":
+      // accent-outlined card — uses the album tint as a hand-drawn ring
       return {
-        bg: "bg-void-black",
+        bg: "bg-card",
         border: `border-2`,
-        borderColor: accentColor,
-        shadow: `0 0 20px ${rgbaLight}`,
-        hoverShadow: `0 0 30px ${rgbaMed}`,
+        borderColor: rgbaBorder,
+        shadow: `0 0 0 1px ${rgbaTint}, ${paperShadow}`,
+        hoverShadow: `0 0 0 1px ${rgbaTintHover}, ${paperShadowHover}`,
       };
     case "brutalist":
+      // bold offset-shadow card, still on warm paper with an ink border
       return {
-        bg: "",
-        bgColor: accentColor,
-        textColor: "#000",
-        border: "border-4 border-black",
-        shadow: "8px 8px 0px 0px rgba(0,0,0,1)",
-        hoverShadow: "12px 12px 0px 0px rgba(0,0,0,1)",
+        bg: "bg-card",
+        border: "border-2 border-line",
+        shadow: "5px 5px 0 0 rgb(var(--line))",
+        hoverShadow: "8px 8px 0 0 rgb(var(--accent-orange) / 0.55)",
       };
     case "inverted":
+      // contrast card — the alternate paper surface
       return {
-        bg: "bg-white",
-        textColor: "#000",
-        border: "border-2 border-black",
-        shadow: "6px 6px 0px 0px rgba(0,0,0,1)",
-        hoverShadow: "10px 10px 0px 0px rgba(0,0,0,1)",
+        bg: "bg-paper-2",
+        border: "border border-line",
+        shadow: paperShadow,
+        hoverShadow: paperShadowHover,
       };
     case "glassy":
       return {
-        bg: "bg-white/10",
-        border: "border border-white/20",
-        shadow: "",
-        hoverShadow: "",
+        bg: "bg-card/70 backdrop-blur-sm",
+        border: "border border-line",
+        shadow: paperShadow,
+        hoverShadow: paperShadowHover,
       };
     case "outlined":
+      // sketchy dashed card — very "notebook"
       return {
-        bg: "bg-transparent",
-        border: "border-2 border-dashed border-white/30",
+        bg: "bg-paper-2/50",
+        border: "border-2 border-dashed border-line",
         shadow: "",
-        hoverShadow: "",
+        hoverShadow: paperShadowHover,
       };
     case "accent":
       return {
-        bg: "",
-        bgGradient: `linear-gradient(135deg, ${rgbaLight}, transparent, rgba(124, 119, 198, 0.2))`,
-        border: "border border-white/10",
-        shadow: "",
-        hoverShadow: `0 25px 50px -12px ${rgbaLight}`,
+        bg: "bg-card",
+        bgGradient: `linear-gradient(135deg, ${rgbaTint}, transparent 55%, rgba(124, 119, 198, 0.12))`,
+        border: "border border-line",
+        shadow: paperShadow,
+        hoverShadow: `0 18px 44px -16px ${rgbaTintHover}`,
       };
     default:
       return {
-        bg: "bg-gradient-to-br from-charcoal-black/95 via-charcoal-black/80 to-void-black/95",
-        border: "border border-white/5",
-        shadow: "",
-        hoverShadow: "",
+        bg: "bg-card",
+        border: "border border-line",
+        shadow: paperShadow,
+        hoverShadow: paperShadowHover,
       };
   }
 }

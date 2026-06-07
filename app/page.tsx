@@ -1,10 +1,9 @@
 import { Post } from "@/app/lib/supabase";
-import AnimatedHomePage from "@/app/components/AnimatedHomePage";
-import AnimatedHero from "@/app/components/AnimatedHero";
+import SketchbookHome from "@/app/components/SketchbookHome";
+import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
 import { createPublicClient } from "@/utils/supabase/server";
-import Link from "next/link";
 
-async function fetchPosts() {
+async function fetchPosts(): Promise<Post[]> {
   try {
     // Use public client (no cookies) to enable static generation/ISR
     const supabase = createPublicClient();
@@ -28,45 +27,29 @@ async function fetchPosts() {
   }
 }
 
+async function fetchBanner() {
+  try {
+    const supabase = createPublicClient();
+    return await fetchLatestHomepageBanner(supabase);
+  } catch (error) {
+    console.error("Error fetching banner:", error);
+    return null;
+  }
+}
+
 // Enable ISR with 60 second revalidation
 export const revalidate = 60;
 
 export default async function Home() {
-  const allPosts = await fetchPosts();
-
-  // Set first 3 posts as featured for horizontal scroll
-  const featuredPosts = allPosts.slice(0, 3);
-  const posts = allPosts.slice(3);
+  const [posts, banner] = await Promise.all([fetchPosts(), fetchBanner()]);
 
   return (
     <div className="min-h-screen overflow-x-hidden page-reveal">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      <main className="relative z-10 min-h-screen">
-
-        {/* Hero Section */}
-        <AnimatedHero />
-
-        {/* Animated Posts Content */}
-        <AnimatedHomePage posts={posts} featuredPosts={featuredPosts} />
-
-        {/* Footer */}
-        <footer className="mt-24 pb-24 md:pb-16">
-          <div className="max-w-7xl mx-auto px-6 md:px-8">
-            <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
-              <Link
-                href="/connect"
-                className="hover:text-white transition-colors duration-300 font-light"
-              >
-                Connect
-              </Link>
-              <div className="w-1 h-1 bg-gray-700 rounded-full" />
-              <span className="font-light">© 2025 pramit mazumder</span>
-            </div>
-          </div>
-        </footer>
-      </main>
+      <SketchbookHome
+        posts={posts}
+        bannerImage={banner?.image_url ?? null}
+        sketchCount={banner?.sketch_count ?? 0}
+      />
     </div>
   );
 }

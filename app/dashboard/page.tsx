@@ -215,12 +215,13 @@ function DashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-2 border-cyber-orange border-t-transparent rounded-full"
+          className="w-8 h-8 border-2 border-accent-orange border-t-transparent rounded-full"
         />
+        <p className="font-hand text-xl text-ink-soft">opening the sketchbook...</p>
       </div>
     );
   }
@@ -233,8 +234,13 @@ function DashboardContent() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl md:text-4xl font-light mb-2">dashboard</h1>
-          <p className="text-gray-400">welcome back, {user?.email}</p>
+          <p className="font-hand text-2xl text-accent-orange -rotate-1 mb-1">
+            behind the scenes
+          </p>
+          <h1 className="font-serif text-3xl md:text-4xl font-medium mb-2 text-ink">
+            dashboard
+          </h1>
+          <p className="text-ink-soft">welcome back, {user?.email}</p>
         </motion.header>
 
         {/* Spotify Connection */}
@@ -251,24 +257,24 @@ function DashboardContent() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+          className="sketch-card mb-8 p-5"
         >
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-gray-500">
-                Private Tooling
+              <p className="font-hand text-lg tracking-wide text-accent-purple">
+                private tooling
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
+              <h2 className="mt-1 font-serif text-xl font-medium text-ink">
                 its 3 am
               </h2>
-              <p className="mt-2 text-sm text-gray-400">
-                Late-night music curation — review, sequence, and shape playlists.
+              <p className="mt-2 text-sm text-ink-soft">
+                late-night music curation — review, sequence, and shape playlists.
               </p>
             </div>
 
             <Link
               href="/music/manage"
-              className="inline-flex items-center justify-center rounded-full bg-cyber-orange px-5 py-2.5 text-sm font-medium text-black transition hover:bg-opacity-90"
+              className="inline-flex items-center justify-center rounded-full border-[1.8px] border-accent-purple px-5 py-2.5 text-sm font-medium text-accent-purple transition hover:bg-accent-purple/10"
             >
               its 3 am
             </Link>
@@ -288,7 +294,7 @@ function DashboardContent() {
               setShowCreateForm(true);
             }
           }}
-          className="w-full md:w-auto px-6 py-3 bg-cyber-orange text-black rounded-lg hover:bg-opacity-90 transition-all mb-8"
+          className="btn-sketch-solid mb-8 w-full md:w-auto justify-center"
         >
           {showCreateForm
             ? editingPost
@@ -303,15 +309,15 @@ function DashboardContent() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             onSubmit={handleSubmit}
-            className="bg-deep-graphite rounded-lg p-6 mb-8"
+            className="sketch-card p-6 mb-8"
           >
-            <div className="mb-4">
-              <h2 className="text-xl font-medium">
-                {editingPost ? "Edit Post" : "Create New Post"}
+            <div className="mb-5">
+              <h2 className="font-serif text-xl font-medium text-ink">
+                {editingPost ? "edit post" : "create new post"}
               </h2>
               {editingPost && (
-                <p className="text-sm text-gray-400 mt-1">
-                  Editing: {editingPost.title}
+                <p className="font-hand text-base text-accent-orange mt-1">
+                  editing: {editingPost.title}
                 </p>
               )}
             </div>
@@ -321,7 +327,7 @@ function DashboardContent() {
                 placeholder="paste a youtube/soundcloud link..."
                 value={formData.media_url}
                 onChange={(e) => detectMediaType(e.target.value)}
-                className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors"
               />
 
               <input
@@ -332,7 +338,7 @@ function DashboardContent() {
                   setFormData({ ...formData, title: e.target.value })
                 }
                 required
-                className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors"
               />
 
               {/* Toggle between simple textarea and markdown editor */}
@@ -342,8 +348,8 @@ function DashboardContent() {
                   onClick={() => setIsMarkdownMode(!isMarkdownMode)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                     isMarkdownMode
-                      ? "bg-cyber-orange text-black"
-                      : "bg-white/10 text-gray-400 hover:bg-white/20"
+                      ? "bg-accent-orange text-pure-white"
+                      : "bg-ink/5 text-ink-soft hover:bg-ink/10 border border-line"
                   }`}
                 >
                   <svg
@@ -362,8 +368,8 @@ function DashboardContent() {
                   {isMarkdownMode ? "Enhanced Editor" : "Simple Editor"}
                 </button>
                 {isMarkdownMode && (
-                  <span className="text-xs text-gray-500">
-                    ✨ Drag & drop images, markdown shortcuts, and more
+                  <span className="text-xs text-ink-faint">
+                    ✨ drag & drop images, markdown shortcuts, and more
                   </span>
                 )}
               </div>
@@ -385,7 +391,7 @@ function DashboardContent() {
                     setFormData({ ...formData, content: e.target.value })
                   }
                   rows={6}
-                  className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
+                  className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors resize-none"
                 />
               )}
 
@@ -396,21 +402,21 @@ function DashboardContent() {
                 onChange={(e) =>
                   setFormData({ ...formData, tags: e.target.value })
                 }
-                className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors"
               />
 
               {/* Display Settings */}
-              <div className="border border-gray-800 rounded-lg p-4 space-y-4">
-                <h3 className="text-sm font-medium text-gray-400">Display Settings</h3>
+              <div className="border border-dashed border-line rounded-lg p-4 space-y-4 bg-paper/40">
+                <h3 className="font-hand text-lg text-accent-rust">display settings</h3>
 
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Card Size (leave empty for random)</label>
+                  <label className="block text-xs text-ink-soft mb-1">card size (leave empty for random)</label>
                   <select
                     value={formData.display_size}
                     onChange={(e) =>
                       setFormData({ ...formData, display_size: e.target.value as any })
                     }
-                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                    className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors"
                   >
                     <option value="">Random (default)</option>
                     <option value="massive">Massive (2x2 → 3x3)</option>
@@ -424,7 +430,7 @@ function DashboardContent() {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Description (preview text & social embeds)</label>
+                  <label className="block text-xs text-ink-soft mb-1">description (preview text & social embeds)</label>
                   <textarea
                     placeholder="Custom description for cards and social sharing..."
                     value={formData.description}
@@ -432,12 +438,12 @@ function DashboardContent() {
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none resize-none"
+                    className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors resize-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Meta Image URL (for social embeds)</label>
+                  <label className="block text-xs text-ink-soft mb-1">meta image url (for social embeds)</label>
                   <input
                     type="text"
                     placeholder="https://..."
@@ -445,60 +451,75 @@ function DashboardContent() {
                     onChange={(e) =>
                       setFormData({ ...formData, meta_image: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg focus:border-cyber-orange focus:outline-none"
+                    className="w-full px-4 py-2 bg-paper-2 text-ink placeholder:text-ink-faint border border-line rounded-lg focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange/40 transition-colors"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formData.is_draft}
                       onChange={(e) =>
                         setFormData({ ...formData, is_draft: e.target.checked })
                       }
-                      className="w-4 h-4"
+                      className="w-4 h-4 accent-accent-orange"
                     />
-                    <span className="text-gray-400">save as draft</span>
+                    <span className="text-ink-soft">save as draft</span>
                   </label>
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formData.is_pinned}
                       onChange={(e) =>
                         setFormData({ ...formData, is_pinned: e.target.checked })
                       }
-                      className="w-4 h-4 accent-cyber-orange"
+                      className="w-4 h-4 accent-accent-orange"
                     />
-                    <span className="text-gray-400">📌 pin to top</span>
+                    <span className="text-ink-soft">📌 pin to top</span>
                   </label>
                 </div>
 
                 <div className="flex gap-2">
-                  {["note", "music", "climb"].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() =>
-                        setFormData({ ...formData, type: type as any })
-                      }
-                      className={`px-3 py-1 rounded-full text-sm transition-all ${
-                        formData.type === type
-                          ? "bg-white text-black"
-                          : "bg-white/10 text-gray-400 hover:bg-white/20"
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
+                  {(["note", "music", "climb"] as const).map((type) => {
+                    const styles = {
+                      note: {
+                        active: "bg-accent-orange text-pure-white border-accent-orange",
+                        idle: "bg-accent-orange/10 text-accent-orange border-accent-orange/30 hover:bg-accent-orange/20",
+                      },
+                      music: {
+                        active: "bg-accent-purple text-pure-white border-accent-purple",
+                        idle: "bg-accent-purple/10 text-accent-purple border-accent-purple/30 hover:bg-accent-purple/20",
+                      },
+                      climb: {
+                        active: "bg-accent-rust text-pure-white border-accent-rust",
+                        idle: "bg-accent-rust/10 text-accent-rust border-accent-rust/30 hover:bg-accent-rust/20",
+                      },
+                    }[type];
+                    const active = formData.type === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, type: type as any })
+                        }
+                        className={`px-3 py-1 rounded-full text-sm transition-all border ${
+                          active ? styles.active : styles.idle
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2 bg-white text-black rounded-lg hover:bg-opacity-90 transition-all"
+                className="btn-sketch-solid w-full justify-center"
               >
                 {editingPost ? "update post" : "publish"}
               </button>
@@ -507,44 +528,58 @@ function DashboardContent() {
         )}
 
         {/* Posts List */}
+        <div className="mb-4 flex items-baseline gap-3">
+          <h2 className="font-serif text-2xl font-medium text-ink">the shelf</h2>
+          <span className="font-hand text-lg text-ink-faint">
+            {posts.length} {posts.length === 1 ? "entry" : "entries"}
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {posts.map((post) => (
+          {posts.map((post, i) => {
+            const typeColor =
+              post.type === "music"
+                ? "text-accent-purple"
+                : post.type === "climb"
+                ? "text-accent-rust"
+                : "text-accent-orange";
+            return (
             <motion.div
               key={post.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-deep-graphite rounded-lg p-4"
+              className="sketch-card p-4"
+              style={{ rotate: `${(i % 2 === 0 ? -0.5 : 0.5)}deg` }}
             >
               <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-medium">{post.title}</h3>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h3 className="font-serif font-medium text-ink">{post.title}</h3>
                     {post.is_pinned && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-cyber-orange/20 text-cyber-orange">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-orange/15 text-accent-orange border border-accent-orange/30">
                         📌 pinned
                       </span>
                     )}
                     {post.is_draft && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-500">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-rust/15 text-accent-rust border border-accent-rust/30">
                         draft
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-400 mb-2">
-                    {post.type} •{" "}
+                  <p className="text-sm text-ink-soft mb-2">
+                    <span className={`font-medium ${typeColor}`}>{post.type}</span> •{" "}
                     {new Date(post.created_at).toLocaleDateString()} •{" "}
                     {post.view_count} views
                   </p>
                   {post.content && (
-                    <p className="text-xs text-gray-500 line-clamp-2">
+                    <p className="text-xs text-ink-faint line-clamp-2">
                       {post.content.substring(0, 100)}...
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2 ml-4">
+                <div className="flex gap-2 ml-4 shrink-0">
                   <button
                     onClick={() => router.push(`/post/${post.slug}${post.is_draft ? '/preview' : ''}`)}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-ink-soft hover:text-ink transition-colors"
                     title="View post"
                   >
                     <svg
@@ -569,7 +604,7 @@ function DashboardContent() {
                   </button>
                   <button
                     onClick={() => startEditing(post)}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-accent-purple hover:opacity-70 transition-opacity"
                     title="Edit post"
                   >
                     <svg
@@ -588,7 +623,7 @@ function DashboardContent() {
                   </button>
                   <button
                     onClick={() => deletePost(post.id)}
-                    className="text-red-500 hover:text-red-400 transition-colors"
+                    className="text-accent-rust hover:opacity-70 transition-opacity"
                     title="Delete post"
                   >
                     <svg
@@ -608,7 +643,8 @@ function DashboardContent() {
                 </div>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </main>

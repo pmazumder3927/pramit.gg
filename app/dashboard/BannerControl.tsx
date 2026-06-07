@@ -63,37 +63,37 @@ export default function BannerControl() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
-      className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+      className="sketch-card mb-8 p-5"
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-xs uppercase tracking-[0.28em] text-gray-500">
-            The Collage
+          <p className="font-hand text-lg tracking-wide text-accent-rust">
+            the collage
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">
+          <h2 className="mt-1 font-serif text-xl font-medium text-ink">
             confessional collage
           </h2>
-          <p className="mt-2 text-sm text-gray-400">
-            re-weave the sketches into a fresh painted nocturne via gpt-image-2. The latest collage is shown on /collage.
+          <p className="mt-2 text-sm text-ink-soft">
+            re-weave the sketches into a fresh painted nocturne via gpt-image-2. the latest collage is shown on /collage.
           </p>
           {loading ? null : banner ? (
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-3 text-xs text-ink-faint">
               last generated{" "}
               {new Date(banner.created_at).toLocaleString()} from{" "}
               {banner.sketch_count} sketch
               {banner.sketch_count === 1 ? "" : "es"}
             </p>
           ) : (
-            <p className="mt-3 text-xs text-gray-500">no banner yet.</p>
+            <p className="mt-3 text-xs text-ink-faint">no banner yet.</p>
           )}
           {error ? (
-            <p className="mt-2 text-xs text-rose-300/80">{error}</p>
+            <p className="mt-2 text-xs text-accent-rust">{error}</p>
           ) : null}
         </div>
 
         <div className="flex flex-col items-stretch gap-3 md:items-end">
           {banner ? (
-            <div className="h-20 w-40 overflow-hidden rounded-lg border border-white/10">
+            <div className="h-20 w-40 overflow-hidden rounded-lg border border-line tape [--tape-rot:4deg] relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={banner.image_url}
@@ -106,7 +106,7 @@ export default function BannerControl() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="inline-flex items-center justify-center rounded-full bg-cyber-orange px-5 py-2.5 text-sm font-medium text-black transition hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full bg-accent-orange px-5 py-2.5 text-sm font-medium text-pure-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {generating ? "weaving..." : banner ? "regenerate banner" : "generate banner"}
           </button>

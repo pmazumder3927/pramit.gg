@@ -15,25 +15,20 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center px-6">
       <div className="text-center">
-        <h2 className="text-2xl font-light text-white mb-4">
-          something went wrong
+        <span className="font-hand text-3xl -rotate-2 text-accent-rust">oops —</span>
+        <h2 className="mt-1 font-serif text-3xl font-medium text-ink mb-4">
+          a smudge in the ink
         </h2>
-        <p className="text-gray-400 mb-8 max-w-md">
+        <p className="text-ink-soft mb-8 max-w-md mx-auto">
           an unexpected error occurred. please try again or return home.
         </p>
         <div className="flex gap-4 justify-center">
-          <button
-            onClick={reset}
-            className="px-6 py-3 bg-accent-orange text-black rounded-lg hover:bg-opacity-90 transition-all"
-          >
+          <button onClick={reset} className="btn-sketch btn-sketch-solid">
             try again
           </button>
-          <Link
-            href="/"
-            className="px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-all"
-          >
+          <Link href="/" className="btn-sketch">
             go home
           </Link>
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useNowPlayingContext } from "./NowPlayingContext";
 import {
   getVariantStyles,
@@ -25,6 +26,7 @@ function formatTime(ms: number): string {
 export default function NowPlaying() {
   const [isExpanded, setIsExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   // Use shared context instead of separate SWR call
   const { track, albumColor, variant } = useNowPlayingContext();
@@ -42,6 +44,10 @@ export default function NowPlaying() {
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isExpanded]);
+
+  // The homepage hero shows its own "now spinning" card, so skip the
+  // floating widget there to avoid a duplicate. (Must be after all hooks.)
+  if (pathname === "/") return null;
 
   const progressPercentage = track?.progress && track?.duration
     ? (track.progress / track.duration) * 100

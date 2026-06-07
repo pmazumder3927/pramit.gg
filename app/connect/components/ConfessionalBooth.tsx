@@ -8,6 +8,7 @@ import DrawingCaptcha, {
   type DrawingCaptchaHandle,
 } from "@/app/connect/components/DrawingCaptcha";
 import CatCouncil from "@/app/connect/components/CatCouncil";
+import { Doodle, HandNote, Tape, PaperClip, TornEdge, RuledPaper } from "@/app/components/sketchbook";
 
 type Phase = "form" | "judging" | "approve" | "reject" | "received";
 
@@ -146,22 +147,24 @@ export default function ConfessionalBooth() {
 
   return (
     <div className="relative">
-      <div className="absolute top-0 left-0 w-8 h-px bg-white/10" />
-      <div className="absolute top-0 left-0 w-px h-8 bg-white/10" />
-      <div className="absolute bottom-0 right-0 w-8 h-px bg-white/10" />
-      <div className="absolute bottom-0 right-0 w-px h-8 bg-white/10" />
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-center mb-8"
+        className="mb-8"
       >
-        <h2 className="text-2xl md:text-3xl font-extralight text-white/80 mb-2">
-          whisper into the void
+        <div className="flex items-center gap-2">
+          <HandNote tone="purple" rotate={-3} className="text-2xl">
+            leave a doodle in my sketchbook
+          </HandNote>
+          <Doodle name="arrow" tone="purple" className="h-5 w-10" strokeWidth={3} />
+        </div>
+        <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
+          draw me something, whisper something
         </h2>
-        <p className="text-white/40 font-light text-sm max-w-md mx-auto">
-          anonymous thoughts, feedback, or just say hi
+        <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
+          anonymous. sketch on the page, drop a note, and the cat council
+          decides if it stays. say hi, leave feedback, whatever — it&apos;s your page too.
         </p>
       </motion.div>
 
@@ -169,8 +172,11 @@ export default function ConfessionalBooth() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden"
+        className="relative -rotate-[0.4deg] rounded-[3px] border border-line bg-card shadow-paper-lg"
       >
+        <Tape tone="purple" rotate={-3} className="-top-3 left-10" width={90} />
+        <Tape tone="orange" rotate={4} className="-top-3 right-10" width={90} />
+        <PaperClip className="-top-4 right-1/2 translate-x-1/2 md:right-16 md:translate-x-0" rotate={8} tone="ink" />
         <AnimatePresence mode="wait">
           {showCouncil ? (
             <motion.div
@@ -179,7 +185,7 @@ export default function ConfessionalBooth() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
-              className="px-6 py-10 md:py-14"
+              className="m-3 rounded-xl border-[1.6px] border-line bg-paper-2/60 px-6 py-10 md:py-14"
             >
               <CatCouncil
                 verdict={
@@ -205,10 +211,10 @@ export default function ConfessionalBooth() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
-                className="w-12 h-12 mx-auto mb-4 rounded-full border border-emerald-300/30 flex items-center justify-center"
+                className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-[1.6px] border-accent-orange/50 text-accent-orange"
               >
                 <svg
-                  className="w-5 h-5 text-emerald-200/80"
+                  className="h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -216,16 +222,16 @@ export default function ConfessionalBooth() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth={1.5}
+                    strokeWidth={1.8}
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
               </motion.div>
 
-              <h3 className="text-lg font-light text-white/80 mb-1">
+              <h3 className="font-serif text-lg font-medium text-ink mb-1">
                 message received
               </h3>
-              <p className="text-white/40 text-sm font-light">
+              <p className="font-hand text-lg text-accent-rust">
                 the council waves you on. whispered into the void.
               </p>
             </motion.div>
@@ -235,23 +241,26 @@ export default function ConfessionalBooth() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-5 md:p-7"
             >
-              <div className="relative mx-auto mb-4 max-w-3xl">
+              <RuledPaper variant="ruled" className="rounded-[3px] p-5 md:p-7">
+              <div className="relative mx-auto mb-2 max-w-3xl">
+                <HandNote tone="rust" rotate={-1.5} className="mb-1.5 block text-lg">
+                  1 · jot a note
+                </HandNote>
                 <textarea
                   value={message}
                   onChange={handleMessageChange}
                   placeholder="speak your truth..."
-                  className="w-full h-32 bg-transparent border border-white/[0.08] rounded-xl p-4 text-white/80 placeholder-white/30 resize-none focus:border-white/20 focus:outline-none transition-colors duration-300 font-light text-sm"
+                  className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-sm text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
                 />
-                <div className="absolute bottom-3 right-3 text-xs text-white/30">
+                <div className="absolute bottom-3 right-3 text-xs tabular-nums text-ink-faint">
                   {characterCount}/{maxLength}
                 </div>
               </div>
 
-              <div className="mx-auto mb-6 flex max-w-3xl items-center gap-2 text-xs text-white/30">
+              <div className="mx-auto mb-5 flex max-w-3xl items-center gap-2 font-hand text-base text-ink-faint">
                 <svg
-                  className="w-3.5 h-3.5"
+                  className="h-3.5 w-3.5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -266,6 +275,9 @@ export default function ConfessionalBooth() {
                 <span>completely anonymous · no tracking</span>
               </div>
 
+              <HandNote tone="rust" rotate={-1.5} className="mx-auto mb-2 block max-w-3xl text-lg">
+                2 · draw the council a little something
+              </HandNote>
               <div className="mb-6">
                 <DrawingCaptcha
                   ref={drawingRef}
@@ -280,7 +292,7 @@ export default function ConfessionalBooth() {
               </div>
 
               {submitError ? (
-                <div className="mx-auto mb-6 max-w-3xl rounded-xl border border-rose-400/20 bg-rose-500/5 px-4 py-3 text-sm font-light text-rose-100/80">
+                <div className="mx-auto mb-6 max-w-3xl rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 px-4 py-3 text-sm text-accent-rust">
                   {submitError}
                 </div>
               ) : null}
@@ -288,7 +300,7 @@ export default function ConfessionalBooth() {
               <motion.button
                 onClick={submitMessage}
                 disabled={!message.trim() || isBusy || !captchaReady}
-                className="mx-auto block w-full max-w-3xl py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/70 text-sm font-light hover:bg-white/[0.08] hover:text-white/90 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="mx-auto block w-full max-w-3xl rounded-xl border-[1.6px] border-line bg-paper-2/50 py-3 font-serif text-sm text-ink-soft transition-all duration-300 hover:border-accent-orange/60 hover:bg-accent-orange/10 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
                 whileHover={{
                   scale: message.trim() && captchaReady && !isBusy ? 1.01 : 1,
                 }}
@@ -300,6 +312,7 @@ export default function ConfessionalBooth() {
                   ? "submit to the council"
                   : "draw something for the council first"}
               </motion.button>
+              </RuledPaper>
             </motion.div>
           )}
         </AnimatePresence>

@@ -24,29 +24,31 @@ export function useNowPlaying() {
 }
 
 export function getVariantStyles(variant: VisualVariant, accentColor: string) {
+  // Sketchbook: a warm, readable "card laid on paper" in every theme. The
+  // music's album color still tints the neon border + accents.
   switch (variant) {
     case "neon":
       return {
-        container: "bg-void-black/95 border-2",
-        glow: `shadow-[0_0_30px_${accentColor}30,0_0_60px_${accentColor}15]`,
+        container: "bg-card/95 backdrop-blur-md border-2 shadow-paper",
+        glow: "",
         borderColor: accentColor,
       };
     case "glassy":
       return {
-        container: "bg-white/[0.08] backdrop-blur-xl border border-white/20",
-        glow: "shadow-2xl shadow-black/40",
+        container: "glass shadow-paper",
+        glow: "",
         borderColor: "transparent",
       };
     case "accent":
       return {
-        container: "bg-gradient-to-br from-charcoal-black/95 via-void-black to-charcoal-black/95 border border-white/10",
-        glow: "shadow-xl shadow-black/30",
+        container: "bg-card/95 backdrop-blur-md border border-line shadow-paper",
+        glow: "",
         borderColor: "transparent",
       };
     default:
       return {
-        container: "bg-void-black/90 border border-white/[0.08]",
-        glow: "shadow-lg shadow-black/20",
+        container: "bg-card/90 backdrop-blur-md border border-line shadow-paper",
+        glow: "",
         borderColor: "transparent",
       };
   }

@@ -71,12 +71,12 @@ export default function Navigation() {
       </div>
 
       {/* Desktop Navigation */}
-      <div className="hidden md:block fixed top-8 right-8 z-50">
+      <div className="hidden md:block fixed top-6 right-6 z-50">
         <motion.button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-void-black/80 backdrop-blur-xl text-gray-500 hover:text-white transition-all duration-300 p-4 rounded-2xl border border-white/[0.06] hover:border-white/[0.12]"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          aria-label="Open menu"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-line/80 bg-card/70 text-ink-soft backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-accent-orange/60 hover:text-accent-orange"
+          whileTap={{ scale: 0.95 }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
@@ -136,7 +136,7 @@ export default function Navigation() {
                 >
                   <Link
                     href={item.href}
-                    className="group relative block text-5xl md:text-7xl lg:text-8xl font-extralight text-white/80 hover:text-white transition-colors duration-300"
+                    className="group relative block font-serif text-5xl md:text-7xl lg:text-8xl font-light text-ink/80 hover:text-ink transition-colors duration-300"
                     onClick={() => setIsOpen(false)}
                   >
                     {item.label}

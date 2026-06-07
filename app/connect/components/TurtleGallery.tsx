@@ -3,6 +3,8 @@
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { Doodle, HandNote, Tape } from "@/app/components/sketchbook";
+
 import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
@@ -69,35 +71,37 @@ export default function TurtleGallery() {
 
   return (
     <div className="relative">
-      <div className="absolute top-0 left-0 w-8 h-px bg-white/10" />
-      <div className="absolute top-0 left-0 w-px h-8 bg-white/10" />
-      <div className="absolute bottom-0 right-0 w-8 h-px bg-white/10" />
-      <div className="absolute bottom-0 right-0 w-px h-8 bg-white/10" />
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-center mb-8"
+        className="mb-8"
       >
-        <h2 className="text-2xl md:text-3xl font-extralight text-white/80 mb-2">
-          the drawing gallery
+        <div className="flex items-center gap-2">
+          <HandNote tone="orange" rotate={-2} className="text-2xl">
+            pinned to the wall
+          </HandNote>
+          <Doodle name="star" tone="orange" className="h-5 w-5" strokeWidth={2} />
+        </div>
+        <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
+          what other pen-pals left behind
         </h2>
-        <p className="text-white/40 font-light text-sm max-w-md mx-auto">
-          every confession comes with a sketch. these are theirs.
+        <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
+          every note comes with a sketch. these are theirs — taped up just like
+          yours will be.
         </p>
       </motion.div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-400/20 bg-rose-500/5 p-5 text-center text-sm font-light text-rose-100/80">
+        <div className="rounded-2xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 p-5 text-center text-sm text-accent-rust">
           {error}
         </div>
       ) : drawings === null ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center text-sm font-light text-white/40">
+        <div className="rounded-2xl border-[1.4px] border-dashed border-line bg-card p-8 text-center font-hand text-xl text-ink-faint">
           gathering drawings...
         </div>
       ) : drawings.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center text-sm font-light text-white/40">
+        <div className="rounded-2xl border-[1.4px] border-dashed border-line bg-card p-8 text-center font-hand text-xl text-ink-faint">
           nothing here yet. be the first.
         </div>
       ) : (
@@ -111,14 +115,21 @@ export default function TurtleGallery() {
                 duration: 0.4,
                 delay: Math.min(index * 0.03, 0.4),
               }}
-              className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-2 transition-colors duration-300 hover:border-white/15 hover:bg-white/[0.04]"
+              style={{ rotate: `${(index % 3) - 1}deg` }}
+              className="group relative rounded-[3px] border-[1.4px] border-line bg-card p-2 pt-3 shadow-paper transition-all duration-300 hover:rotate-0 hover:border-accent-orange/50 hover:shadow-paper-lg"
             >
+              <Tape
+                tone={(["orange", "purple", "rust"] as const)[index % 3]}
+                rotate={(index % 2 ? 1 : -1) * (6 + (index % 3) * 2)}
+                width={44}
+                className="-top-2.5 left-1/2 -translate-x-1/2"
+              />
               <DrawingSvg drawing={drawing} />
-              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] font-light text-white/40">
-                <span className="truncate">
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] text-ink-faint">
+                <span className="truncate font-hand text-sm text-accent-rust">
                   {drawing.prompt ?? "a turtle"}
                 </span>
-                <span className="text-white/25 tabular-nums">
+                <span className="tabular-nums text-ink-faint/80">
                   {formatDate(drawing.created_at)}
                 </span>
               </div>
@@ -148,7 +159,7 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
         alt={drawing.prompt ?? "drawing"}
         loading="lazy"
         decoding="async"
-        className="w-full rounded-lg bg-[#0a0a0a]"
+        className="w-full rounded-md bg-[#1a1410]"
         style={{ aspectRatio: `${width} / ${height}` }}
       />
     );
@@ -157,7 +168,7 @@ function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="w-full rounded-lg bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_60%)]"
+      className="w-full rounded-md bg-[#1a1410] bg-[radial-gradient(circle_at_top,_rgba(255,180,120,0.06),_transparent_60%)]"
       style={{ aspectRatio: `${width} / ${height}` }}
       preserveAspectRatio="xMidYMid meet"
     >

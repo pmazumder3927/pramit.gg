@@ -11,11 +11,10 @@ import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import {
   generateChaoticStyle,
-  getVariantStyles,
   hexToRgb,
-  isLightColor,
 } from "../lib/chaotic-styles";
 import { useAlbumColor } from "../lib/use-album-color";
+import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
 interface SpotifyTrack {
   id: string;
@@ -56,27 +55,24 @@ export function ChaoticTrackCard({
   const albumColor = useAlbumColor(track.albumImageUrl);
   const rgb = hexToRgb(albumColor);
 
-  const parallaxStrength = 8;
+  const parallaxStrength = 6;
   const x = useTransform(mouseX, [0, 1], [-parallaxStrength, parallaxStrength]);
   const y = useTransform(mouseY, [0, 1], [-parallaxStrength, parallaxStrength]);
   const springX = useSpring(x, { stiffness: 150, damping: 20 });
   const springY = useSpring(y, { stiffness: 150, damping: 20 });
 
-  const variantStyles = getVariantStyles(style.variant, albumColor);
-  const isDark =
-    !["brutalist", "inverted"].includes(style.variant) ||
-    (style.variant === "brutalist" && !isLightColor(albumColor));
-  const textColor = isDark ? "text-white" : "text-void-black";
-  const secondaryColor = isDark ? "text-gray-400" : "text-gray-600";
+  // a liner-note tracklist row — every row is numbered, slightly rotated, on paper
+  const num = (index + 1).toString().padStart(2, "0");
+  const baseRot = style.rotation * 0.4;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, rotate: style.rotation }}
+      initial={{ opacity: 0, y: 24, rotate: style.rotation }}
       animate={{
         opacity: 1,
         y: 0,
-        rotate: style.rotation * 0.3,
-        x: style.offsetX * 0.2,
+        rotate: baseRot,
+        x: style.offsetX * 0.12,
       }}
       transition={{
         delay: Math.min(index * 0.03, 0.3),
@@ -88,11 +84,7 @@ export function ChaoticTrackCard({
         y: springY,
         zIndex: isHovered ? 50 : 1,
       }}
-      whileHover={{
-        scale: 1.03,
-        rotate: 0,
-        zIndex: 50,
-      }}
+      whileHover={{ scale: 1.02, rotate: 0, zIndex: 50 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className="group cursor-pointer"
@@ -104,62 +96,55 @@ export function ChaoticTrackCard({
         className="block"
       >
         <div
-          className={`
-            relative overflow-hidden transition-all duration-300 rounded-2xl p-4 md:p-6
-            ${variantStyles.bg} ${variantStyles.border}
-          `}
+          className="relative overflow-hidden rounded-[3px] border border-line bg-card px-3 py-3 pl-4 transition-all duration-300 md:px-5 md:py-4 md:pl-6"
           style={{
-            backgroundColor: variantStyles.bgColor,
-            backgroundImage: variantStyles.bgGradient,
-            borderColor: variantStyles.borderColor,
+            ...paperTextureStyle(chaosFor(track.id).paper),
             boxShadow: isHovered
-              ? variantStyles.hoverShadow
-              : variantStyles.shadow,
+              ? "5px 11px 26px -10px rgb(var(--fg) / 0.34)"
+              : "2px 4px 12px -7px rgb(var(--fg) / 0.28)",
           }}
         >
-          {/* Noise texture */}
-          <div
-            className="absolute inset-0 opacity-[0.03] pointer-events-none"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            }}
-          />
-
-          {/* Hover glow */}
+          {/* at-rest album-color spine — each song wears its own art */}
+          <span aria-hidden className="absolute left-0 top-0 z-10 h-full w-[3px]" style={{ background: albumColor }} />
+          {/* hover wash in album tint */}
           <motion.div
-            className="absolute inset-0 pointer-events-none"
+            className="pointer-events-none absolute inset-0"
             initial={{ opacity: 0 }}
-            animate={{ opacity: isHovered ? 0.15 : 0 }}
+            animate={{ opacity: isHovered ? 0.12 : 0 }}
             style={{
-              background: `radial-gradient(circle at 50% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5), transparent 70%)`,
+              background: `radial-gradient(circle at 0% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5), transparent 60%)`,
             }}
           />
 
-          <div className="relative z-10 flex items-center gap-4">
-            {/* Track Number */}
-            {isTopTrack && (
-              <motion.div
-                className={`text-2xl md:text-3xl font-bold w-8 md:w-12 flex-shrink-0`}
-                style={{ color: index < 3 ? albumColor : undefined }}
-                animate={isHovered ? { scale: 1.2, rotate: -5 } : {}}
-                transition={{ duration: 0.2 }}
-              >
-                {index + 1}
-              </motion.div>
-            )}
+          <div className="relative z-10 flex items-center gap-3 md:gap-4">
+            {/* track number — handwritten liner-note index */}
+            <div
+              className={`w-7 flex-shrink-0 text-center font-hand leading-none md:w-9 ${
+                isTopTrack ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
+              }`}
+              style={{
+                color:
+                  isHovered || (isTopTrack && index < 3)
+                    ? albumColor
+                    : "rgb(var(--fg-faint))",
+                transform: `rotate(${index % 2 === 0 ? -4 : 3}deg)`,
+              }}
+            >
+              {isTopTrack ? index + 1 : num}
+            </div>
 
-            {/* Album Art */}
+            {/* Album art — small taped stub */}
             {track.albumImageUrl && (
               <motion.div
-                className="relative w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden flex-shrink-0"
-                whileHover={{ scale: 1.1, rotate: 5 }}
+                className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-[2px] border border-line md:h-14 md:w-14"
+                whileHover={{ scale: 1.08, rotate: 4 }}
               >
                 <Image
                   src={track.albumImageUrl}
                   alt={track.album}
                   fill
                   className="object-cover"
-                  sizes="64px"
+                  sizes="56px"
                 />
                 <motion.div
                   className="absolute inset-0"
@@ -172,65 +157,59 @@ export function ChaoticTrackCard({
               </motion.div>
             )}
 
-            {/* Track Info */}
-            <div className="flex-1 min-w-0">
+            {/* Track info */}
+            <div className="min-w-0 flex-1">
               <h3
-                className={`font-semibold text-base md:text-lg truncate mb-1 transition-colors duration-300 ${textColor}`}
-                style={{ color: isHovered && isDark ? albumColor : undefined }}
+                className="mb-0.5 truncate font-serif text-base font-medium text-ink transition-colors duration-300 md:text-lg"
+                style={{ color: isHovered ? albumColor : undefined }}
               >
                 {track.title}
               </h3>
-              <p
-                className={`${secondaryColor} text-sm truncate mb-0.5`}
-                style={{ color: variantStyles.textColor }}
-              >
+              <p className="truncate font-serif text-sm italic text-ink-soft">
                 {track.artist}
-              </p>
-              <p
-                className={`text-xs truncate opacity-60 hidden md:block`}
-                style={{ color: variantStyles.textColor || (isDark ? "#9ca3af" : "#4b5563") }}
-              >
-                {track.album}
               </p>
             </div>
 
+            {/* dotted leader to metadata, like a tracklist */}
+            <span
+              aria-hidden
+              className="hidden flex-1 self-end border-b border-dotted border-line/70 pb-1 lg:block"
+            />
+
             {/* Metadata */}
-            <div
-              className={`hidden md:flex flex-col items-end gap-1 text-xs ${secondaryColor}`}
-              style={{ color: variantStyles.textColor }}
-            >
-              {track.duration && (
+            <div className="flex flex-shrink-0 flex-col items-end gap-0.5 text-xs text-ink-faint">
+              {track.duration ? (
                 <span className="font-mono">{formatTime(track.duration)}</span>
-              )}
+              ) : null}
               {track.playedAt && (
-                <span>
+                <span className="hidden font-hand text-sm md:block">
                   {formatDistanceToNow(new Date(track.playedAt), {
                     addSuffix: true,
                   })}
                 </span>
               )}
-              {track.popularity && (
+              {track.popularity && !track.playedAt && (
                 <div className="flex items-center gap-1">
                   <svg
-                    className="w-3 h-3"
+                    className="h-3 w-3"
                     style={{ color: albumColor }}
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  <span>{track.popularity}</span>
+                  <span className="font-mono">{track.popularity}</span>
                 </div>
               )}
             </div>
 
             {/* Spotify icon */}
             <motion.div
-              className="p-2 rounded-full bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="flex-shrink-0 rounded-full bg-ink/[0.05] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
               whileHover={{ scale: 1.2, rotate: 10 }}
             >
               <svg
-                className="w-5 h-5"
+                className="h-4 w-4"
                 style={{ color: albumColor }}
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -240,11 +219,11 @@ export function ChaoticTrackCard({
             </motion.div>
           </div>
 
-          {/* Accent line */}
+          {/* accent underline on hover */}
           <motion.div
-            className="absolute bottom-0 left-0 h-1"
+            className="absolute bottom-0 left-0 h-[3px]"
             style={{
-              background: `linear-gradient(90deg, ${albumColor}, rgba(124, 119, 198, 0.8))`,
+              background: `linear-gradient(90deg, ${albumColor}, rgb(var(--accent-purple) / 0.8))`,
             }}
             initial={{ width: "0%" }}
             animate={{ width: isHovered ? "100%" : "0%" }}

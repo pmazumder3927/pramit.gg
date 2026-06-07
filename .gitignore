@@ -32,6 +32,9 @@ yarn-error.log*
 # local banner generation experiments (sample outputs)
 /banner-experiments/*/
 
+# homepage redesign explorations (scratch: mockups, screenshots, playwright deps)
+/homepage-explorations/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts 

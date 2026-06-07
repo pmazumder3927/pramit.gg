@@ -29,7 +29,7 @@ export function MusicManagerShell({
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(255,107,61,0.06),transparent_30%)]" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_88%_14%,rgba(124,119,198,0.06),transparent_34%)]" />
 
-      <div className="relative z-10 border-b border-white/[0.06] bg-black/30 backdrop-blur-xl">
+      <div className="relative z-10 border-b border-line bg-card/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-5">
             <Link

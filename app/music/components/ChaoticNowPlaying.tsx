@@ -3,6 +3,7 @@
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import Image from "next/image";
 import { hexToRgb, adjustBrightness } from "../lib/chaotic-styles";
+import { Doodle, HandNote } from "@/app/components/sketchbook";
 
 interface NowPlayingTrack {
   isPlaying: boolean;
@@ -29,81 +30,131 @@ function formatTime(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
+// a 12-point pop-art starburst
+const BURST = Array.from({ length: 24 }, (_, i) => {
+  const a = (Math.PI / 12) * i - Math.PI / 2;
+  const r = i % 2 === 0 ? 48 : 31;
+  return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
+}).join(" ");
+
 export function ChaoticNowPlaying({
   nowPlaying,
   accentColor,
   mouseX,
   mouseY,
 }: ChaoticNowPlayingProps) {
-  const x = useTransform(mouseX, [0, 1], [-15, 15]);
-  const y = useTransform(mouseY, [0, 1], [-10, 10]);
+  const x = useTransform(mouseX, [0, 1], [-12, 12]);
+  const y = useTransform(mouseY, [0, 1], [-8, 8]);
   const springX = useSpring(x, { stiffness: 100, damping: 20 });
   const springY = useSpring(y, { stiffness: 100, damping: 20 });
 
   const rgb = hexToRgb(accentColor);
-  const lighterColor = adjustBrightness(accentColor, 20);
+  const lighterColor = adjustBrightness(accentColor, 22);
+  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+  const onAlbum = brightness > 145 ? "#1a1410" : "#fffaf2";
+  const pct =
+    nowPlaying.progress && nowPlaying.duration
+      ? (nowPlaying.progress / nowPlaying.duration) * 100
+      : 0;
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
-      animate={{ opacity: 1, scale: 1, rotate: 0 }}
+      initial={{ opacity: 0, y: 26, rotate: -1.2 }}
+      animate={{ opacity: 1, y: 0, rotate: -0.5 }}
       transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
       style={{ x: springX, y: springY }}
-      className="mb-12 md:mb-16"
+      className="relative mx-auto mb-16 max-w-3xl md:mb-24"
     >
-      <div className="relative bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 md:p-10 overflow-hidden group">
-        {/* Subtle background gradient */}
+      {/* handwritten margin label */}
+      <HandNote tone="purple" rotate={-8} className="absolute -left-1 -top-7 z-30 text-2xl md:-left-5 md:text-3xl">
+        on the deck —
+      </HandNote>
+
+      {/* pop-art starburst badge */}
+      <div className="absolute -right-3 -top-7 z-30 h-[5.5rem] w-[5.5rem] rotate-6 md:-right-7 md:h-24 md:w-24">
+        <svg viewBox="-50 -50 100 100" className="h-full w-full" style={{ filter: "drop-shadow(2px 3px 0 rgb(var(--fg) / 0.5))" }}>
+          <polygon points={BURST} fill={accentColor} stroke="rgb(var(--fg))" strokeWidth="2.5" strokeLinejoin="round" />
+        </svg>
+        <span
+          className="absolute inset-0 grid -rotate-3 place-items-center px-2 text-center font-mono text-[0.5rem] font-bold uppercase leading-[1.15] tracking-wider md:text-[0.6rem]"
+          style={{ color: onAlbum }}
+        >
+          {nowPlaying.isPlaying ? "now playing" : "last played"}
+        </span>
+      </div>
+
+      {/* the comic panel — hard offset shadow in the album's color */}
+      <div
+        className="relative overflow-hidden rounded-[4px] border-[3px] border-ink bg-card px-6 py-7 md:px-10 md:py-9"
+        style={{ boxShadow: `9px 9px 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.95)` }}
+      >
+        {/* ben-day halftone dots, tinted to the album */}
         <div
-          className="absolute inset-0 opacity-30"
+          className="pointer-events-none absolute inset-0 opacity-[0.16]"
           style={{
-            background: `radial-gradient(circle at 20% 50%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1), transparent 60%)`,
+            backgroundImage: `radial-gradient(rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1) 1.5px, transparent 1.7px)`,
+            backgroundSize: "9px 9px",
           }}
         />
-
-        {/* Noise texture */}
+        {/* album-tinted corner wash */}
         <div
-          className="absolute inset-0 opacity-[0.03] pointer-events-none"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          }}
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full blur-2xl"
+          style={{ background: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)` }}
         />
 
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-10">
-          {/* Album Art with vinyl effect */}
-          <div className="relative">
+        <div className="relative z-10 flex flex-col items-center gap-7 md:flex-row md:items-center md:gap-10">
+          {/* Album art — popped, thick frame, hard album-color shadow */}
+          <div className="relative shrink-0 -rotate-2">
             {nowPlaying.albumImageUrl && (
               <motion.div
-                className="relative w-32 h-32 md:w-48 md:h-48 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"
-                whileHover={{ scale: 1.05, rotate: 2 }}
+                className="relative border-[3px] border-ink bg-paper"
+                style={{ boxShadow: `6px 6px 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9)` }}
+                whileHover={{ scale: 1.04, rotate: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Image
-                  src={nowPlaying.albumImageUrl}
-                  alt={nowPlaying.album}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 128px, 192px"
-                />
+                <div className="relative h-40 w-40 overflow-hidden md:h-48 md:w-48">
+                  <Image
+                    src={nowPlaying.albumImageUrl}
+                    alt={nowPlaying.album}
+                    fill
+                    className="object-cover"
+                    style={{ filter: "saturate(1.35) contrast(1.08)" }}
+                    sizes="(max-width: 768px) 160px, 192px"
+                  />
+                  {/* halftone over the art for that printed-comic feel */}
+                  <div
+                    className="pointer-events-none absolute inset-0 mix-blend-multiply opacity-30"
+                    style={{
+                      backgroundImage: "radial-gradient(rgba(0,0,0,0.5) 1px, transparent 1.2px)",
+                      backgroundSize: "5px 5px",
+                    }}
+                  />
+                </div>
               </motion.div>
             )}
-
           </div>
 
-          {/* Track Info */}
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
-              <div
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: nowPlaying.isPlaying ? accentColor : "#6b7280" }}
-              />
-              <span className="text-sm text-white/40 font-light uppercase tracking-wider">
-                {nowPlaying.isPlaying ? "now playing" : "last played"}
+          {/* Track info */}
+          <div className="flex flex-1 flex-col text-center md:text-left">
+            <div className="mb-2 flex items-center justify-center gap-2.5 md:justify-start">
+              {nowPlaying.isPlaying ? (
+                <span className="eq-bars" aria-label="now playing">
+                  <span style={{ animationDelay: "0s", background: accentColor }} />
+                  <span style={{ animationDelay: "0.2s", background: accentColor }} />
+                  <span style={{ animationDelay: "0.4s", background: accentColor }} />
+                  <span style={{ animationDelay: "0.15s", background: accentColor }} />
+                </span>
+              ) : (
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(var(--fg-faint))" }} />
+              )}
+              <span className="font-hand text-xl -rotate-1" style={{ color: accentColor }}>
+                {nowPlaying.isPlaying ? "spinning right now" : "last on the deck"}
               </span>
             </div>
 
             <motion.h2
-              className="text-2xl md:text-4xl font-light text-white mb-2 leading-tight"
-              initial={{ opacity: 0, y: 10 }}
+              className="font-serif text-3xl font-semibold leading-[0.98] tracking-tight text-ink md:text-[2.7rem]"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
@@ -111,8 +162,8 @@ export function ChaoticNowPlaying({
             </motion.h2>
 
             <motion.p
-              className="text-lg md:text-xl text-gray-300 mb-1"
-              initial={{ opacity: 0, y: 10 }}
+              className="mt-1.5 font-serif text-lg italic text-ink-soft md:text-xl"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
@@ -120,72 +171,54 @@ export function ChaoticNowPlaying({
             </motion.p>
 
             <motion.p
-              className="text-gray-500 mb-6"
-              initial={{ opacity: 0, y: 10 }}
+              className="mt-0.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-faint"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
               {nowPlaying.album}
             </motion.p>
 
-            {/* Progress bar */}
-            {nowPlaying.isPlaying &&
-              nowPlaying.progress &&
-              nowPlaying.duration && (
-                <div className="space-y-2">
-                  <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
-                    <motion.div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        background: `linear-gradient(90deg, ${accentColor}, ${lighterColor})`,
-                      }}
-                      initial={{ width: "0%" }}
-                      animate={{
-                        width: `${(nowPlaying.progress / nowPlaying.duration) * 100}%`,
-                      }}
-                      transition={{ duration: 0.5 }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-500 font-mono">
-                    <span>{formatTime(nowPlaying.progress)}</span>
-                    <span>{formatTime(nowPlaying.duration)}</span>
-                  </div>
+            {/* Progress */}
+            {nowPlaying.isPlaying && nowPlaying.progress != null && nowPlaying.duration != null ? (
+              <div className="mt-5 space-y-1.5">
+                <div className="relative h-2.5 overflow-hidden rounded-full border-2 border-ink bg-paper-2">
+                  <motion.div
+                    className="absolute left-0 top-0 h-full"
+                    style={{ background: `linear-gradient(90deg, ${accentColor}, ${lighterColor})` }}
+                    initial={{ width: "0%" }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
                 </div>
-              )}
-          </div>
+                <div className="flex justify-between font-mono text-xs text-ink-faint">
+                  <span>{formatTime(nowPlaying.progress)}</span>
+                  <span>{formatTime(nowPlaying.duration)}</span>
+                </div>
+              </div>
+            ) : null}
 
-          {/* Spotify Link */}
-          {nowPlaying.songUrl && (
-            <motion.a
-              href={nowPlaying.songUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-4 rounded-full transition-all duration-300 group/btn"
-              style={{
-                backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
-                borderWidth: 1,
-                borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`,
-              }}
-              whileHover={{
-                scale: 1.1,
-                rotate: 10,
-                backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`,
-                borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
-              }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <svg
-                className="w-8 h-8 transition-colors"
-                style={{ color: accentColor }}
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
-              </svg>
-            </motion.a>
-          )}
+            {/* Open in Spotify — pop button in the album color */}
+            {nowPlaying.songUrl && (
+              <div className="mt-6 flex justify-center md:justify-start">
+                <a
+                  href={nowPlaying.songUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/btn inline-flex items-center gap-2 rounded-full border-[2.5px] border-ink px-5 py-2 font-mono text-xs font-bold uppercase tracking-widest transition-transform hover:-translate-y-0.5"
+                  style={{ background: accentColor, color: onAlbum, boxShadow: "3px 3px 0 0 rgb(var(--fg))" }}
+                >
+                  <svg className="h-4 w-4 transition-transform group-hover/btn:rotate-12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                  open in spotify
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
+        <Doodle name="squiggle" tone="rust" className="absolute -bottom-3 right-8 h-4 w-24 opacity-70" strokeWidth={2.5} />
       </div>
     </motion.div>
   );

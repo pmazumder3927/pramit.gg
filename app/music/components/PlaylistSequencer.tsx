@@ -1304,7 +1304,7 @@ export function PlaylistSequencer({
           <h2 className="mt-3 text-xl font-semibold text-white">Sign in to sequence playlists</h2>
           <a
             href="/api/auth/login"
-            className="mt-5 inline-flex rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-gray-200"
+            className="mt-5 inline-flex rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition hover:opacity-90"
           >
             Sign in
           </a>
@@ -1545,7 +1545,7 @@ export function PlaylistSequencer({
             style={{
               borderColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`,
               backgroundColor: `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`,
-              color: "rgba(255,255,255,0.75)",
+              color: "rgb(var(--fg-soft))",
             }}
           >
             <div className="flex items-center justify-between">

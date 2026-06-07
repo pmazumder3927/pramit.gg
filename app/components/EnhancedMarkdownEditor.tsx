@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "motion/react";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -28,8 +28,24 @@ export default function EnhancedMarkdownEditor({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [colorMode, setColorMode] = useState<"light" | "dark">("dark");
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<any>(null);
+
+  // Keep the markdown editor's color mode in sync with the site theme
+  useEffect(() => {
+    const sync = () =>
+      setColorMode(
+        document.documentElement.classList.contains("dark") ? "dark" : "light"
+      );
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const insertAtCursor = useCallback(
     (text: string) => {
@@ -246,9 +262,9 @@ export default function EnhancedMarkdownEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center rounded-lg"
+            className="absolute inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg"
           >
-            <div className="bg-deep-graphite p-6 rounded-lg flex flex-col items-center">
+            <div className="sketch-card p-6 flex flex-col items-center">
               <div className="w-16 h-16 mb-4 relative">
                 <svg
                   className="w-16 h-16 transform -rotate-90"
@@ -261,7 +277,7 @@ export default function EnhancedMarkdownEditor({
                     stroke="currentColor"
                     strokeWidth="4"
                     fill="none"
-                    className="text-gray-700"
+                    className="text-line"
                   />
                   <circle
                     cx="32"
@@ -272,14 +288,14 @@ export default function EnhancedMarkdownEditor({
                     fill="none"
                     strokeDasharray={175.84}
                     strokeDashoffset={175.84 - (175.84 * uploadProgress) / 100}
-                    className="text-cyber-orange transition-all duration-300"
+                    className="text-accent-orange transition-all duration-300"
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-mono">{uploadProgress}%</span>
+                  <span className="text-sm font-mono text-ink">{uploadProgress}%</span>
                 </div>
               </div>
-              <p className="text-gray-300">Uploading media...</p>
+              <p className="text-ink-soft">uploading media...</p>
             </div>
           </motion.div>
         )}
@@ -292,12 +308,12 @@ export default function EnhancedMarkdownEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-cyber-orange/20 border-2 border-cyber-orange border-dashed z-40 flex items-center justify-center rounded-lg"
+            className="absolute inset-0 bg-accent-orange/15 border-2 border-accent-orange border-dashed z-40 flex items-center justify-center rounded-lg backdrop-blur-sm"
           >
             <div className="text-center">
               <div className="text-4xl mb-2">📸🎥</div>
-              <p className="text-white font-medium">
-                Drop image, video, or HTML graph here to upload
+              <p className="font-hand text-2xl text-accent-orange">
+                drop image, video, or html graph here to upload
               </p>
             </div>
           </motion.div>
@@ -310,7 +326,7 @@ export default function EnhancedMarkdownEditor({
           <button
             type="button"
             onClick={insertMediaClick}
-            className="flex items-center gap-1 px-3 py-1 bg-cyber-orange/20 text-cyber-orange hover:bg-cyber-orange/30 rounded-lg transition-colors text-sm"
+            className="flex items-center gap-1 px-3 py-1 bg-accent-orange/15 text-accent-orange border border-accent-orange/30 hover:bg-accent-orange/25 rounded-lg transition-colors text-sm"
           >
             <svg
               className="w-4 h-4"
@@ -325,14 +341,14 @@ export default function EnhancedMarkdownEditor({
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            Upload Media/Graph
+            upload media/graph
           </button>
-          <span className="text-xs text-gray-500">or drag & drop</span>
+          <span className="text-xs text-ink-faint">or drag & drop</span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>📱 Mobile friendly</span>
+        <div className="flex items-center gap-2 text-xs text-ink-faint">
+          <span>📱 mobile friendly</span>
           <span>•</span>
-          <span>Max 100MB</span>
+          <span>max 100MB</span>
         </div>
       </div>
 
@@ -341,8 +357,8 @@ export default function EnhancedMarkdownEditor({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        data-color-mode="dark"
-        className="relative"
+        data-color-mode={colorMode}
+        className="relative rounded-lg overflow-hidden border border-line"
       >
         <MDEditor
           ref={editorRef}
@@ -367,8 +383,8 @@ export default function EnhancedMarkdownEditor({
       </div>
 
       {/* Mobile-specific instructions */}
-      <div className="md:hidden mt-2 text-xs text-gray-500 text-center">
-        💡 On mobile: Tap &quot;Upload Media&quot; to upload from your camera or
+      <div className="md:hidden mt-2 text-xs text-ink-faint text-center">
+        💡 on mobile: tap &quot;upload media&quot; to upload from your camera or
         gallery
       </div>
     </div>

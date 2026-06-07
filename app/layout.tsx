@@ -1,16 +1,32 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Fraunces, Caveat, Work_Sans } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
-import Navigation from "./components/Navigation";
+import SketchbookNav from "./components/SketchbookNav";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
-import AuroraBackground from "./components/AuroraBackground";
+import PaperBackground from "./components/PaperBackground";
+import AlbumThemeVars from "./components/AlbumThemeVars";
 
-const inter = Inter({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  weight: ["200", "300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
   display: "swap",
+  variable: "--font-fraunces",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-caveat",
+});
+
+const workSans = Work_Sans({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-work",
 });
 
 export const metadata: Metadata = {
@@ -62,14 +78,30 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
+// Runs before paint to set the theme class, avoiding a flash of the wrong theme.
+const themeScript = `
+(function(){
+  try {
+    var t = localStorage.getItem('theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t === 'dark') document.documentElement.classList.add('dark');
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.className}>
+    <html
+      lang="en"
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable}`}
+      suppressHydrationWarning
+    >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="dns-prefetch" href="https://i.scdn.co" />
         <link rel="dns-prefetch" href="https://mosaic.scdn.co" />
         <link rel="dns-prefetch" href="https://img.youtube.com" />
@@ -77,9 +109,10 @@ export default function RootLayout({
       </head>
       <body className="grain min-h-screen">
         <NowPlayingProvider>
-          <AuroraBackground />
+          <AlbumThemeVars />
+          <PaperBackground />
+          <SketchbookNav />
           <div className="relative z-10">{children}</div>
-          <Navigation />
           <NowPlaying />
         </NowPlayingProvider>
       </body>

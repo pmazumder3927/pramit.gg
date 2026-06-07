@@ -72,10 +72,10 @@ export default function SpotifyConnection({
 
   if (loading) {
     return (
-      <div className="bg-deep-graphite rounded-lg p-6">
+      <div className="sketch-card p-6">
         <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-gray-400">Checking Spotify status...</span>
+          <div className="w-5 h-5 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin" />
+          <span className="text-ink-soft">checking spotify status...</span>
         </div>
       </div>
     );
@@ -85,14 +85,14 @@ export default function SpotifyConnection({
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-deep-graphite rounded-lg p-6"
+      className="sketch-card p-6"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {/* Spotify Logo */}
           <div className="w-12 h-12 bg-[#1DB954] rounded-full flex items-center justify-center">
             <svg
-              className="w-7 h-7 text-black"
+              className="w-7 h-7 text-true-black"
               viewBox="0 0 24 24"
               fill="currentColor"
             >
@@ -101,11 +101,11 @@ export default function SpotifyConnection({
           </div>
 
           <div>
-            <h3 className="font-medium text-lg">Spotify</h3>
-            <p className="text-sm text-gray-400">
+            <h3 className="font-serif font-medium text-lg text-ink">spotify</h3>
+            <p className="text-sm text-ink-soft">
               {isConnected
-                ? "Connected - Your music activity is being displayed"
-                : "Connect to show your music activity on your site"}
+                ? "connected — your music activity is being displayed"
+                : "connect to show your music activity on your site"}
             </p>
           </div>
         </div>
@@ -113,23 +113,23 @@ export default function SpotifyConnection({
         <div className="flex items-center gap-3">
           {/* Status indicator */}
           <div
-            className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-500" : "bg-gray-500"}`}
+            className={`w-3 h-3 rounded-full ${isConnected ? "bg-[#1DB954]" : "bg-ink-faint"}`}
           />
 
           {isConnected ? (
             <button
               onClick={handleDisconnect}
               disabled={disconnecting}
-              className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50"
+              className="px-4 py-2 bg-accent-rust/15 text-accent-rust border border-accent-rust/30 rounded-lg hover:bg-accent-rust/25 transition-all disabled:opacity-50"
             >
-              {disconnecting ? "Disconnecting..." : "Disconnect"}
+              {disconnecting ? "disconnecting..." : "disconnect"}
             </button>
           ) : (
             <button
               onClick={handleConnect}
-              className="px-4 py-2 bg-[#1DB954] text-black font-medium rounded-lg hover:bg-[#1ed760] transition-all"
+              className="px-4 py-2 bg-[#1DB954] text-true-black font-medium rounded-lg hover:bg-[#1ed760] transition-all"
             >
-              Connect Spotify
+              connect spotify
             </button>
           )}
         </div>
@@ -140,10 +140,10 @@ export default function SpotifyConnection({
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`mt-4 px-4 py-2 rounded-lg ${
+          className={`mt-4 px-4 py-2 rounded-lg border ${
             message.type === "success"
-              ? "bg-green-500/20 text-green-400"
-              : "bg-red-500/20 text-red-400"
+              ? "bg-[#1DB954]/15 text-[#15833c] dark:text-[#1ed760] border-[#1DB954]/30"
+              : "bg-accent-rust/15 text-accent-rust border-accent-rust/30"
           }`}
         >
           {message.text}

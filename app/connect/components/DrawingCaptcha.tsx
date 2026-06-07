@@ -65,19 +65,43 @@ type PopoverId = "brush" | "color" | "size" | null;
 
 const COLOR_PRESETS = [
   "#f5f5f5",
-  "#0c0816",
+  "#2a2018",
   "#ff8f6b",
-  "#ffd36d",
-  "#b7ffca",
-  "#b9ddff",
-  "#d0c0ff",
-  "#9df4f2",
-  "#f8a4c8",
+  "#e0922f",
+  "#7aa86a",
+  "#5e86b8",
+  "#8b6fc4",
+  "#3fa7a3",
+  "#d56a98",
   "#a87bf2",
 ];
 
+// Canvas surfaces + default ink per theme. Light mode is a warm sketchbook
+// paper with dark ink; dark mode keeps the inky offering-tablet feel.
+const SURFACE = {
+  light: {
+    canvas: "#f3ece0",
+    ink: "#2a2018",
+    grid: "rgba(42,32,24,0.07)",
+    vignette: "rgba(120,90,60,0.12)",
+  },
+  dark: {
+    canvas: "#1a1410",
+    ink: "#f5f5f5",
+    grid: "rgba(255,255,255,0.05)",
+    vignette: "rgba(0,0,0,0.55)",
+  },
+} as const;
+
+type ThemeName = keyof typeof SURFACE;
+
+function readTheme(): ThemeName {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
 const DEFAULT_BRUSH: BrushId = "pen";
-const DEFAULT_COLOR = COLOR_PRESETS[0];
+const DEFAULT_COLOR = "#2a2018";
 const DEFAULT_WIDTH = 6;
 const DEFAULT_OPACITY = 1;
 const MIN_WIDTH = 1;
@@ -106,8 +130,6 @@ const TOOL_LABELS: Record<ToolMode, string> = {
   ellipse: "ellipse",
 };
 
-const CANVAS_BACKGROUND = "#0a0a0a";
-const CANVAS_PREVIEW_BG = "#0a0a0a";
 
 const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   function DrawingCaptcha(
@@ -148,6 +170,36 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   // UI state.
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [popover, setPopover] = useState<PopoverId>(null);
+
+  // Theme — drives the canvas surface + default ink so the tool reads against
+  // whatever paper it's sitting on. Re-read on mount and whenever the html
+  // `.dark` class flips.
+  const [theme, setTheme] = useState<ThemeName>("dark");
+  const surface = SURFACE[theme];
+  // Track whether the user has hand-picked a color; if not, the default ink
+  // follows the theme so it always contrasts the surface.
+  const colorTouchedRef = useRef(false);
+  useEffect(() => {
+    const sync = () => {
+      const next = readTheme();
+      setTheme(next);
+      if (!colorTouchedRef.current) {
+        setColor(SURFACE[next].ink);
+      }
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const handleColorChange = useCallback((value: string) => {
+    colorTouchedRef.current = true;
+    setColor(value);
+  }, []);
 
   const drawingRef = useRef<{
     pointerId: number;
@@ -616,9 +668,9 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+      <div className="rounded-xl border-[1.4px] border-dashed border-line bg-card p-6">
         <p
-          className={`${councilSerif.className} text-base italic text-white/40`}
+          className={`${councilSerif.className} text-base italic text-ink-faint`}
         >
           summoning the council...
         </p>
@@ -628,14 +680,14 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
 
   if (loadError || !challenge) {
     return (
-      <div className="rounded-2xl border border-rose-400/20 bg-rose-500/5 p-5">
-        <p className="mb-3 text-sm font-light text-rose-100/80">
+      <div className="rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 p-5">
+        <p className="mb-3 text-sm text-accent-rust">
           {loadError ?? "The council is unreachable."}
         </p>
         <button
           type="button"
           onClick={reload}
-          className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-light text-white/70 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white/90"
+          className="rounded-xl border-[1.4px] border-line bg-paper-2/50 px-4 py-2 text-sm text-ink-soft transition-colors duration-300 hover:border-accent-orange/60 hover:text-ink"
         >
           try again
         </button>
@@ -644,35 +696,35 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   }
 
   const containerClass = isFullscreen
-    ? "fixed inset-0 z-[100] flex min-h-0 flex-col bg-black/95 p-3 text-white backdrop-blur-xl sm:p-6"
-    : "text-white";
+    ? "fixed inset-0 z-[100] flex min-h-0 flex-col bg-paper/95 p-3 text-ink backdrop-blur-xl sm:p-6"
+    : "text-ink";
 
   return (
     <div className={containerClass}>
       <div
         className={
           isFullscreen
-            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
-            : "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]"
+            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border-[1.6px] border-line bg-card shadow-paper-lg"
+            : "relative flex min-h-0 flex-col overflow-hidden rounded-xl border-[1.6px] border-line bg-card"
         }
       >
         {/* Header — the council's request, in mystical voice */}
         <header className="relative flex shrink-0 items-start justify-between gap-4 px-5 pb-2.5 pt-4 sm:px-6 sm:pt-5">
           <div className="flex min-w-0 flex-col gap-1">
             <p
-              className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-white/45 sm:text-base`}
+              className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
               style={{ fontWeight: 300 }}
             >
-              <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-white/25">
+              <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-ink-faint">
                 edict {romanize(challenge.level)}
               </span>
-              <span aria-hidden className="text-white/15">
+              <span aria-hidden className="text-ink-faint/60">
                 ·
               </span>
               <span className="truncate">the council implores you to draw</span>
             </p>
             <h3
-              className={`${councilSerif.className} flex items-baseline gap-2.5 truncate text-white/95`}
+              className={`${councilSerif.className} flex items-baseline gap-2.5 truncate text-ink`}
               style={{ fontWeight: 400 }}
             >
               <span
@@ -715,24 +767,23 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
           aria-hidden
           className="relative mx-5 mb-2 flex items-center gap-2 sm:mx-6"
         >
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
-          <span className="text-[10px] tracking-[0.4em] text-white/25">◆</span>
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-line to-transparent" />
+          <span className="text-[10px] tracking-[0.4em] text-ink-faint/70">◆</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-line to-transparent" />
         </div>
 
         {/* Canvas — the offering tablet */}
         <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
           <div
             ref={wrapperRef}
-            className="relative w-full select-none overflow-hidden rounded-xl border border-white/[0.06]"
+            className="relative w-full select-none overflow-hidden rounded-xl border border-line"
             style={{
               aspectRatio: isFullscreen
                 ? undefined
                 : `${DRAWING_CANVAS_WIDTH} / ${DRAWING_CANVAS_HEIGHT}`,
               flex: isFullscreen ? "1 1 auto" : undefined,
-              backgroundColor: CANVAS_BACKGROUND,
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0)",
+              backgroundColor: surface.canvas,
+              backgroundImage: `radial-gradient(circle at 1px 1px, ${surface.grid} 1px, transparent 0)`,
               backgroundSize: "22px 22px",
             }}
           >
@@ -741,8 +792,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
               aria-hidden
               className="pointer-events-none absolute inset-0"
               style={{
-                background:
-                  "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%)",
+                background: `radial-gradient(ellipse at center, transparent 55%, ${surface.vignette} 100%)`,
               }}
             />
 
@@ -818,7 +868,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 }}
               >
                 <div
-                  className={`${councilSerif.className} text-base italic tracking-wide text-white/35 sm:text-lg`}
+                  className={`${councilSerif.className} text-base italic tracking-wide text-ink-faint sm:text-lg`}
                 >
                   make your offering
                 </div>
@@ -849,7 +899,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 setBrushId(id);
                 if (tool !== "brush") setTool("brush");
               }}
-              onColor={setColor}
+              onColor={handleColorChange}
               onWidth={setWidth}
               onOpacity={setOpacity}
               onUndo={undo}
@@ -880,7 +930,7 @@ function CornerGlyph({
   return (
     <span
       aria-hidden
-      className={`pointer-events-none absolute z-20 select-none text-[10px] leading-none text-white/20 ${placement[position]}`}
+      className={`pointer-events-none absolute z-20 select-none text-[10px] leading-none text-ink-faint/50 ${placement[position]}`}
     >
       ✦
     </span>
@@ -892,8 +942,8 @@ function StatusSigil({ ready }: { ready: boolean }) {
     <div
       className={`${councilSerif.className} flex items-center gap-2 rounded-full border px-3 py-1 text-xs italic backdrop-blur-md transition-colors duration-500 ${
         ready
-          ? "border-accent-orange/30 bg-accent-orange/10 text-orange-100/90"
-          : "border-white/[0.08] bg-black/45 text-white/50"
+          ? "border-accent-orange/40 bg-accent-orange/10 text-accent-orange"
+          : "border-line bg-paper-2/70 text-ink-faint"
       }`}
       style={{ fontWeight: 400 }}
     >
@@ -903,7 +953,7 @@ function StatusSigil({ ready }: { ready: boolean }) {
         ) : null}
         <span
           className={`relative inline-block h-1.5 w-1.5 rounded-full ${
-            ready ? "bg-accent-orange" : "bg-white/35"
+            ready ? "bg-accent-orange" : "bg-ink-faint/60"
           }`}
         />
       </span>
@@ -982,7 +1032,7 @@ function Toolbar({
 
   return (
     <div className="absolute inset-x-2 bottom-2 z-30 flex justify-center sm:bottom-3">
-      <div className="relative max-w-full overflow-visible rounded-full border border-white/[0.08] bg-black/65 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="relative max-w-full overflow-visible rounded-full border border-line bg-card/85 p-1 shadow-paper backdrop-blur-xl">
         {/* Click-catcher: closes popover when tapping the toolbar background */}
         {popover ? (
           <button
@@ -1019,7 +1069,7 @@ function Toolbar({
             disabled={disabled}
           >
             <BrushDot brushId={brushId} color={color} />
-            <span className="hidden text-[11px] font-light text-white/65 sm:inline">
+            <span className="hidden text-[11px] font-light text-ink-soft sm:inline">
               {BRUSH_LABELS[brushId]}
             </span>
             <Caret />
@@ -1032,11 +1082,11 @@ function Toolbar({
             disabled={disabled || brushId === "eraser"}
           >
             <span
-              className="block h-3.5 w-3.5 rounded-full ring-1 ring-white/10"
+              className="block h-3.5 w-3.5 rounded-full ring-1 ring-line"
               style={{
                 background:
                   brushId === "eraser"
-                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0 2px, transparent 2px 4px)"
+                    ? "repeating-linear-gradient(45deg, rgb(var(--fg) / 0.18) 0 2px, transparent 2px 4px)"
                     : color,
               }}
             />
@@ -1050,13 +1100,13 @@ function Toolbar({
             disabled={disabled}
           >
             <span
-              className="block rounded-full bg-white/85"
+              className="block rounded-full bg-ink/80"
               style={{
                 width: `${Math.max(3, Math.min(width / 2, 14))}px`,
                 height: `${Math.max(3, Math.min(width / 2, 14))}px`,
               }}
             />
-            <span className="hidden text-[11px] tabular-nums font-light text-white/65 sm:inline">
+            <span className="hidden text-[11px] tabular-nums font-light text-ink-soft sm:inline">
               {width}
             </span>
             <Caret />
@@ -1140,7 +1190,7 @@ function Divider() {
   return (
     <span
       aria-hidden
-      className="mx-0.5 h-5 w-px shrink-0 bg-white/[0.08] sm:mx-1"
+      className="mx-0.5 h-5 w-px shrink-0 bg-line sm:mx-1"
     />
   );
 }
@@ -1151,7 +1201,7 @@ function Caret() {
       width={9}
       height={9}
       viewBox="0 0 10 10"
-      className="shrink-0 text-white/35"
+      className="shrink-0 text-ink-faint"
       fill="none"
       stroke="currentColor"
       strokeWidth={1.4}
@@ -1172,7 +1222,7 @@ function PopoverShell({ children }: { children: React.ReactNode }) {
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       className="absolute bottom-[calc(100%+10px)] left-1/2 z-30 -translate-x-1/2"
     >
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-black/80 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-2xl">
+      <div className="relative overflow-hidden rounded-2xl border border-line bg-card/95 shadow-paper-lg backdrop-blur-2xl">
         {/* Inner ember ring — ties popovers to the editor's accent */}
         <div
           aria-hidden
@@ -1213,14 +1263,14 @@ function BrushPanel({
               aria-pressed={selected}
               className={`group flex flex-col items-stretch gap-1.5 rounded-xl border px-2 py-2 text-left transition-colors duration-150 ${
                 selected
-                  ? "border-accent-orange/40 bg-accent-orange/[0.06]"
-                  : "border-white/[0.06] bg-white/[0.015] hover:border-white/15 hover:bg-white/[0.04]"
+                  ? "border-accent-orange/40 bg-accent-orange/[0.08]"
+                  : "border-line bg-paper-2/40 hover:border-ink-faint/40 hover:bg-paper-2/70"
               }`}
             >
               <BrushPreview brush={id} color={color} width={width} />
               <span
                 className={`text-[10px] font-light leading-none ${
-                  selected ? "text-white/95" : "text-white/55"
+                  selected ? "text-ink" : "text-ink-soft"
                 }`}
               >
                 {BRUSH_LABELS[id]}
@@ -1257,17 +1307,17 @@ function ColorPanel({
               style={{
                 backgroundColor: preset,
                 boxShadow: selected
-                  ? `0 0 0 2px rgba(255,255,255,0.95), 0 0 14px ${preset}77`
-                  : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+                  ? `0 0 0 2px rgb(var(--accent-orange)), 0 0 14px ${preset}77`
+                  : "inset 0 0 0 1px rgb(var(--line))",
               }}
             />
           );
         })}
       </div>
-      <label className="mt-2.5 flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2.5 py-2 transition-colors hover:bg-white/[0.04]">
+      <label className="mt-2.5 flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-2 transition-colors hover:bg-paper-2/70">
         <span
           aria-hidden
-          className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md ring-1 ring-white/10"
+          className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md ring-1 ring-line"
         >
           <span
             className="absolute inset-0"
@@ -1281,10 +1331,10 @@ function ColorPanel({
             style={{ backgroundColor: color }}
           />
         </span>
-        <span className="flex-1 text-xs font-light text-white/65">
+        <span className="flex-1 text-xs font-light text-ink-soft">
           custom color
         </span>
-        <span className="text-[11px] tabular-nums text-white/35">
+        <span className="text-[11px] tabular-nums text-ink-faint">
           {normalizeHex(color)}
         </span>
         <input
@@ -1318,7 +1368,7 @@ function SizePanel({
 }) {
   return (
     <div className="w-[260px] p-3">
-      <div className="mb-3 flex justify-center overflow-hidden rounded-lg border border-white/[0.05] bg-black/40 p-1.5">
+      <div className="mb-3 flex justify-center overflow-hidden rounded-lg border border-line bg-paper-2/40 p-1.5">
         <BrushPreview brush={brushId} color={color} width={width} large />
       </div>
       <SliderRow
@@ -1361,9 +1411,9 @@ function SliderRow({
 }) {
   return (
     <div className="mt-2">
-      <div className="mb-1 flex items-center justify-between text-[11px] font-light text-white/45">
+      <div className="mb-1 flex items-center justify-between text-[11px] font-light text-ink-faint">
         <span>{label}</span>
-        <span className="tabular-nums text-white/70">
+        <span className="tabular-nums text-ink-soft">
           {value}
           {unit}
         </span>
@@ -1376,7 +1426,7 @@ function SliderRow({
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         disabled={disabled}
-        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-white disabled:opacity-40"
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-line accent-[rgb(var(--accent-orange))] disabled:opacity-40"
         aria-label={label}
       />
     </div>
@@ -1412,10 +1462,10 @@ function IconBtn({
       aria-pressed={active}
       className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 active:scale-90 disabled:opacity-30 ${
         active
-          ? "bg-accent-orange/[0.14] text-white shadow-[inset_0_0_0_1px_rgba(255,107,61,0.4),0_0_12px_rgba(255,107,61,0.2)]"
+          ? "bg-accent-orange/15 text-accent-orange shadow-[inset_0_0_0_1px_rgba(255,107,61,0.4)]"
           : danger
-            ? "text-white/55 hover:bg-rose-400/10 hover:text-rose-100/90"
-            : "text-white/60 hover:bg-white/[0.08] hover:text-white/95"
+            ? "text-ink-soft hover:bg-accent-rust/15 hover:text-accent-rust"
+            : "text-ink-soft hover:bg-paper-2/70 hover:text-ink"
       }`}
     >
       {children}
@@ -1446,8 +1496,8 @@ function PopoverButton({
       aria-pressed={open}
       className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors duration-150 active:scale-95 disabled:opacity-30 ${
         open
-          ? "bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
-          : "text-white/70 hover:bg-white/[0.08] hover:text-white/95"
+          ? "bg-paper-2/80 text-ink shadow-[inset_0_0_0_1px_rgb(var(--line))]"
+          : "text-ink-soft hover:bg-paper-2/70 hover:text-ink"
       }`}
     >
       {children}
@@ -1473,7 +1523,7 @@ function HeaderIcon({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-white/45 transition-colors duration-150 active:scale-90 hover:bg-white/[0.05] hover:text-white/85 disabled:opacity-30"
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft transition-colors duration-150 active:scale-90 hover:bg-paper-2/70 hover:text-ink disabled:opacity-30"
     >
       {children}
     </button>
@@ -1487,8 +1537,8 @@ function BrushDot({ brushId, color }: { brushId: BrushId; color: string }) {
         className="block h-3.5 w-3.5 rounded-full"
         style={{
           background:
-            "repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 4px)",
-          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.18)",
+            "repeating-linear-gradient(45deg, rgb(var(--fg) / 0.2) 0 2px, transparent 2px 4px)",
+          boxShadow: "inset 0 0 0 1px rgb(var(--line))",
         }}
       />
     );
@@ -1580,6 +1630,8 @@ function BrushPreview({
   large?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const theme = readTheme();
+  const surface = SURFACE[theme];
   const W = large ? 220 : 80;
   const H = large ? 36 : 22;
 
@@ -1604,7 +1656,9 @@ function BrushPreview({
       const pressure = 0.4 + Math.sin(u * Math.PI) * 0.5;
       points.push({ x, y, p: pressure, t: u * 240 });
     }
-    const previewColor = brush === "eraser" ? "#bcbcbc" : color;
+    // Eraser preview shows as a "hole" — mid-grey that reads on either surface.
+    const previewColor =
+      brush === "eraser" ? (theme === "light" ? "#c9bba8" : "#6b5f54") : color;
     const previewWidth = large
       ? Math.max(3, Math.min(width, 14))
       : Math.max(2, Math.min(width, 8));
@@ -1617,13 +1671,13 @@ function BrushPreview({
       seed: 7,
       tool: brush === "spray" ? "spray" : undefined,
     });
-  }, [brush, color, width, W, H, large]);
+  }, [brush, color, width, W, H, large, theme]);
 
   return (
     <canvas
       ref={ref}
       className="block rounded"
-      style={{ width: W, height: H, backgroundColor: CANVAS_PREVIEW_BG }}
+      style={{ width: W, height: H, backgroundColor: surface.canvas }}
     />
   );
 }

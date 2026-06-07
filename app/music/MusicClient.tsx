@@ -13,6 +13,7 @@ import {
   ChaoticTrackCard,
   ChaoticPlaylistCard,
 } from "./components";
+import { Doodle, HandNote, Stamp } from "@/app/components/sketchbook";
 
 interface SpotifyTrack {
   id: string;
@@ -180,65 +181,65 @@ export default function MusicClient() {
       <GradientOrbs primaryColor={nowPlayingColor} />
 
       <main className="relative z-10 min-h-screen">
-        {/* Hero Section */}
+        {/* Hero Section — the mixtape cover */}
         <motion.section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
-          className="pt-20 pb-8 md:pt-32 md:pb-12"
+          className="pt-20 pb-6 md:pt-28 md:pb-10"
         >
-          <div className="max-w-7xl mx-auto px-4 md:px-8">
-            {/* Title with dynamic gradient */}
+          <div className="max-w-5xl mx-auto px-4 md:px-8">
+            {/* Liner-note masthead */}
             <motion.div
-              className="text-center mb-8 md:mb-12"
-              initial={{ opacity: 0, y: 30 }}
+              className="relative mb-10 text-center md:mb-14"
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <h1
-                className="text-5xl md:text-7xl lg:text-8xl font-extralight tracking-tight mb-4"
-                style={{
-                  backgroundImage: `linear-gradient(90deg, #fff, ${nowPlayingColor}, #7c77c6)`,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                music
-              </h1>
-              <motion.p
-                className="text-lg md:text-xl text-gray-400 font-light mb-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-              >
+              <span className="inline-block -rotate-2 font-hand text-2xl text-accent-purple md:text-3xl">
+                what i&apos;m listening to
+              </span>
+
+              <div className="relative mx-auto mt-1 inline-block">
+                <h1 className="font-serif text-6xl font-medium tracking-tight text-ink md:text-8xl">
+                  music
+                </h1>
+                <Doodle
+                  name="underline"
+                  tone="orange"
+                  draw
+                  className="absolute -bottom-3 left-0 h-4 w-full"
+                  strokeWidth={3}
+                />
+                <Doodle
+                  name="star"
+                  tone="purple"
+                  className="absolute -right-7 -top-2 h-5 w-5 rotate-12"
+                  strokeWidth={2}
+                />
+              </div>
+
+              <p className="mt-5 font-serif text-lg italic text-ink-soft md:text-xl">
                 a window into my (sonic) world
-              </motion.p>
-              <motion.a
-                href="https://open.spotify.com/user/jtjyzh7ke7twmvg5t3bwm4skf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 border"
-                style={{
-                  backgroundColor: `${nowPlayingColor}15`,
-                  borderColor: `${nowPlayingColor}30`,
-                  color: nowPlayingColor,
-                }}
-                whileHover={{
-                  scale: 1.05,
-                  backgroundColor: `${nowPlayingColor}25`,
-                  borderColor: `${nowPlayingColor}50`,
-                }}
-                whileTap={{ scale: 0.97 }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
-                </svg>
-                Follow on Spotify
-              </motion.a>
+              </p>
+
+              <div className="mt-5 flex items-center justify-center gap-4">
+                <a
+                  href="https://open.spotify.com/user/jtjyzh7ke7twmvg5t3bwm4skf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-sketch group/follow"
+                >
+                  <svg
+                    className="h-4 w-4 transition-transform group-hover/follow:rotate-12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                  follow on spotify
+                </a>
+              </div>
             </motion.div>
 
             {/* Now Playing */}
@@ -262,10 +263,11 @@ export default function MusicClient() {
         </motion.section>
 
         {/* Content — mount on first visit, keep alive after, toggle with CSS */}
-        <div className="max-w-7xl mx-auto px-4 md:px-8 pb-24">
+        <div className="max-w-4xl mx-auto px-4 md:px-8 pb-28 md:pb-16 mt-6 md:mt-10">
           {visitedTabs.has("recent") && (
             <div className={selectedTab === "recent" ? "" : "hidden"}>
-              <div className="space-y-3 md:space-y-4">
+              <SheetHeading label="the rotation" sub="lately on repeat" />
+              <div className="space-y-2.5 md:space-y-3">
                 {recentlyPlayed?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id + index}
@@ -287,7 +289,8 @@ export default function MusicClient() {
 
           {visitedTabs.has("top") && (
             <div className={selectedTab === "top" ? "" : "hidden"}>
-              <div className="space-y-3 md:space-y-4">
+              <SheetHeading label="heavy hitters" sub="my top of the moment" />
+              <div className="space-y-2.5 md:space-y-3">
                 {topTracks?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id}
@@ -307,7 +310,8 @@ export default function MusicClient() {
 
           {visitedTabs.has("playlists") && (
             <div className={selectedTab === "playlists" ? "" : "hidden"}>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]">
+              <SheetHeading label="the mixtape wall" sub="playlists i keep coming back to" />
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]">
                 {playlists?.playlists.map((playlist, index) => (
                   <ChaoticPlaylistCard
                     key={playlist.id}
@@ -331,6 +335,24 @@ export default function MusicClient() {
   );
 }
 
+function SheetHeading({ label, sub }: { label: string; sub: string }) {
+  return (
+    <div className="mb-5 flex items-end justify-between gap-3 border-b border-dashed border-line pb-2 md:mb-7">
+      <div className="flex items-baseline gap-3">
+        <Stamp tone="purple" rotate={-3}>
+          tracklist
+        </Stamp>
+        <h2 className="font-serif text-2xl font-medium text-ink md:text-3xl">
+          {label}
+        </h2>
+      </div>
+      <HandNote tone="rust" rotate={-2} className="hidden text-lg sm:block md:text-xl">
+        {sub}
+      </HandNote>
+    </div>
+  );
+}
+
 function EmptyState({ emoji, message }: { emoji: string; message: string }) {
   return (
     <motion.div
@@ -345,7 +367,7 @@ function EmptyState({ emoji, message }: { emoji: string; message: string }) {
       >
         {emoji}
       </motion.div>
-      <p className="text-gray-500">{message}</p>
+      <p className="font-hand text-2xl text-ink-faint">{message}</p>
     </motion.div>
   );
 }

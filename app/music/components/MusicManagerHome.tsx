@@ -172,7 +172,7 @@ export function MusicManagerHome() {
               <div className="mt-4 flex flex-wrap gap-2.5">
                 <Link
                   href="/music/manage/review"
-                  className="rounded-full px-4 py-1.5 text-xs font-medium text-black transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                  className="rounded-full px-4 py-1.5 text-xs font-medium text-pure-white transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   style={{ backgroundColor: accentColor }}
                 >
                   Review
@@ -209,13 +209,13 @@ export function MusicManagerHome() {
             {
               label: "Shaped",
               value: structured,
-              color: "#7c77c6",
+              color: "rgb(var(--accent-purple))",
             },
           ].map((m) => (
             <div key={m.label} className="text-center">
               <p
-                className="text-2xl font-light tabular-nums"
-                style={{ color: m.color || "white" }}
+                className="text-2xl font-light tabular-nums text-ink"
+                style={m.color ? { color: m.color } : undefined}
               >
                 {m.value}
               </p>
@@ -261,7 +261,7 @@ export function MusicManagerHome() {
                 {duplicates.likedSongs.groups.slice(0, 4).map((group) => (
                   <div
                     key={group.key}
-                    className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3"
+                    className="rounded-xl border border-line bg-paper-2/40 px-4 py-3"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -322,7 +322,7 @@ export function MusicManagerHome() {
                 {duplicates.playlists.slice(0, 5).map((playlist) => (
                   <div
                     key={playlist.playlistId}
-                    className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3"
+                    className="rounded-xl border border-line bg-paper-2/40 px-4 py-3"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">

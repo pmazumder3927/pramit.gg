@@ -188,11 +188,75 @@ const KITTEN_PALETTES: KittenPalette[] = [
   { k: "#a4a3b8", e: "#ffc34a", n: "#d59a92", m: "#2a2030", glow: "#dfe1f6" },
 ];
 
+type ThemeName = "light" | "dark";
+
+function readTheme(): ThemeName {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function useTheme(): ThemeName {
+  const [theme, setTheme] = useState<ThemeName>("dark");
+  useEffect(() => {
+    const sync = () => setTheme(readTheme());
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+}
+
+// Structural (non-cat) scene colors. The cats keep their warm fur palettes in
+// both themes; only the stage around them flips so the diorama reads as a sunny
+// studio in light mode and a candlelit chamber at night in dark mode.
+type SceneColors = {
+  canvasPaper: string; // easel canvas the drawing replays on
+  easelMat: string;
+  easelWood: string;
+  easelWoodEdge: string;
+  tripod: string;
+  tripodDark: string;
+  groundShadow: string;
+  cushion: string;
+  cushionTop: string;
+};
+
+const SCENE: Record<ThemeName, SceneColors> = {
+  light: {
+    canvasPaper: "#f3ece0",
+    easelMat: "#e7dcc8",
+    easelWood: "#b07d4a",
+    easelWoodEdge: "#caa06a",
+    tripod: "#7a5230",
+    tripodDark: "#5a3920",
+    groundShadow: "#6b4a2e",
+    cushion: "#a87bf2",
+    cushionTop: "#c5a8f8",
+  },
+  dark: {
+    canvasPaper: "#0c0816",
+    easelMat: "#1a1226",
+    easelWood: "#5a3920",
+    easelWoodEdge: "#7a5230",
+    tripod: "#3a261a",
+    tripodDark: "#2c1d12",
+    groundShadow: "#06030c",
+    cushion: "#7a4cd6",
+    cushionTop: "#a87bf2",
+  },
+};
+
 export default function CatCouncil({
   verdict,
   message,
   strokes = [],
 }: CatCouncilProps) {
+  const theme = useTheme();
+  const scene = SCENE[theme];
   return (
     <div className="relative flex flex-col items-center">
       <div className="relative w-full max-w-[640px]">
@@ -204,14 +268,28 @@ export default function CatCouncil({
         >
           <defs>
             <radialGradient id="council-spotlight" cx="50%" cy="40%" r="60%">
-              <stop offset="0%" stopColor="#fff2c2" stopOpacity="0.18" />
-              <stop offset="60%" stopColor="#7a4cd6" stopOpacity="0.05" />
-              <stop offset="100%" stopColor="#000" stopOpacity="0" />
+              <stop
+                offset="0%"
+                stopColor={theme === "light" ? "#ffcf8a" : "#fff2c2"}
+                stopOpacity={theme === "light" ? "0.22" : "0.18"}
+              />
+              <stop offset="60%" stopColor="#a87bf2" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#a87bf2" stopOpacity="0" />
             </radialGradient>
             <radialGradient id="rug-shade" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#5a3a8c" stopOpacity="0.85" />
-              <stop offset="80%" stopColor="#2c1c50" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#1a0f30" stopOpacity="0" />
+              {theme === "light" ? (
+                <>
+                  <stop offset="0%" stopColor="#c9a8f0" stopOpacity="0.7" />
+                  <stop offset="80%" stopColor="#a87bf2" stopOpacity="0.45" />
+                  <stop offset="100%" stopColor="#a87bf2" stopOpacity="0" />
+                </>
+              ) : (
+                <>
+                  <stop offset="0%" stopColor="#5a3a8c" stopOpacity="0.85" />
+                  <stop offset="80%" stopColor="#2c1c50" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#1a0f30" stopOpacity="0" />
+                </>
+              )}
             </radialGradient>
           </defs>
 
@@ -225,7 +303,7 @@ export default function CatCouncil({
           />
 
           {/* Floor / velvet rug */}
-          <Floor verdict={verdict} />
+          <Floor verdict={verdict} scene={scene} />
 
           {/* Ambient candles in the gaps between judges and easel */}
           <Candle x={195} y={285} verdict={verdict} flicker={0} />
@@ -237,6 +315,7 @@ export default function CatCouncil({
             y={SCENE_HEIGHT - 70}
             palette={KITTEN_PALETTES[2]}
             verdict={verdict}
+            scene={scene}
           />
 
           {/* Tail-chasing kitten in the far-right corner with a yarn ball */}
@@ -254,6 +333,7 @@ export default function CatCouncil({
             y={36}
             strokes={strokes}
             verdict={verdict}
+            scene={scene}
           />
 
           {/* Kitten peeking over the top of the easel canvas */}
@@ -321,14 +401,14 @@ export default function CatCouncil({
         </svg>
       </div>
 
-      <CouncilCaption verdict={verdict} message={message} />
+      <CouncilCaption verdict={verdict} message={message} theme={theme} />
     </div>
   );
 }
 
 // ── Floor / rug ─────────────────────────────────────────────────────────────
 
-function Floor({ verdict }: { verdict: Verdict }) {
+function Floor({ verdict, scene }: { verdict: Verdict; scene: SceneColors }) {
   const fade =
     verdict === "reject" ? 0.55 : verdict === "approve" ? 1 : 0.85;
   return (
@@ -339,8 +419,8 @@ function Floor({ verdict }: { verdict: Verdict }) {
         cy={SCENE_HEIGHT - 14}
         rx={SCENE_WIDTH * 0.42}
         ry={26}
-        fill="#06030c"
-        opacity={0.55}
+        fill={scene.groundShadow}
+        opacity={0.3}
       />
       {/* Velvet rug body */}
       <ellipse
@@ -455,11 +535,13 @@ function Easel({
   y,
   strokes,
   verdict,
+  scene,
 }: {
   x: number;
   y: number;
   strokes: DrawingStroke[];
   verdict: Verdict;
+  scene: SceneColors;
 }) {
   const FRAME_W = 240;
   const FRAME_H = 160;
@@ -503,7 +585,7 @@ function Easel({
         y1={FRAME_H + 6}
         x2={-22}
         y2={FRAME_H + 86}
-        stroke="#3a261a"
+        stroke={scene.tripod}
         strokeWidth={6}
         strokeLinecap="round"
       />
@@ -512,7 +594,7 @@ function Easel({
         y1={FRAME_H + 6}
         x2={FRAME_W + 22}
         y2={FRAME_H + 86}
-        stroke="#3a261a"
+        stroke={scene.tripod}
         strokeWidth={6}
         strokeLinecap="round"
       />
@@ -521,7 +603,7 @@ function Easel({
         y1={FRAME_H + 6}
         x2={FRAME_W / 2}
         y2={FRAME_H + 96}
-        stroke="#2c1d12"
+        stroke={scene.tripodDark}
         strokeWidth={5}
         strokeLinecap="round"
       />
@@ -531,7 +613,7 @@ function Easel({
         y1={FRAME_H + 50}
         x2={FRAME_W + 6}
         y2={FRAME_H + 50}
-        stroke="#3a261a"
+        stroke={scene.tripod}
         strokeWidth={3}
         strokeLinecap="round"
       />
@@ -543,7 +625,7 @@ function Easel({
         width={FRAME_W + 18}
         height={FRAME_H + 18}
         rx={4}
-        fill="#5a3920"
+        fill={scene.easelWood}
       />
       <rect
         x={-9}
@@ -552,7 +634,7 @@ function Easel({
         height={FRAME_H + 18}
         rx={4}
         fill="none"
-        stroke="#7a5230"
+        stroke={scene.easelWoodEdge}
         strokeWidth={2}
       />
       {/* Inner mat */}
@@ -562,10 +644,10 @@ function Easel({
         width={FRAME_W + 4}
         height={FRAME_H + 4}
         rx={2}
-        fill="#1a1226"
+        fill={scene.easelMat}
       />
       {/* Canvas */}
-      <rect x={0} y={0} width={FRAME_W} height={FRAME_H} fill="#0c0816" />
+      <rect x={0} y={0} width={FRAME_W} height={FRAME_H} fill={scene.canvasPaper} />
 
       {/* The drawing itself, replayed stroke-by-stroke during deliberation. */}
       <foreignObject x={0} y={0} width={FRAME_W} height={FRAME_H}>
@@ -574,11 +656,12 @@ function Easel({
           verdict={verdict}
           cssWidth={FRAME_W}
           cssHeight={FRAME_H}
+          paper={scene.canvasPaper}
         />
       </foreignObject>
 
       {/* Top hanger nail */}
-      <rect x={FRAME_W / 2 - 1} y={-13} width={2} height={4} fill="#3a261a" />
+      <rect x={FRAME_W / 2 - 1} y={-13} width={2} height={4} fill={scene.tripod} />
       <circle cx={FRAME_W / 2} cy={-15} r={2} fill="#c8a06a" />
     </motion.g>
     </g>
@@ -597,11 +680,13 @@ function EaselReplay({
   verdict,
   cssWidth,
   cssHeight,
+  paper,
 }: {
   strokes: DrawingStroke[];
   verdict: Verdict;
   cssWidth: number;
   cssHeight: number;
+  paper: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -628,9 +713,9 @@ function EaselReplay({
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, pxW, pxH);
-      // Dark paper underneath so multiply/destination-out behave consistently
-      // with how the strokes were originally drawn.
-      ctx.fillStyle = "#0c0816";
+      // Paper underneath so multiply/destination-out behave consistently with
+      // how the strokes were originally drawn (matches the live canvas shade).
+      ctx.fillStyle = paper;
       ctx.fillRect(0, 0, pxW, pxH);
       ctx.restore();
 
@@ -671,7 +756,7 @@ function EaselReplay({
 
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [strokes, verdict, cssWidth, cssHeight]);
+  }, [strokes, verdict, cssWidth, cssHeight, paper]);
 
   return (
     <canvas
@@ -873,7 +958,7 @@ function AdultCat({
         cy={ADULT_H + 2}
         rx={ADULT_W * 0.42}
         ry={4}
-        fill="#06030c"
+        fill="#2a1d12"
         opacity={0.5}
       />
     </motion.g>
@@ -1293,7 +1378,7 @@ function RunningKitten({
             cy={KITTEN_H + 2}
             rx={KITTEN_W * 0.4}
             ry={2}
-            fill="#06030c"
+            fill="#2a1d12"
             opacity={0.6}
           />
         </g>
@@ -1358,7 +1443,7 @@ function TailChaserKitten({
         cy={KITTEN_H + 2}
         rx={KITTEN_W * 0.45}
         ry={3}
-        fill="#06030c"
+        fill="#2a1d12"
         opacity={0.5}
       />
     </g>
@@ -1370,11 +1455,13 @@ function SleepingKitten({
   y,
   palette,
   verdict,
+  scene,
 }: {
   x: number;
   y: number;
   palette: KittenPalette;
   verdict: Verdict;
+  scene: SceneColors;
 }) {
   const breathing: Variants = {
     judging: {
@@ -1401,7 +1488,7 @@ function SleepingKitten({
         width={SLEEPING_W + 8}
         height={10}
         rx={4}
-        fill="#7a4cd6"
+        fill={scene.cushion}
         opacity={0.55}
       />
       <rect
@@ -1410,7 +1497,7 @@ function SleepingKitten({
         width={SLEEPING_W + 8}
         height={3}
         rx={1.5}
-        fill="#a87bf2"
+        fill={scene.cushionTop}
         opacity={0.6}
       />
       <motion.g
@@ -1436,7 +1523,7 @@ function SleepingKitten({
         cy={SLEEPING_H + 6}
         rx={SLEEPING_W * 0.5}
         ry={3}
-        fill="#06030c"
+        fill="#2a1d12"
         opacity={0.55}
       />
     </g>
@@ -1563,7 +1650,7 @@ function YarnBall({ x, y }: { x: number; y: number }) {
         opacity={0.85}
       />
       {/* Floor shadow */}
-      <ellipse cx={0} cy={7} rx={6} ry={1.6} fill="#06030c" opacity={0.5} />
+      <ellipse cx={0} cy={7} rx={6} ry={1.6} fill="#2a1d12" opacity={0.5} />
     </g>
   );
 }
@@ -1772,6 +1859,7 @@ function CouncilCaption({
 }: {
   verdict: Verdict;
   message?: string;
+  theme?: ThemeName;
 }) {
   const [dotCount, setDotCount] = useState(0);
 
@@ -1787,7 +1875,7 @@ function CouncilCaption({
 
   if (verdict === "judging") {
     return (
-      <p className="mt-5 text-sm font-light text-white/55 tracking-wide">
+      <p className="mt-5 font-serif text-base italic tracking-wide text-ink-soft">
         the council is deliberating{".".repeat(dotCount)}
         <span className="opacity-0">{".".repeat(3 - dotCount)}</span>
       </p>
@@ -1799,7 +1887,7 @@ function CouncilCaption({
       <motion.p
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mt-5 text-sm font-light tracking-wide text-emerald-200/80"
+        className="mt-5 font-serif text-base italic tracking-wide text-accent-orange"
       >
         the council is satisfied. {message ?? "your message has been received."}
       </motion.p>
@@ -1810,7 +1898,7 @@ function CouncilCaption({
     <motion.p
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-5 max-w-md text-center text-sm font-light tracking-wide text-rose-200/80"
+      className="mt-5 max-w-md text-center font-serif text-base italic tracking-wide text-accent-rust"
     >
       {message ?? "the council is unconvinced."}
     </motion.p>

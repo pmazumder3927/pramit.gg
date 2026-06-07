@@ -95,11 +95,8 @@ export default async function PostPage({ params }: PostPageProps) {
 
   return (
     <div className="min-h-screen page-reveal">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(120,119,198,0.03),transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(255,107,61,0.02),transparent_50%)]" />
-
-      <main className="relative z-10 min-h-screen px-5 py-8 sm:px-6 md:px-8 md:py-16">
-        <article className="max-w-2xl md:max-w-3xl lg:max-w-5xl mx-auto">
+      <main className="relative z-10 min-h-screen px-4 py-10 pb-28 sm:px-6 md:px-8 md:py-16 md:pb-16">
+        <article className="mx-auto max-w-3xl">
           <PostContent post={post} />
         </article>
       </main>

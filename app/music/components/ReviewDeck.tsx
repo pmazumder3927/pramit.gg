@@ -99,7 +99,7 @@ function BucketPill({
         height: 78,
         borderColor: selected
           ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`
-          : "rgba(255,255,255,0.06)",
+          : "rgb(var(--line))",
         boxShadow: selected
           ? `0 0 20px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`
           : "none",
@@ -223,7 +223,7 @@ function BucketManageOverlay({
               onSave(Array.from(selected));
               onClose();
             }}
-            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-gray-200"
+            className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition hover:opacity-90"
           >
             Done
           </button>
@@ -321,7 +321,7 @@ function BucketPickerOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-gray-200"
+            className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition hover:opacity-90"
           >
             Done
           </button>
@@ -876,7 +876,7 @@ export function ReviewDeck({
           </p>
           <a
             href="/api/auth/login"
-            className="mt-5 inline-flex rounded-full bg-white px-6 py-2.5 text-sm font-medium text-black transition hover:bg-gray-200"
+            className="mt-5 inline-flex rounded-full bg-ink px-6 py-2.5 text-sm font-medium text-paper transition hover:opacity-90"
           >
             Sign in
           </a>
