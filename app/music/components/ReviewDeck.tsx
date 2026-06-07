@@ -251,8 +251,8 @@ function BucketManageOverlay({
                   <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-black" />
                 )}
                 {selected.has(bucket.bucketId) && (
-                  <div className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-white">
-                    <svg className="h-2.5 w-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                  <div className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-pure-white">
+                    <svg className="h-2.5 w-2.5 text-true-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -360,8 +360,8 @@ function BucketPickerOverlay({
                   )}
 
                   {selected && (
-                    <div className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-white">
-                      <svg className="h-2.5 w-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                    <div className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-pure-white">
+                      <svg className="h-2.5 w-2.5 text-true-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>

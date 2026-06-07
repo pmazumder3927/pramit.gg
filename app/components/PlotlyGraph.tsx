@@ -146,7 +146,7 @@ export default function PlotlyGraph({ src, title, height = "500px" }: PlotlyGrap
               <div className="absolute inset-0 flex items-center justify-center bg-pure-white z-10">
                 <div className="text-center">
                   <div className="w-12 h-12 border-4 border-accent-orange/30 border-t-accent-orange rounded-full animate-spin mb-4"></div>
-                  <p className="text-[#6b5d52]">loading visualization...</p>
+                  <p className="text-ink-faint">loading visualization...</p>
                 </div>
               </div>
             )}
