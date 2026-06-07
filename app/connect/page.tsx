@@ -186,7 +186,7 @@ END:VCARD`;
                 >
                   <div className="aspect-square w-full">
                     <Image
-                      src="https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/1752126862158_8673ra.png"
+                      src="/me.jpg"
                       alt="Pramit Mazumder"
                       width={320}
                       height={320}

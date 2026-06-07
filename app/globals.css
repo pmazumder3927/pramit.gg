@@ -285,7 +285,11 @@
 
   /* ---------- songscape · sumi-no-mizu (ink-in-water variant) ---------- */
   /* veins ease their colour when the album palette resolves / the theme flips */
-  .ink-vein { transition: stroke 0.9s ease, fill 0.9s ease; }
+  .ink-soft path { transition: stroke 0.9s ease, fill 0.9s ease; }
+  /* soft ink bleed: a small blur on the STATIC ring layer. with will-change it
+     rasterises once and the drift/breathe/diffuse transforms above just
+     composite it, so the bleed stays cheap on an always-mounted backdrop. */
+  .ink-soft { filter: blur(2.6px); will-change: transform; }
   /* the playhead diffuses the whole tank: ink slowly spreads + thins as the
      song ages. one --t (0..1) is written by rAF onto the svg root. */
   .ink-diffuse {

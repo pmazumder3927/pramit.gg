@@ -78,24 +78,24 @@ type Drop = {
   py: number;
 };
 
-// one closed, finger-edged ring centred on the origin, radius R. `fingers`
-// scales the comb amplitude (outer rings comb more); `freqs` come from the
-// song's words so the silhouette is the song's, deterministically.
-function ringPath(R: number, rand: () => number, fingers: number, freqs: number[]): string {
-  const steps = 72;
-  const amps = freqs.map(() => (0.035 + rand() * 0.05) * fingers);
-  const phs = freqs.map(() => rand() * Math.PI * 2);
-  let out = "";
-  for (let i = 0; i <= steps; i++) {
-    const a = (i / steps) * Math.PI * 2;
-    let rr = 1;
-    for (let h = 0; h < freqs.length; h++) rr += amps[h] * Math.sin(freqs[h] * a + phs[h]);
-    rr += (rand() - 0.5) * 0.012; // hand-wavered micro jitter
-    const r = R * rr;
-    out += `${i ? "L" : "M"}${Math.round(Math.cos(a) * r * 10) / 10} ${Math.round(Math.sin(a) * r * 10) / 10}`;
-    if (i < steps) out += " ";
+// A smooth CLOSED curve through points (Catmull-Rom → cubic béziers). Flowing
+// edges read as brushed ink rather than a faceted polygon.
+function smoothClosed(pts: [number, number][]): string {
+  const n = pts.length;
+  const r = (v: number) => Math.round(v * 10) / 10;
+  let d = `M${r(pts[0][0])} ${r(pts[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += `C${r(c1x)} ${r(c1y)} ${r(c2x)} ${r(c2y)} ${r(p2[0])} ${r(p2[1])}`;
   }
-  return out + "Z";
+  return d + "Z";
 }
 
 function makeInk(words: string[], seedStr: string, idle: boolean) {
@@ -120,14 +120,38 @@ function makeInk(words: string[], seedStr: string, idle: boolean) {
     const rad = (0.26 + rand() * 0.2) * Math.min(W, H);
     const cx = W / 2 + Math.cos(ang) * rad;
     const cy = H / 2 + Math.sin(ang) * rad * 0.82;
-    const baseR = 150 + rand() * 150;
-    const ringCount = 4 + Math.floor(rand() * 3); // 4..6
+    const baseR = 175 + rand() * 165;
+
+    // ONE coherent warp field shared by every ring of this drop, so the nested
+    // rings flow together (marbling) instead of each wobbling on its own (noise).
+    const harm = freqs.slice(0, 3);
+    const amps = harm.map(() => 0.03 + rand() * 0.035);
+    const phs = harm.map(() => rand() * Math.PI * 2);
+    // a single drag direction pulls the outer rings off-centre — the classic
+    // suminagashi teardrop after a breath crosses the water.
+    const dragAng = rand() * Math.PI * 2;
+    const dragMag = (0.1 + rand() * 0.16) * baseR;
+    const dragX = Math.cos(dragAng) * dragMag;
+    const dragY = Math.sin(dragAng) * dragMag;
+    const squash = 0.84 + rand() * 0.18; // slight ovalness
+
+    const ringCount = 5 + Math.floor(rand() * 3); // 5..7 — finer, since smooth
+    const SAMPLES = 32;
     const rings: Ring[] = [];
     for (let k = 0; k < ringCount; k++) {
       const pos = ringCount === 1 ? 1 : k / (ringCount - 1);
-      const R = baseR * (0.3 + 0.7 * pos);
-      const fingers = 0.5 + pos * 1.4; // outer rings comb harder
-      rings.push({ d: ringPath(R, rand, fingers, freqs), pos });
+      const R = baseR * (0.16 + 0.84 * pos);
+      const ccx = dragX * pos; // outer rings pulled along the drag
+      const ccy = dragY * pos;
+      const pts: [number, number][] = [];
+      for (let s = 0; s < SAMPLES; s++) {
+        const a = (s / SAMPLES) * Math.PI * 2;
+        let warp = 1;
+        for (let h = 0; h < harm.length; h++) warp += amps[h] * (0.6 + pos) * Math.sin(harm[h] * a + phs[h]);
+        const rr = R * warp;
+        pts.push([ccx + Math.cos(a) * rr, ccy + Math.sin(a) * rr * squash]);
+      }
+      rings.push({ d: smoothClosed(pts), pos });
     }
     // warmth: first drop warm, second cool, rest drift between the poles
     const warmth = i === 0 ? 1 : i === 1 ? -1 : (rand() - 0.5) * 1.6;
@@ -153,34 +177,31 @@ function makeInk(words: string[], seedStr: string, idle: boolean) {
   return { drops, uid: seed.toString(36) };
 }
 
-// Theme-aware ring style. The blend modes invert what "reads": under multiply
-// (light) the DARK ink shows, so we bias every vein toward ink and make the
-// outer bloom the heaviest line; under screen (dark) only LIGHT shows, so we
-// lift every ring's luminance (inner→outer) so the concentric rings stay
-// distinct instead of collapsing into one glow. No near-white halo in light
-// mode (multiply by white is a no-op).
-type RingStyle = { stroke: string; fill: string; width: number };
-function ringStyle(p: AlbumPalette, dark: boolean, warmth: number, pos: number): RingStyle {
+// the drop's hue, biased toward the warm (orange) / cool (purple) poles
+function dropHue(p: AlbumPalette, warmth: number): RGB {
   const warm = mix(toRgb(p.vibrant), ORANGE, 0.22);
   const cool = mix(toRgb(p.secondary), PURPLE, 0.3);
-  const hue = mix(cool, warm, (warmth + 1) / 2);
-  const light = toRgb(p.light);
-  const deep = toRgb(p.deep);
+  return mix(cool, warm, (warmth + 1) / 2);
+}
 
+// Theme-aware vein style → an RGB colour + base alpha + width. Each ring is then
+// painted as a soft wet halo + a crisp vein on top (see render), which fakes the
+// bleeding edge of ink without an SVG filter. The blend modes invert what
+// "reads": multiply (light) shows the DARK ink, so we bias toward ink and make
+// the outer edge heaviest; screen (dark) shows only LIGHT, so we lift every
+// ring's luminance (inner→outer) so the nested rings stay distinct.
+type Vein = { c: RGB; a: number; w: number };
+function ringStyle(p: AlbumPalette, dark: boolean, hue: RGB, pos: number): Vein {
   if (dark) {
-    const inner = mix(hue, light, 0.2); // lift cores so screen still shows them
-    const c = mix(inner, light, pos * 0.6); // outer rings brightest
-    return {
-      stroke: cssRgb(c, 0.34 + 0.34 * pos),
-      width: 1.3 + pos * 1.1,
-      fill: pos === 0 ? cssRgb(mix(hue, light, 0.1), 0.06) : "none",
-    };
+    const inner = mix(hue, toRgb(p.light), 0.22); // lift cores so screen shows them
+    const c = mix(inner, toRgb(p.light), pos * 0.6); // outer rings brightest
+    return { c, a: 0.32 + 0.32 * pos, w: 1.1 + pos * 1.0 };
   }
   // light / paper — ink veins, outer edge heaviest
   const tinted = mix(INK, hue, 0.5); // ink carrying the drop's hue
-  const edge = mix(deep, INK, 0.35); // darker bloom edge so it reads under multiply
+  const edge = mix(toRgb(p.deep), INK, 0.35); // darker bloom edge reads under multiply
   const c = mix(tinted, edge, pos * 0.6);
-  return { stroke: cssRgb(c, 0.34 + 0.26 * pos), width: 1.7 + pos * 1.5, fill: "none" };
+  return { c, a: 0.32 + 0.24 * pos, w: 1.5 + pos * 1.3 };
 }
 
 /* ----------------------------- playhead -------------------------------- */
@@ -376,20 +397,47 @@ export default function SongScapeInk() {
                         } as React.CSSProperties
                       }
                     >
-                      {d.rings.map((r, k) => {
-                        const s = ringStyle(palette, dark, d.warmth, r.pos);
-                        return (
-                          <path
-                            key={k}
-                            d={r.d}
-                            className="ink-vein"
-                            fill={s.fill}
-                            stroke={s.stroke}
-                            strokeWidth={s.width}
-                            strokeLinejoin="round"
-                          />
-                        );
-                      })}
+                      {/* static, blur-softened layer → cached as one composited
+                          raster; the drift/breathe/diffuse transforms above just
+                          move it, so the soft ink bleed stays cheap. */}
+                      <g className="ink-soft">
+                        {(() => {
+                          const hue = dropHue(palette, d.warmth);
+                          const outer = d.rings[d.rings.length - 1];
+                          const body = dark
+                            ? cssRgb(mix(hue, toRgb(palette.light), 0.1), 0.05)
+                            : cssRgb(mix(INK, hue, 0.55), 0.035);
+                          return (
+                            <>
+                              {/* faint suspended body — the wash the veins float in */}
+                              <path d={outer.d} fill={body} stroke="none" />
+                              {d.rings.map((r, k) => {
+                                const v = ringStyle(palette, dark, hue, r.pos);
+                                return (
+                                  <g key={k} className="ink-vein">
+                                    {/* wet halo (soft bleed) */}
+                                    <path
+                                      d={r.d}
+                                      fill="none"
+                                      stroke={cssRgb(v.c, v.a * 0.3)}
+                                      strokeWidth={v.w * 3.2}
+                                      strokeLinejoin="round"
+                                    />
+                                    {/* the vein itself */}
+                                    <path
+                                      d={r.d}
+                                      fill="none"
+                                      stroke={cssRgb(v.c, v.a)}
+                                      strokeWidth={v.w}
+                                      strokeLinejoin="round"
+                                    />
+                                  </g>
+                                );
+                              })}
+                            </>
+                          );
+                        })()}
+                      </g>
                     </g>
                   </g>
                 </motion.g>
