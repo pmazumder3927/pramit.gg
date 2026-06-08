@@ -4,25 +4,9 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Doodle, HandNote, Tape } from "@/app/components/sketchbook";
+import DoodleTile from "@/app/components/DoodleTile";
 
-import {
-  DRAWING_CANVAS_HEIGHT,
-  DRAWING_CANVAS_WIDTH,
-  type DrawingStroke,
-} from "@/app/lib/confessional-captcha";
-
-const LEGACY_CANVAS_WIDTH = 320;
-const LEGACY_CANVAS_HEIGHT = 220;
-
-const LEGACY_STROKE_COLORS = [
-  "#f2d1b0",
-  "#b9ddff",
-  "#b7ffca",
-  "#f8a4c8",
-  "#ffe28a",
-  "#d0c0ff",
-  "#9df4f2",
-];
+import { type DrawingStroke } from "@/app/lib/confessional-captcha";
 
 type DrawingRecord = {
   id: string;
@@ -123,7 +107,11 @@ export default function TurtleGallery() {
                 width={44}
                 className="-top-2.5 left-1/2 -translate-x-1/2"
               />
-              <DrawingSvg drawing={drawing} />
+              <DoodleTile
+                snapshotUrl={drawing.snapshot_url}
+                strokes={drawing.strokes}
+                prompt={drawing.prompt}
+              />
               <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] text-ink-faint">
                 <span className="truncate font-hand text-sm text-accent-rust">
                   {drawing.prompt ?? "a turtle"}
@@ -137,97 +125,6 @@ export default function TurtleGallery() {
         </div>
       )}
     </div>
-  );
-}
-
-function DrawingSvg({ drawing }: { drawing: DrawingRecord }) {
-  // Old turtle records were drawn on a 320x220 canvas with no per-stroke color;
-  // detect by absence of stored prompt and fall back to the legacy palette.
-  const isLegacy = drawing.prompt === null;
-  const width = isLegacy ? LEGACY_CANVAS_WIDTH : DRAWING_CANVAS_WIDTH;
-  const height = isLegacy ? LEGACY_CANVAS_HEIGHT : DRAWING_CANVAS_HEIGHT;
-
-  // New rows ship a pre-rasterized snapshot. The PNG is transparent — strokes
-  // only — so we paint the editor's canvas color underneath here. That way
-  // semi-transparent strokes (watercolor, pencil, etc.) render against the
-  // exact same shade they were drawn on.
-  if (drawing.snapshot_url) {
-    return (
-      <img
-        src={drawing.snapshot_url}
-        alt={drawing.prompt ?? "drawing"}
-        loading="lazy"
-        decoding="async"
-        className="w-full rounded-md bg-[#1a1410]"
-        style={{ aspectRatio: `${width} / ${height}` }}
-      />
-    );
-  }
-
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="w-full rounded-md bg-[#1a1410] bg-[radial-gradient(circle_at_top,_rgba(255,180,120,0.06),_transparent_60%)]"
-      style={{ aspectRatio: `${width} / ${height}` }}
-      preserveAspectRatio="xMidYMid meet"
-    >
-      {drawing.strokes.map((stroke, index) => {
-        const points = Array.isArray(stroke?.points) ? stroke.points : [];
-        if (points.length === 0) {
-          return null;
-        }
-
-        const color = isLegacy
-          ? LEGACY_STROKE_COLORS[index] ?? "#ffffff"
-          : stroke.color ?? "#f5f5f5";
-        const strokeWidth = isLegacy ? 4 : stroke.width ?? 5;
-        const opacity = isLegacy ? 0.9 : stroke.opacity ?? 0.9;
-
-        if (!isLegacy && stroke.tool === "spray") {
-          const r = Math.max(0.6, strokeWidth / 2);
-          return (
-            <g key={index} opacity={opacity}>
-              {points.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={r} fill={color} />
-              ))}
-            </g>
-          );
-        }
-
-        if (points.length === 1) {
-          return (
-            <circle
-              key={index}
-              cx={points[0].x}
-              cy={points[0].y}
-              r={strokeWidth / 2}
-              fill={color}
-              opacity={opacity}
-            />
-          );
-        }
-
-        const path = points
-          .map((point, i) => {
-            const command = i === 0 ? "M" : "L";
-            return `${command}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-          })
-          .join(" ");
-
-        return (
-          <path
-            key={index}
-            d={path}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={opacity}
-          />
-        );
-      })}
-    </svg>
   );
 }
 

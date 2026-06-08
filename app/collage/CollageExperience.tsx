@@ -18,6 +18,7 @@ import {
   Doodle,
   TornEdge,
 } from "@/app/components/sketchbook";
+import DoodleTile from "@/app/components/DoodleTile";
 
 type Banner = {
   id: string;
@@ -533,18 +534,11 @@ function SketchCard({ sketch }: { sketch: SketchPreview }) {
         width={48}
         className="-top-2.5 left-1/2 -translate-x-1/2"
       />
-      <div className="relative aspect-[3/2] overflow-hidden border border-ink/10 bg-paper-2">
-        {sketch.snapshot_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={sketch.snapshot_url}
-            alt={sketch.prompt ?? "sketch"}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-          />
-        )}
-      </div>
+      <DoodleTile
+        snapshotUrl={sketch.snapshot_url}
+        prompt={sketch.prompt}
+        className="border border-ink/10"
+      />
       {sketch.prompt && (
         <figcaption
           title={sketch.prompt}
