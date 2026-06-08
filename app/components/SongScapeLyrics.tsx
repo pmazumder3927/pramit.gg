@@ -93,12 +93,49 @@ interface Box {
   y1: number;
 }
 
-// the view-box-space box a line would occupy (ignoring its small rotation)
-function boxOf(anchor: Anchor, x: number, y: number, size: number, text: string): Box {
+// the axis-aligned box a line occupies AFTER its rotation about the anchor (x,y),
+// in view-box space — so avoidance stays accurate at any tilt, vertical included.
+function boxOf(
+  anchor: Anchor,
+  x: number,
+  y: number,
+  size: number,
+  rot: number,
+  text: string
+): Box {
   const w = estWidth(text, size);
-  const x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
-  // baseline sits at y; allow for ascenders above and a little descent below
-  return { x0, y0: y - size * 0.78, x1: x0 + w, y1: y + size * 0.28 };
+  const left = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+  // baseline at y; ascenders above, a little descent below
+  const corners: [number, number][] = [
+    [left, y - size * 0.78],
+    [left + w, y - size * 0.78],
+    [left + w, y + size * 0.28],
+    [left, y + size * 0.28],
+  ];
+  const th = (rot * Math.PI) / 180;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [px, py] of corners) {
+    const dx = px - x;
+    const dy = py - y;
+    const rx = x + dx * c - dy * s;
+    const ry = y + dx * s + dy * c;
+    if (rx < x0) x0 = rx;
+    if (rx > x1) x1 = rx;
+    if (ry < y0) y0 = ry;
+    if (ry > y1) y1 = ry;
+  }
+  return { x0, y0, x1, y1 };
+}
+
+// fraction of a line's box that falls OUTSIDE the canvas (0 = fully on-screen)
+function offCanvasFrac(b: Box): number {
+  const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
+  const ix = Math.min(b.x1, W) - Math.max(b.x0, 0);
+  const iy = Math.min(b.y1, H) - Math.max(b.y0, 0);
+  const inside = ix > 0 && iy > 0 ? ix * iy : 0;
+  return 1 - inside / area;
 }
 
 // fraction of a line's own box that overlaps the obstacles (0 = clear)
@@ -138,6 +175,7 @@ function collectObstacles(): Box[] {
   );
   els.forEach((el) => {
     if (el.closest('[aria-hidden="true"]')) return; // skip the backdrop itself
+    if (el.closest("[data-lyrics-ignore]")) return; // secondary chrome (e.g. the post TOC)
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) return;
     if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
@@ -164,7 +202,16 @@ function makeCandidate(rand: () => number, text: string): Inscription {
     x = (0.84 + rand() * 0.1) * W;
   }
   const y = clamp((0.16 + rand() * 0.66) * H, 0.14 * H, 0.84 * H);
-  const rot = (rand() * 2 - 1) * 2.8;
+  // mix of orientations: mostly gentle tilt, sometimes a strong diagonal, and
+  // occasionally near-vertical — so the words scatter across the page like notes.
+  const sign = rand() < 0.5 ? -1 : 1;
+  const o = rand();
+  const rot =
+    o < 0.18
+      ? sign * (76 + rand() * 14) // ~76–90°, near-vertical
+      : o < 0.45
+        ? sign * (16 + rand() * 26) // 16–42°, strong diagonal
+        : sign * rand() * 11; // 0–11°, gentle tilt
   const size = FONT * (0.84 + rand() * 0.34);
   const dur = clamp(text.length * 0.04, 0.6, 2.2);
   return { key: 0, text, x, y, rot, size, anchor, dur };
@@ -179,32 +226,38 @@ const ALLOW_OVERLAP = 0.22;
 // measured (e.g. an empty page), preserving the natural scatter.
 function place(seedStr: string, text: string, obstacles: Box[]): Inscription {
   const rand = mkRand(fnv(seedStr));
-  const tries = obstacles.length ? 12 : 1;
+  // always try a few so a tilted/vertical line that runs off-canvas can reshuffle
+  const tries = 14;
   let best: Inscription | null = null;
-  let bestFrac = Infinity;
+  let bestScore = Infinity;
   for (let i = 0; i < tries; i++) {
     const cand = makeCandidate(rand, text);
-    const frac = overlapFrac(boxOf(cand.anchor, cand.x, cand.y, cand.size, text), obstacles);
-    if (frac < bestFrac) {
+    const box = boxOf(cand.anchor, cand.x, cand.y, cand.size, cand.rot, text);
+    const over = overlapFrac(box, obstacles);
+    const off = offCanvasFrac(box);
+    const score = over + off * 1.6; // staying on-canvas weighs a bit heavier
+    if (score < bestScore) {
       best = cand;
-      bestFrac = frac;
+      bestScore = score;
     }
-    if (frac <= ALLOW_OVERLAP) break; // good enough — keep the natural pick
+    if (over <= ALLOW_OVERLAP && off <= 0.06) break; // good enough — keep the natural pick
   }
   return best!;
 }
 
-// squeeze a line that would run off-canvas back inside its column
+// squeeze a line so its rotated box fits the canvas in BOTH dimensions — works
+// for any tilt (a vertical line is bounded by the canvas height, not width).
 function fit(insc: Inscription) {
-  const room =
-    insc.anchor === "start"
-      ? W - MARGIN - insc.x
-      : insc.anchor === "end"
-        ? insc.x - MARGIN
-        : Math.min(insc.x, W - insc.x) * 2 - MARGIN;
-  const est = estWidth(insc.text, insc.size);
-  return est > room
-    ? { textLength: Math.max(120, room), lengthAdjust: "spacingAndGlyphs" as const }
+  const w = estWidth(insc.text, insc.size);
+  const h = insc.size;
+  const th = (insc.rot * Math.PI) / 180;
+  const ac = Math.abs(Math.cos(th));
+  const as = Math.abs(Math.sin(th));
+  const limW = ac > 1e-3 ? (W - 2 * MARGIN - h * as) / ac : Infinity;
+  const limH = as > 1e-3 ? (H - 2 * MARGIN - h * ac) / as : Infinity;
+  const lim = Math.max(120, Math.min(limW, limH));
+  return w > lim
+    ? { textLength: Math.round(lim), lengthAdjust: "spacingAndGlyphs" as const }
     : {};
 }
 
@@ -299,7 +352,7 @@ export default function SongScapeLyrics({
     setInscriptions((list) => {
       // steer clear of the page's text AND the other lines currently on screen
       const obstacles = foreground.concat(
-        list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.text))
+        list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.rot, p.text))
       );
       const insc = { ...place(`${trackId}:${idx}`, text, obstacles), key: counter.current++ };
       return [...list, insc].slice(-MAX);

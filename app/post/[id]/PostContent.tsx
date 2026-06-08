@@ -635,7 +635,12 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
 
         {/* ---------- RIGHT MARGIN: field notes ---------- */}
         <aside className="hidden self-start xl:sticky xl:top-20 xl:block">
-          <MarginMeta tone={tone} readingTime={readingTime} views={views} />
+          <MarginMeta
+            tone={tone}
+            readingTime={readingTime}
+            views={views}
+            title={post.title}
+          />
         </aside>
       </div>
 
@@ -656,6 +661,10 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
           <p className="font-hand text-lg text-ink-faint">
             — pramit <span className="text-accent-purple">✦</span> mazumder
           </p>
+
+          <div className="mt-6">
+            <ShareControls title={post.title} />
+          </div>
         </div>
 
         {(prev || next) && (
@@ -803,6 +812,7 @@ function MarginTOC(props: TocProps) {
   return (
     <nav
       aria-label="On this page"
+      data-lyrics-ignore
       className="relative mt-8 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide pl-4"
     >
       <span
@@ -824,6 +834,7 @@ function TocDetails({
   return (
     <details
       ref={detailsRef}
+      data-lyrics-ignore
       className="group mb-10 rounded-md border border-dashed border-line bg-paper-2/40 px-5 py-3 xl:hidden"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between font-hand text-xl text-accent-purple [&::-webkit-details-marker]:hidden">
@@ -854,10 +865,12 @@ function MarginMeta({
   tone,
   readingTime,
   views,
+  title,
 }: {
   tone: Tone;
   readingTime: number;
   views: number;
+  title: string;
 }) {
   const toTop = () =>
     window.scrollTo({
@@ -872,6 +885,15 @@ function MarginMeta({
         </p>
         <ViewCount count={views} />
       </div>
+      <div className="flex justify-end">
+        <Doodle
+          name="squiggle"
+          tone={tone}
+          className="h-4 w-20 opacity-60"
+          strokeWidth={2.5}
+        />
+      </div>
+      <ShareControls title={title} variant="margin" />
       <div className="flex justify-end">
         <Doodle
           name="squiggle"
@@ -906,6 +928,160 @@ function NavCard({ post, dir }: { post: PostNav; dir: "newer" | "older" }) {
         {post.title}
       </p>
     </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Share controls — copy the permalink, hand it to the OS share sheet, or post
+// to X. Styled as hand-inked links to keep the journal voice.
+// ---------------------------------------------------------------------------
+function ShareItem({
+  label,
+  onClick,
+  href,
+  tone = "rust",
+  active = false,
+  ariaLabel,
+}: {
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  tone?: Tone;
+  active?: boolean;
+  ariaLabel?: string;
+}) {
+  const cls =
+    "group/sh relative inline-flex items-center font-hand text-xl leading-none transition-colors";
+  const color = active
+    ? "text-accent-orange"
+    : "text-ink-soft hover:text-accent-rust focus-visible:text-accent-rust";
+  const inner = (
+    <>
+      {label}
+      <Doodle
+        name="underline"
+        tone={tone}
+        className={`absolute -bottom-2 left-0 h-1.5 w-full transition-opacity duration-200 ${
+          active ? "opacity-100" : "opacity-0 group-hover/sh:opacity-50 group-focus-visible/sh:opacity-50"
+        }`}
+        strokeWidth={3}
+      />
+    </>
+  );
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={ariaLabel}
+        className={`${cls} ${color}`}
+      >
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={`${cls} ${color}`}
+    >
+      {inner}
+    </button>
+  );
+}
+
+function ShareControls({
+  title,
+  variant = "inline",
+}: {
+  title: string;
+  variant?: "inline" | "margin";
+}) {
+  const [url, setUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    setUrl(window.location.href.split("#")[0]);
+    setCanShare(
+      typeof navigator !== "undefined" && typeof navigator.share === "function",
+    );
+  }, []);
+
+  const copy = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const nativeShare = async () => {
+    if (!url) return;
+    try {
+      await navigator.share({ title, url });
+    } catch {
+      /* user dismissed, or share unsupported */
+    }
+  };
+
+  const xHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+    title,
+  )}&url=${encodeURIComponent(url)}`;
+
+  const items = (
+    <>
+      <ShareItem
+        label={copied ? "copied ✓" : "copy link"}
+        onClick={copy}
+        tone="orange"
+        active={copied}
+        ariaLabel={copied ? "Link copied to clipboard" : "Copy link to this entry"}
+      />
+      {canShare && (
+        <ShareItem
+          label="share…"
+          onClick={nativeShare}
+          tone="purple"
+          ariaLabel="Share this entry"
+        />
+      )}
+      <ShareItem label="on X" href={xHref} tone="rust" ariaLabel="Share on X" />
+    </>
+  );
+
+  const status = (
+    <span role="status" aria-live="polite" className="sr-only">
+      {copied ? "Link copied to clipboard" : ""}
+    </span>
+  );
+
+  if (variant === "margin") {
+    return (
+      <div className="space-y-3 text-right">
+        <p className="font-hand text-lg -rotate-1 text-accent-purple">share —</p>
+        <div className="flex flex-col items-end gap-3">{items}</div>
+        {status}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <span className="font-hand text-xl -rotate-1 text-accent-purple">
+        liked this? pass it on —
+      </span>
+      <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-3">
+        {items}
+      </div>
+      {status}
+    </div>
   );
 }
 
