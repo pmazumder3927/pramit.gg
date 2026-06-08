@@ -25,7 +25,8 @@ const councilSerif = Cormorant_Garamond({
 import {
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
-  DRAWING_MIN_TOTAL_LENGTH,
+  GLYPH_DRAWING_MIN_STROKES,
+  GLYPH_DRAWING_MIN_TOTAL_LENGTH,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
   evaluateDrawing,
@@ -238,12 +239,24 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
 
   const challenge = challengeResponse?.challenge ?? null;
   const token = challengeResponse?.token ?? "";
-  const drawingEvaluation = evaluateDrawing(strokes);
-  const ready = Boolean(challenge && drawingEvaluation.ok);
 
-  // Glyph-inscription challenges show the target character as a reference + a
-  // faint tracing ghost behind the canvas, instead of a freeform prompt.
+  // Glyph-inscription challenges show the target character only as a reference
+  // in the header — there is deliberately NO tracing guide on the canvas, so
+  // the reproduction is freehand from a glance.
   const glyph = challenge?.kind === "glyph" ? challenge.glyph ?? null : null;
+
+  // Glyph inscriptions clear a looser pre-gate (a faithful 龙/凤/ankh is a
+  // 2-stroke shape); the vision grader is the real check.
+  const drawingEvaluation = evaluateDrawing(
+    strokes,
+    glyph
+      ? {
+          minStrokes: GLYPH_DRAWING_MIN_STROKES,
+          minTotalLength: GLYPH_DRAWING_MIN_TOTAL_LENGTH,
+        }
+      : undefined,
+  );
+  const ready = Boolean(challenge && drawingEvaluation.ok);
 
   const loadChallenge = useCallback(async () => {
     setIsLoading(true);
@@ -729,8 +742,15 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
         <header className="relative flex shrink-0 items-start justify-between gap-4 px-5 pb-2.5 pt-4 sm:px-6 sm:pt-5">
           {glyph ? (
             <div className="flex min-w-0 flex-col gap-1">
+              {/* Spoken task for screen readers; the visible glyph is
+                  aria-hidden so a bare/unknown codepoint isn't announced. */}
+              <span className="sr-only">
+                Reproduce the {glyph.scriptLabel} character meaning “
+                {glyph.meaning}”
+                {glyph.romanization ? `, romanized ${glyph.romanization}` : ""}.
+              </span>
               <p
-                className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
+                className={`${councilSerif.className} flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm italic text-ink-soft sm:text-base`}
                 style={{ fontWeight: 300 }}
               >
                 <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-ink-faint">
@@ -739,7 +759,17 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 <span aria-hidden className="text-ink-faint/60">
                   ·
                 </span>
-                <span className="truncate">{glyph.scriptLabel}</span>
+                <span>{glyph.scriptLabel}</span>
+                {glyph.romanization ? (
+                  <>
+                    <span aria-hidden className="text-ink-faint/60">
+                      ·
+                    </span>
+                    <span className="font-sans text-[10px] not-italic uppercase tracking-[0.28em] text-ink-faint">
+                      {glyph.romanization}
+                    </span>
+                  </>
+                ) : null}
               </p>
               <h3
                 className={`${councilSerif.className} flex min-w-0 items-baseline gap-3 text-ink`}
@@ -752,23 +782,21 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                   ✦
                 </span>
                 <span
+                  aria-hidden
                   lang={GLYPH_LANG[glyph.script] || undefined}
-                  className="shrink-0 text-4xl not-italic leading-none text-ink sm:text-5xl"
+                  className="shrink-0 select-none text-3xl not-italic leading-none text-ink sm:text-5xl"
                   style={{ fontFamily: glyphFontStack(glyph.script) }}
                 >
                   {glyph.glyph}
                 </span>
-                <span className="min-w-0 truncate text-xl italic tracking-tight text-ink-soft sm:text-2xl">
+                <span className="line-clamp-2 min-w-0 text-lg italic leading-snug tracking-tight text-ink-soft [overflow-wrap:anywhere] sm:text-2xl">
                   “{glyph.meaning}”
-                  {glyph.romanization ? (
-                    <span className="ml-2 font-sans text-[11px] not-italic uppercase tracking-[0.2em] text-ink-faint">
-                      {glyph.romanization}
-                    </span>
-                  ) : null}
                 </span>
               </h3>
-              <p className="mt-0.5 max-w-prose font-serif text-xs italic text-ink-faint">
-                reproduce the character — {glyph.shapeHint}
+              <p
+                className={`${councilSerif.className} mt-0.5 text-xs italic text-ink-faint`}
+              >
+                the council remembers the original.
               </p>
             </div>
           ) : (
@@ -935,7 +963,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 <div
                   className={`${councilSerif.className} text-base italic tracking-wide text-ink-faint sm:text-lg`}
                 >
-                  {glyph ? "reproduce it from memory" : "make your offering"}
+                  {glyph ? "do your best" : "make your offering"}
                 </div>
               </motion.div>
             ) : null}

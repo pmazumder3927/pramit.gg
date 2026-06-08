@@ -9,6 +9,8 @@ import {
   CAPTCHA_VERSION,
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
+  GLYPH_DRAWING_MIN_STROKES,
+  GLYPH_DRAWING_MIN_TOTAL_LENGTH,
   type ChallengeGlyph,
   type ChallengeKind,
   type ConfessionalCaptchaChallenge,
@@ -291,7 +293,15 @@ export async function verifyConfessionalCaptchaSubmission(
     };
   }
 
-  const drawing = evaluateDrawing(submission.strokes);
+  const drawing = evaluateDrawing(
+    submission.strokes,
+    challenge.kind === "glyph"
+      ? {
+          minStrokes: GLYPH_DRAWING_MIN_STROKES,
+          minTotalLength: GLYPH_DRAWING_MIN_TOTAL_LENGTH,
+        }
+      : undefined,
+  );
   if (!drawing.ok) {
     return {
       ok: false,

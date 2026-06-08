@@ -89,23 +89,13 @@ export const GLYPHS: GlyphEntry[] = [
     level: 5,
   },
   {
-    glyph: "鬱",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "yù",
-    meaning: "gloom / lush",
-    shapeHint:
-      "a famously dense character: trees flanking a vessel up top, over a cover, over a tangle of strokes. ~29 strokes.",
-    level: 5,
-  },
-  {
     glyph: "黼",
     script: "chinese",
     scriptLabel: "Chinese",
     romanization: "fǔ",
     meaning: "axe-shaped embroidery pattern",
     shapeHint:
-      "the black-silk radical 黹 on the left (itself intricate) beside the 甫 component on the right.",
+      "the embroidery/needlework radical 黹 on the left (itself intricate) beside the 甫 component on the right.",
     level: 5,
   },
   {
@@ -388,17 +378,17 @@ export const GLYPHS: GlyphEntry[] = [
     romanization: "hōō",
     meaning: "phoenix",
     shapeHint:
-      "two characters, each an enclosing hooked frame wrapping a bird-like component inside.",
+      "two characters, each a hooked frame wrapping a component inside — 鳳 around the bird 鳥, 凰 around 皇 'emperor'.",
     level: 5,
   },
   {
     glyph: "顰",
     script: "japanese",
     scriptLabel: "Japanese · kanji",
-    romanization: "hisomu",
+    romanization: "hisomeru",
     meaning: "to frown / knit the brows",
     shapeHint:
-      "an extremely dense kanji — a wide grid of components over the 頻 character; almost no white space.",
+      "an extremely dense kanji — the 頻 shape (a hatched top over the 頁 'head' component) spanning the top, sitting over the 卑 component at the bottom; almost no white space.",
     level: 5,
   },
   {
@@ -582,7 +572,8 @@ export const GLYPHS: GlyphEntry[] = [
     scriptLabel: "Egyptian hieroglyph",
     romanization: "nṯr",
     meaning: "a seated god",
-    shapeHint: "a bearded figure seated on a low throne, seen in profile, knees forward.",
+    shapeHint:
+      "a bearded figure in profile sitting on the ground, knees drawn up in front, one arm resting on the knee — a seated god, not on a chair.",
     level: 4,
   },
   {
@@ -619,7 +610,8 @@ export const GLYPHS: GlyphEntry[] = [
     scriptLabel: "Egyptian hieroglyph",
     romanization: "ḏ",
     meaning: "cobra",
-    shapeHint: "a cobra resting along the ground then rearing up at the head end.",
+    shapeHint:
+      "a cobra lying low along the ground, its body in a long horizontal S-curve, with only the head and neck lifted slightly at one end.",
     level: 3,
   },
   {

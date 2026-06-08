@@ -8,7 +8,12 @@ export const DRAWING_CANVAS_WIDTH = 480;
 export const DRAWING_CANVAS_HEIGHT = 320;
 export const DRAWING_MIN_STROKES = 3;
 export const DRAWING_MIN_TOTAL_LENGTH = 640;
-export const DRAWING_MAX_LEVEL = 5;
+
+// Glyph inscriptions can be faithfully drawn in fewer, longer strokes than a
+// freeform doodle (e.g. 龙, 凤, the ankh 𓋹 are 2-stroke shapes), so the cheap
+// pre-gate is looser for them — the vision grader is the real check.
+export const GLYPH_DRAWING_MIN_STROKES = 2;
+export const GLYPH_DRAWING_MIN_TOTAL_LENGTH = 400;
 
 export type { DrawingPoint, DrawingStroke } from "./drawing/types";
 export type { GlyphScript } from "./confessional-glyphs";
@@ -62,7 +67,12 @@ export type DrawingEvaluation = {
   totalLength: number;
 };
 
-export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
+export function evaluateDrawing(
+  strokes: DrawingStroke[],
+  opts?: { minStrokes?: number; minTotalLength?: number },
+): DrawingEvaluation {
+  const minStrokes = opts?.minStrokes ?? DRAWING_MIN_STROKES;
+  const minTotalLength = opts?.minTotalLength ?? DRAWING_MIN_TOTAL_LENGTH;
   const normalized = strokes
     .map((stroke) => ({
       isSpray: isSprayStroke(stroke),
@@ -82,8 +92,8 @@ export function evaluateDrawing(strokes: DrawingStroke[]): DrawingEvaluation {
     return sum + polylineLength(stroke.points);
   }, 0);
 
-  const strokeCountOk = normalized.length >= DRAWING_MIN_STROKES;
-  const lengthOk = totalLength >= DRAWING_MIN_TOTAL_LENGTH;
+  const strokeCountOk = normalized.length >= minStrokes;
+  const lengthOk = totalLength >= minTotalLength;
 
   const checklist: DrawingChecklistItem[] = [
     {

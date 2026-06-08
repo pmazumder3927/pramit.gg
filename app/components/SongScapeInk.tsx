@@ -21,6 +21,7 @@ import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette
 import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { useLyrics } from "./useLyrics";
 import SongScapeLyrics from "./SongScapeLyrics";
+import { type Box, collectForeground, boxesOverlap } from "@/app/lib/scape-layout";
 
 const W = 1600;
 const H = 900;
@@ -191,8 +192,10 @@ function buildSketchAt(
 
 // compose the scape: scatter doodles NATURALLY (uneven, hand-placed) via rejection
 // sampling with a size-scaled min distance — varied local density, not a grid.
-// Doodles near the reading centre shrink + dim so text stays legible.
-function makeScape(sketches: DrawingStroke[][], seedStr: string) {
+// Doodles near the reading centre shrink + dim, and any that would land on the
+// page's content (foreground boxes, view-box space) are rejected so the sketches
+// sit in the gaps around the text rather than under it.
+function makeScape(sketches: DrawingStroke[][], seedStr: string, foreground: Box[]) {
   const seed = fnv(seedStr);
   if (!sketches.length) return { drops: [] as Stroke[], uid: seed.toString(36) };
   const rand = mkRand(seed);
@@ -206,7 +209,7 @@ function makeScape(sketches: DrawingStroke[][], seedStr: string) {
   const placed: { x: number; y: number; r: number }[] = [];
   const drops: Stroke[] = [];
   let tries = 0;
-  while (drops.length < n && tries < n * 50) {
+  while (drops.length < n && tries < n * 60) {
     tries++;
     const x = 0.07 + rand() * 0.86;
     const y = 0.1 + rand() * 0.8;
@@ -218,6 +221,12 @@ function makeScape(sketches: DrawingStroke[][], seedStr: string) {
       if (Math.hypot(x - p.x, y - p.y) < (rr + p.r) * 0.85) { ok = false; break; }
     }
     if (!ok) continue;
+    // skip spots that sit on the page's content
+    if (foreground.length) {
+      const half = (sBase * H) / 2;
+      const dbox = { x0: x * W - half, y0: y * H - half, x1: x * W + half, y1: y * H + half };
+      if (foreground.some((f) => boxesOverlap(dbox, f))) continue;
+    }
     placed.push({ x, y, r: rr });
     const i = drops.length;
     const st = buildSketchAt(
@@ -370,6 +379,7 @@ export default function SongScapeInk() {
 
   const [mounted, setMounted] = useState(false);
   const [dark, setDark] = useState(false);
+  const [foreground, setForeground] = useState<Box[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -381,9 +391,23 @@ export default function SongScapeInk() {
     return () => obs.disconnect();
   }, []);
 
+  // measure the page's content so doodles can be placed in the gaps around it.
+  // mount + resize only — NOT scroll: the backdrop is fixed, and re-placing the
+  // doodles on every scroll would make them jump. (Sketches load over the network
+  // after this runs, so the first doodles already see the foreground — no jump.)
+  useEffect(() => {
+    const measure = () => setForeground(collectForeground());
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
   const songKey = track ? track.trackId || `${track.title}${track.artist}${track.album}` : "—";
   const sketches = useSketches();
-  const scape = useMemo(() => makeScape(sketches, songKey), [songKey, sketches]);
+  const scape = useMemo(
+    () => makeScape(sketches, songKey, foreground),
+    [songKey, sketches, foreground]
+  );
 
   // the song's words, inked into the scape (synced lines tracked live)
   const lyrics = useLyrics(track);

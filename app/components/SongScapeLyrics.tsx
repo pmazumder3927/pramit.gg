@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { LyricLine } from "./useLyrics";
 import type { SpotifyTrack } from "./NowPlayingContext";
+import { type Box, collectForeground } from "@/app/lib/scape-layout";
 
 const W = 1600;
 const H = 900;
@@ -60,13 +61,6 @@ function estWidth(text: string, size: number): number {
 const COMPLEX = /[ऀ-ॿঀ-৿]/;
 
 /* ------------------------------ geometry ------------------------------- */
-export interface Box {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
 function fnv(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -205,41 +199,6 @@ function makeGlyphs(seed: number, size: number, text: string): Glyph[] {
   });
 }
 
-/* ----------------------- foreground measurement ------------------------ */
-// The visible foreground text/controls, mapped from screen rects into the SVG's
-// 1600×900 space. The SongScape SVG is a fixed full-viewport backdrop drawn with
-// preserveAspectRatio="xMidYMid slice" (cover), so we invert that mapping.
-function collectForeground(): Box[] {
-  if (typeof window === "undefined") return [];
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  if (!vw || !vh) return [];
-  const scale = Math.max(vw / W, vh / H);
-  const offX = (vw - W * scale) / 2;
-  const offY = (vh - H * scale) / 2;
-  const PAD = 18; // keep a margin from text rather than just clearing it
-  const boxes: Box[] = [];
-  const els = document.querySelectorAll<HTMLElement>(
-    "h1,h2,h3,h4,h5,p,li,blockquote,figure,nav,header,button,a[href],input,textarea,img,[data-avoid-lyrics]"
-  );
-  els.forEach((el) => {
-    if (el.closest('[aria-hidden="true"]')) return; // the backdrop itself
-    if (el.closest("[data-lyrics-ignore]")) return; // secondary chrome (e.g. post TOC)
-    const r = el.getBoundingClientRect();
-    if (r.width < 8 || r.height < 8) return;
-    if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
-    const cs = getComputedStyle(el);
-    if (cs.visibility === "hidden" || cs.opacity === "0") return;
-    boxes.push({
-      x0: (r.left - offX) / scale - PAD,
-      y0: (r.top - offY) / scale - PAD,
-      x1: (r.right - offX) / scale + PAD,
-      y1: (r.bottom - offY) / scale + PAD,
-    });
-  });
-  return boxes;
-}
-
 /* ------------------------------ the pen -------------------------------- */
 interface Inscription {
   key: number;
@@ -276,7 +235,7 @@ function evalSeed(
   text: string,
   obstacles: Box[],
   rand: () => number
-): { col: Column; score: number } {
+): { col: Column; clear: boolean; aesthetic: number; badness: number } {
   const th = (rot * Math.PI) / 180;
   const bx = Math.cos(th);
   const by = Math.sin(th);
@@ -310,36 +269,46 @@ function evalSeed(
   const advRun = Math.max(runA, runB);
 
   const box = boxOf(anchor, px, py, size, rot, text);
+  const ov = overlapFrac(box, obstacles);
+  const off = offCanvasFrac(box);
   const w = unit * size;
   const fill = clamp(w / Math.max(1, lenBudget), 0, 1);
   const sizeNorm = (size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
   const flowRoom = clamp(advRun / (gap * 3), 0, 1); // room for a few lines
-  // higher is better: clear of obstacles, on-canvas, a satisfying fill (snug OR
-  // bold), room to flow, plus a little randomness for unexpected choices.
-  const score =
-    -overlapFrac(box, obstacles) * 8 -
-    offCanvasFrac(box) * 3 +
-    Math.max(fill, sizeNorm) * 1.0 +
-    flowRoom * 0.8 +
-    rand() * 0.6;
+
+  // A seed is "clear" if it genuinely misses the page content. Among clear seeds
+  // we then optimise aesthetics; only if NONE are clear do we fall back to the
+  // least-bad one. This hard gate is what keeps lines off the page's text.
+  const clear = ov < 0.02 && off < 0.04;
+  const aesthetic = Math.max(fill, sizeNorm) * 1.0 + flowRoom * 0.8 + rand() * 0.6;
+  const badness = ov * 8 + off * 3;
 
   // quota of lines for this column. We deliberately DON'T cap by the thin-ray
   // advance estimate — that collapses to 1 on a busy page and kills flow. The
   // real terminator is the per-line clear-check while flowing (see place()).
   const left = 2 + Math.floor(rand() * 4); // 2..5
-  return { col: { x: px, y: py, rot, size, anchor, advX, advY, gap, left }, score };
+  return { col: { x: px, y: py, rot, size, anchor, advX, advY, gap, left }, clear, aesthetic, badness };
 }
 
-// Begin a fresh column: try many seeds across the page, keep the best.
+// Begin a fresh column: sample many seeds across the page. Prefer the nicest spot
+// that's genuinely CLEAR of content; fall back to the least-bad only if the page
+// leaves nowhere clean.
 function startColumn(rand: () => number, text: string, obstacles: Box[]): Column {
-  let best: { col: Column; score: number } | null = null;
-  for (let i = 0; i < 20; i++) {
+  const seeds = [];
+  for (let i = 0; i < 28; i++) {
     const px = (0.05 + rand() * 0.9) * W;
     const py = (0.09 + rand() * 0.82) * H;
-    const s = evalSeed(px, py, pickRot(rand), text, obstacles, rand);
-    if (!best || s.score > best.score) best = s;
+    seeds.push(evalSeed(px, py, pickRot(rand), text, obstacles, rand));
   }
-  return best!.col;
+  const clear = seeds.filter((s) => s.clear);
+  if (clear.length) {
+    let best = clear[0];
+    for (const s of clear) if (s.aesthetic > best.aesthetic) best = s;
+    return best.col;
+  }
+  let best = seeds[0];
+  for (const s of seeds) if (s.badness < best.badness) best = s;
+  return best.col;
 }
 
 // Place one line: continue the current column if the next slot is clear, else
@@ -353,9 +322,10 @@ function place(
   if (prevCol && prevCol.left > 0) {
     const size = clamp(prevCol.size * (0.94 + rand() * 0.12), MIN_SIZE, MAX_SIZE); // gentle drift
     const box = boxOf(prevCol.anchor, prevCol.x, prevCol.y, size, prevCol.rot, text);
-    // continue while the next slot is essentially clear; a sliver is tolerated so
-    // the conservative rotated AABB doesn't break an otherwise good flow.
-    if (overlapFrac(box, obstacles) < 0.1 && offCanvasFrac(box) < 0.08) {
+    // continue only while the next slot stays essentially clear of content; a
+    // tiny sliver is tolerated for the conservative rotated AABB, but anything
+    // more ends the column so it relocates instead of creeping onto the page.
+    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.06) {
       const insc: Inscription = {
         key: 0,
         text,
