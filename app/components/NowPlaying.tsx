@@ -70,6 +70,7 @@ export default function NowPlaying() {
   return (
     <motion.div
       ref={ref}
+      data-avoid-lyrics
       className="fixed bottom-5 left-5 z-50 hidden md:block"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}

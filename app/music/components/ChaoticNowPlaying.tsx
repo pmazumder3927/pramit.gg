@@ -59,6 +59,7 @@ export function ChaoticNowPlaying({
 
   return (
     <motion.div
+      data-avoid-lyrics
       initial={{ opacity: 0, y: 26, rotate: -1.2 }}
       animate={{ opacity: 1, y: 0, rotate: -0.5 }}
       transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}

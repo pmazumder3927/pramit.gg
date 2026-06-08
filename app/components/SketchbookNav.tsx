@@ -83,7 +83,7 @@ export default function SketchbookNav() {
   const showWordmark = !isHome || scrolled;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line/80 bg-paper/85 backdrop-blur-md">
+    <header data-avoid-lyrics className="sticky top-0 z-50 border-b border-line/80 bg-paper/85 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="flex h-14 items-center justify-between gap-4">
           {/* identity: the favicon mark, always; the wordmark reveals on scroll */}

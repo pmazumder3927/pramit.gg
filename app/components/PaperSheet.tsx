@@ -76,11 +76,13 @@ export default function PaperSheet() {
 
   if (!mounted) return null;
 
-  // the watermark carries a whisper of the song's colour (warm lamp in the dark)
+  // the watermark carries a whisper of the song's colour. dark = "pressed into
+  // black paper": a DEEP album tint (mixed toward near-black), barely there, so it
+  // never lifts the floor to grey. light = a soft warm bloom.
   const wmCol = dark
-    ? rgba(mix(toRgb(palette.vibrant), { r: 255, g: 236, b: 212 }, 0.45), 0.075)
+    ? rgba(mix(toRgb(palette.vibrant), { r: 30, g: 28, b: 44 }, 0.55), 0.05)
     : rgba(mix({ r: 255, g: 255, b: 255 }, toRgb(palette.vibrant), 0.12), 0.06);
-  const foxCol = dark ? "rgba(196,166,136,0.05)" : "rgba(120,82,42,0.06)";
+  const foxCol = dark ? "rgba(96,90,120,0.035)" : "rgba(120,82,42,0.06)";
   const marks = [
     `radial-gradient(42% 38% at ${wmx.toFixed(1)}% ${wmy.toFixed(1)}%, ${wmCol} 0%, transparent 62%)`,
     ...fox.map(

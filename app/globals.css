@@ -44,31 +44,33 @@
    glow like embers (orange) and moonlight (lavender).
    ------------------------------------------------------------------------- */
 .dark {
-  --bg: 16 15 23;             /* #100f17 deep indigo night      */
-  --surface: 33 29 32;        /* #211d20 warm lamplit card      */
-  --surface-2: 24 22 30;      /* #16161e cool recessed surface  */
-  --fg: 242 235 222;          /* #f2ebde chalk/cream            */
-  --fg-soft: 199 190 176;     /* #c7beb0                        */
-  --fg-faint: 143 135 126;    /* #8f877e                        */
-  --line: 64 58 68;           /* #3a3a44 cool violet hairline   */
+  --bg: 12 12 19;             /* #0c0c13 deep indigo midnight   */
+  --surface: 21 20 29;        /* #15141d dim card in lamp-shadow*/
+  --surface-2: 16 15 23;      /* #100f17 recessed, near-canvas  */
+  --fg: 211 204 191;          /* #d3ccbf dimmed chalk, no glare */
+  --fg-soft: 154 147 137;     /* #9a9389 low secondary text     */
+  --fg-faint: 112 106 100;    /* #706a64 faint marginalia       */
+  --line: 48 45 58;           /* #302d3a dim violet hairline    */
   --accent-orange: 255 140 86;/* #ff8c56 ember glow             */
-  --accent-purple: 171 160 247;/*#aba0f7 moonlight lavender     */
+  --accent-purple: 178 158 255;/*#b29eff arcane lavender        */
   --accent-rust: 232 132 90;  /* #e8845a                        */
   --album-rgb: var(--accent-orange);
 
-  --gray-50: 242 235 222;
-  --gray-100: 234 227 214;
-  --gray-200: 215 207 195;
-  --gray-300: 195 187 175;
-  --gray-400: 165 156 147;
-  --gray-500: 134 126 118;
-  --gray-600: 103 96 92;
-  --gray-700: 73 68 70;
-  --gray-800: 47 43 48;
-  --gray-900: 30 27 33;
-  --gray-950: 19 18 25;
+  /* ramp pulled toward the dark so borders + recessed surfaces stop
+     washing the page out (the upper half used to sit at 76–95% bright) */
+  --gray-50: 211 204 191;
+  --gray-100: 188 181 170;
+  --gray-200: 158 151 143;
+  --gray-300: 128 122 117;
+  --gray-400: 104 99 96;
+  --gray-500: 86 81 82;
+  --gray-600: 68 64 70;
+  --gray-700: 54 50 58;
+  --gray-800: 38 35 45;
+  --gray-900: 24 22 31;
+  --gray-950: 16 15 23;
 
-  --grain-opacity: 0.055;
+  --grain-opacity: 0.06;
   color-scheme: dark;
 }
 
@@ -157,7 +159,9 @@
     mix-blend-mode: multiply;
     background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E");
   }
-  .dark .grain::before { mix-blend-mode: screen; }
+  /* on near-black, screening white noise LIFTS the whole page to grey (the wash).
+     soft-light keeps the shadows shadow — faint tooth, no black-point lift. */
+  .dark .grain::before { mix-blend-mode: soft-light; }
 
   *:focus { outline: 2px solid transparent; outline-offset: 2px; }
   *:focus-visible {
@@ -285,6 +289,9 @@
 
   /* ---------- paper sheet (the "Deckle" ground the doodles rest on) ---------- */
   .paper-tooth { background-size: 220px 220px; opacity: 0.07; }
+  /* dark = black paper: white tooth specks lift the floor to grey, so keep them
+     barely there (the fibre still catches a hair of light, no wash). */
+  .dark .paper-tooth { opacity: 0.025; }
   /* laid + chain lines — whisper-faint fibre direction, never ruled-notebook loud */
   .paper-laid {
     background-image:
@@ -293,15 +300,17 @@
   }
   .dark .paper-laid {
     background-image:
-      repeating-linear-gradient(0deg, rgb(255 255 255 / 0.016) 0 1px, transparent 1px 3px),
-      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.024) 0 1.2px, transparent 1.2px 27px);
+      repeating-linear-gradient(0deg, rgb(255 255 255 / 0.008) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.012) 0 1.2px, transparent 1.2px 27px);
   }
   /* watermark + foxing breathe very slowly (the "breath of light" on the sheet) */
   .paper-marks { animation: paper-breathe 52s ease-in-out infinite; }
   @keyframes paper-breathe { 0%, 100% { opacity: 0.78; } 50% { opacity: 1; } }
   /* deckle / press vignette — a soft paper-edge frame (neutral, not a "light") */
   .paper-vignette { background: radial-gradient(135% 130% at 50% 42%, transparent 52%, rgb(78 52 26 / 0.12) 100%); }
-  .dark .paper-vignette { background: radial-gradient(140% 135% at 50% 40%, transparent 44%, rgb(0 0 0 / 0.62) 100%); }
+  /* dark = rich shadow frame: crush the edges to true black earlier so the scape
+     reads as a lit pool in a dark room (the darks accentuate the marks). */
+  .dark .paper-vignette { background: radial-gradient(135% 130% at 50% 38%, transparent 26%, rgb(0 0 0 / 0.82) 100%); }
   @media (prefers-reduced-motion: reduce) { .paper-marks { animation: none; } }
 
   /* ---------- songscape · sumi-no-mizu (calligraphy backdrop) ---------- */
@@ -324,7 +333,7 @@
     to   { clip-path: inset(-15% 0 -15% 0); }
   }
   .lyric-write {
-    animation: lyric-write var(--lyric-dur, 1.1s) cubic-bezier(0.33, 0, 0.2, 1) both;
+    animation: lyric-write var(--lyric-dur, 1.1s) var(--lyric-delay, 0s) cubic-bezier(0.33, 0, 0.2, 1) both;
   }
   /* the WHOLE piece breathes as one — a tiny sway so the calligraphy feels alive
      without any stroke ever separating from the others. */
@@ -357,24 +366,13 @@
     50%      { transform: translate(5%, 3%); }
   }
   .ink-caustic { animation: ink-caustic 34s ease-in-out infinite; }
-  /* song-change repaint: the cover (revealed by .ink-write brush strokes in its
-     mask) holds, then washes DOWN into the fresh scape that inked in beneath it.
-     Paint ≈ 0–1.4s (mask), hold to 66%, wash + settle to the end. One-shot. */
-  @keyframes cover-wash {
-    0%, 66% { opacity: 1; transform: translateY(0); }
-    100%    { opacity: 0; transform: translateY(30px); }
-  }
-  .cover-wash {
-    animation: cover-wash 3s cubic-bezier(0.4, 0, 0.25, 1) both;
-    transform-box: view-box; transform-origin: 800px 450px;
-    will-change: opacity, transform;
-  }
+  /* NB: the song-change repaint (CoverReveal) is a <canvas> painterly render — its
+     paint-on + slow dry are driven imperatively in JS, not via CSS keyframes. */
   @media (prefers-reduced-motion: reduce) {
     .ink-sway, .ink-caustic { animation: none; }
     .ink-diffuse, .ink-stroke-wrap { transform: none; }
     .ink-write { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
     .lyric-write { animation: none; clip-path: none; opacity: 1; }
-    .cover-wash { animation: none; opacity: 0; }
   }
 
   /* equalizer bars for now-playing */

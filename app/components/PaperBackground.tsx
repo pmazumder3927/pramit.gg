@@ -23,12 +23,13 @@ export default function PaperBackground() {
           a deckle vignette that deepens away from the song's light. */}
       <PaperSheet />
 
+      {/* song-change repaint — the new cover, stroke-ified into dabs and brushed
+          corner-to-corner as a transient ground that slowly dries. Sits BELOW the
+          doodles so they ink on top of it. One-shot per switch (no reduced-motion). */}
+      <CoverReveal />
+
       {/* now-playing backdrop — visitors' confessional doodles, inked (both themes) */}
       <SongScapeInk />
-
-      {/* song-change repaint — brushes the new cover over the old scape, then
-          washes it down into the fresh one. One-shot per switch (no reduced-motion). */}
-      <CoverReveal />
     </div>
   );
 }

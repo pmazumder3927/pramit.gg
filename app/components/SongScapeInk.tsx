@@ -60,9 +60,12 @@ const mix = (a: RGB, b: RGB, t: number): RGB => ({
 });
 const cssRgb = (c: RGB, a = 1) =>
   `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a})`;
+const clamp255 = (n: number) => Math.max(0, Math.min(255, n));
+const luma = (c: RGB) => 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
 const ORANGE = toRgb("#ff6b3d"); // grandpa's sunset — the warm pole
 const PURPLE = toRgb("#7c77c6"); // first crush's flower — the cool pole
 const INK: RGB = { r: 20, g: 17, b: 14 }; // near-black ink for paper mode
+const NIGHT_LUMA = 108; // doodles pinned this dark — visible on near-black, never a wash
 
 // the doodle's hue, biased toward the warm (orange) / cool (purple) poles
 function dropHue(p: AlbumPalette, warmth: number): RGB {
@@ -70,9 +73,21 @@ function dropHue(p: AlbumPalette, warmth: number): RGB {
   const cool = mix(toRgb(p.secondary), PURPLE, 0.3);
   return mix(cool, warm, (warmth + 1) / 2);
 }
-// near-black hue-tinted ink on paper (light) / pale hue-lifted ink on black (dark)
+// light = near-black hue-tinted ink on paper.
+// dark = "blacklight ink": the same hue SATURATED into a deep electric pigment,
+// then pinned to a low luminance. The colour lives in the stroke itself (no glow,
+// no light layer), so the line reads vivid on near-black while the page stays
+// genuinely dark — many lines can never sum into a bright wash.
 function inkColor(p: AlbumPalette, dark: boolean, hue: RGB): RGB {
-  return dark ? mix(hue, toRgb(p.light), 0.32) : mix(INK, hue, 0.34);
+  if (!dark) return mix(INK, hue, 0.34);
+  const l0 = luma(hue) || 1;
+  const sat = {
+    r: clamp255(l0 + (hue.r - l0) * 1.85),
+    g: clamp255(l0 + (hue.g - l0) * 1.85),
+    b: clamp255(l0 + (hue.b - l0) * 1.85),
+  };
+  const k = NIGHT_LUMA / (luma(sat) || 1);
+  return { r: clamp255(sat.r * k), g: clamp255(sat.g * k), b: clamp255(sat.b * k) };
 }
 
 /* ------------------------------ geometry ------------------------------- */
@@ -412,7 +427,12 @@ export default function SongScapeInk() {
   // the song's words, inked into the scape (synced lines tracked live)
   const lyrics = useLyrics(track);
   const lyricHue = dropHue(palette, 0.15); // gently warm, on-soul
-  const lyricInk = cssRgb(inkColor(palette, dark, lyricHue), 1); // age dimming via group opacity
+  // lyrics must stay readable above the dark scape, so they keep a pale ink;
+  // only the scattered doodles take the deep electric night-ink. (age dim = group opacity)
+  const lyricInk = cssRgb(
+    dark ? mix(lyricHue, toRgb(palette.light), 0.5) : inkColor(palette, false, lyricHue),
+    1
+  );
   // doodle extents so the lyrics layer can write AROUND the sketches, not over them
   const doodleBoxes = useMemo(() => scape.drops.map((d) => d.bbox), [scape]);
 
@@ -430,18 +450,9 @@ export default function SongScapeInk() {
         preserveAspectRatio="xMidYMid slice"
         fill="none"
       >
-        {/* faint light pooling — dark mode only, very low so it never flickers */}
-        {dark && (
-          <g className="ink-caustic">
-            <defs>
-              <radialGradient id={`ink-glow-${scape.uid}`}>
-                <stop offset="0%" stopColor={cssRgb(mix(toRgb(palette.light), { r: 255, g: 255, b: 255 }, 0.3), 0.06)} />
-                <stop offset="100%" stopColor={cssRgb(toRgb(palette.light), 0)} />
-              </radialGradient>
-            </defs>
-            <ellipse cx={W * 0.5} cy={H * 0.42} rx={W * 0.66} ry={H * 0.58} fill={`url(#ink-glow-${scape.uid})`} />
-          </g>
-        )}
+        {/* (no light pool in dark mode — additive glow lifts the black point to
+            grey, which is the "wash". the paper stays true black; the doodles are
+            charcoal/pigment marks ON it.) */}
 
         {/* the whole piece breathes as ONE (subtle sway) */}
         <g className="ink-sway">

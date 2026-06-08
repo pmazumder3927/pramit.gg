@@ -82,25 +82,20 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 type Anchor = "start" | "middle" | "end";
 
-// the axis-aligned box a line occupies AFTER rotation about its anchor (x,y)
-function boxOf(anchor: Anchor, x: number, y: number, size: number, rot: number, text: string): Box {
-  const w = estWidth(text, size);
-  const left = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
-  const corners: [number, number][] = [
-    [left, y - size * 0.78],
-    [left + w, y - size * 0.78],
-    [left + w, y + size * 0.28],
-    [left, y + size * 0.28],
-  ];
+const LH = 1.25; // line-height multiple (row spacing within a wrapped block)
+
+// AABB of a local rect rotated about (cx,cy)
+function rotAABB(cx: number, cy: number, l: number, t: number, r: number, b: number, rot: number): Box {
   const th = (rot * Math.PI) / 180;
   const c = Math.cos(th);
   const s = Math.sin(th);
+  const corners: [number, number][] = [[l, t], [r, t], [r, b], [l, b]];
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [px, py] of corners) {
-    const dx = px - x;
-    const dy = py - y;
-    const rx = x + dx * c - dy * s;
-    const ry = y + dx * s + dy * c;
+    const dx = px - cx;
+    const dy = py - cy;
+    const rx = cx + dx * c - dy * s;
+    const ry = cy + dx * s + dy * c;
     if (rx < x0) x0 = rx;
     if (rx > x1) x1 = rx;
     if (ry < y0) y0 = ry;
@@ -108,6 +103,38 @@ function boxOf(anchor: Anchor, x: number, y: number, size: number, rot: number, 
   }
   return { x0, y0, x1, y1 };
 }
+
+// the AABB a block of `nRows` rows (max width `w`) occupies after rotation about
+// its anchor (x,y) — rows stack downward in the unrotated frame.
+function blockBox(x: number, y: number, size: number, rot: number, anchor: Anchor, w: number, nRows: number): Box {
+  const left = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+  return rotAABB(x, y, left, y - size * 0.78, left + w, y + (nRows - 1) * size * LH + size * 0.28, rot);
+}
+
+// greedy word-wrap (char-wrap for space-less scripts) so a line that won't fit
+// its gap cleanly breaks into rows instead of being squished by textLength.
+function wrapRows(text: string, size: number, maxLen: number): string[] {
+  const max = Math.max(80, maxLen);
+  if (estWidth(text, size) <= max) return [text];
+  const hasSpace = /\s/.test(text);
+  const units = hasSpace ? text.split(/(\s+)/) : Array.from(text);
+  const rows: string[] = [];
+  let cur = "";
+  for (const u of units) {
+    if (!cur) {
+      cur = u;
+    } else if (estWidth((cur + u).trim(), size) > max) {
+      rows.push(cur.trim());
+      cur = hasSpace ? u.replace(/^\s+/, "") : u;
+    } else {
+      cur += u;
+    }
+  }
+  if (cur.trim()) rows.push(cur.trim());
+  return rows.length ? rows : [text];
+}
+const maxRowWidth = (rows: string[], size: number) =>
+  rows.reduce((m, r) => Math.max(m, estWidth(r, size)), 0);
 
 // fraction of a box that overlaps the obstacles (0 = clear)
 function overlapFrac(b: Box, obstacles: Box[]): number {
@@ -200,16 +227,23 @@ function makeGlyphs(seed: number, size: number, text: string): Glyph[] {
 }
 
 /* ------------------------------ the pen -------------------------------- */
+// one wrapped row of a line: its text, optional per-char jitter, and a write-in
+// duration + delay (so rows of a wrapped block cascade in).
+interface Row {
+  text: string;
+  glyphs: Glyph[] | null;
+  dur: number;
+  delay: number;
+}
 interface Inscription {
   key: number;
-  text: string;
-  x: number;
+  x: number; // anchor of the FIRST row
   y: number;
   rot: number;
   size: number;
   anchor: Anchor;
-  dur: number; // write-in seconds
-  glyphs: Glyph[] | null; // per-char jitter, or null to render whole
+  lineHeight: number; // row spacing
+  rows: Row[]; // 1 row normally; several when the line is wrapped
 }
 interface Column {
   x: number; // anchor of the NEXT line
@@ -219,11 +253,29 @@ interface Column {
   anchor: Anchor;
   advX: number; // unit advance toward the next line
   advY: number;
-  gap: number; // distance between lines
+  gap: number; // distance between rows
+  maxLen: number; // baseline length available — wrap target
   left: number; // lines still allowed in this column
 }
 
-const writeDur = (text: string) => clamp(text.length * 0.04, 0.6, 2.2);
+// turn wrapped row texts into renderable rows with per-char jitter and staggered
+// write-in timing (rows of a wrapped block cascade in one after another).
+function buildRows(seed: number, size: number, texts: string[]): Row[] {
+  let delay = 0;
+  return texts.map((t, i) => {
+    const glyphs = COMPLEX.test(t) ? null : makeGlyphs(seed + i * 7919, size, t);
+    const dur = clamp(t.length * 0.04, 0.4, 1.8);
+    const row: Row = { text: t, glyphs, dur, delay };
+    delay += dur * 0.55; // next row starts before this one finishes
+    return row;
+  });
+}
+
+// the rotated AABB an inscription occupies (for obstacle tests)
+function inscBox(insc: Inscription): Box {
+  const w = maxRowWidth(insc.rows.map((r) => r.text), insc.size);
+  return blockBox(insc.x, insc.y, insc.size, insc.rot, insc.anchor, w, insc.rows.length);
+}
 
 // Eye a blank spot: drop a pen at (px,py) and feel the free run along the chosen
 // orientation (both ways) and across it, then size a line to fill that gap, and
@@ -256,11 +308,7 @@ function evalSeed(
     lenBudget = hi;
   }
 
-  const unit = estWidth(text, 1) || 1;
-  const size = clamp(Math.min(lenBudget / unit, Math.min(up / 0.82, down / 0.4)), MIN_SIZE, MAX_SIZE);
-  const gap = size * 1.35;
-
-  // stack future lines toward whichever perpendicular side is more open
+  // stack rows / future lines toward whichever perpendicular side is more open
   const runA = rayDist(px, py, -by, bx, obstacles);
   const runB = rayDist(px, py, by, -bx, obstacles);
   const towardA = runA >= runB;
@@ -268,13 +316,36 @@ function evalSeed(
   const advY = towardA ? bx : -bx;
   const advRun = Math.max(runA, runB);
 
-  const box = boxOf(anchor, px, py, size, rot, text);
+  const unit = estWidth(text, 1) || 1;
+  // single-line fit: shrink to span the gap length (and within its thickness)
+  let size = clamp(Math.min(lenBudget / unit, Math.min(up / 0.82, down / 0.4)), MIN_SIZE, MAX_SIZE);
+  let rows = [text];
+  // WRAP only when the line genuinely can't fit one row even at the smallest size
+  // — otherwise a thin single line still slots into tight gaps, so wrapping (which
+  // makes a bigger block that fits fewer clear spots) is reserved for truly long
+  // lines. When we do wrap, grow the size only as far as the gap actually allows.
+  if (estWidth(text, MIN_SIZE) > lenBudget) {
+    let bestS = MIN_SIZE;
+    let bestRows = wrapRows(text, MIN_SIZE, lenBudget);
+    for (let s = MIN_SIZE + 6; s <= MAX_SIZE; s += 6) {
+      const r = wrapRows(text, s, lenBudget);
+      // bigger size ⇒ taller block; stop at the first that no longer fits the run
+      if (r.length * s * LH > advRun || maxRowWidth(r, s) > lenBudget) break;
+      bestS = s;
+      bestRows = r;
+    }
+    size = bestS;
+    rows = bestRows;
+  }
+
+  const gap = size * LH;
+  const w = maxRowWidth(rows, size);
+  const box = blockBox(px, py, size, rot, anchor, w, rows.length);
   const ov = overlapFrac(box, obstacles);
   const off = offCanvasFrac(box);
-  const w = unit * size;
   const fill = clamp(w / Math.max(1, lenBudget), 0, 1);
   const sizeNorm = (size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
-  const flowRoom = clamp(advRun / (gap * 3), 0, 1); // room for a few lines
+  const flowRoom = clamp(advRun / (gap * (rows.length + 2)), 0, 1);
 
   // A seed is "clear" if it genuinely misses the page content. Among clear seeds
   // we then optimise aesthetics; only if NONE are clear do we fall back to the
@@ -287,7 +358,12 @@ function evalSeed(
   // advance estimate — that collapses to 1 on a busy page and kills flow. The
   // real terminator is the per-line clear-check while flowing (see place()).
   const left = 2 + Math.floor(rand() * 4); // 2..5
-  return { col: { x: px, y: py, rot, size, anchor, advX, advY, gap, left }, clear, aesthetic, badness };
+  return {
+    col: { x: px, y: py, rot, size, anchor, advX, advY, gap, maxLen: lenBudget, left },
+    clear,
+    aesthetic,
+    badness,
+  };
 }
 
 // Begin a fresh column: sample many seeds across the page. Prefer the nicest spot
@@ -311,71 +387,69 @@ function startColumn(rand: () => number, text: string, obstacles: Box[]): Column
   return best.col;
 }
 
-// Place one line: continue the current column if the next slot is clear, else
-// lift the pen and start a fresh column. Returns the line and the pen's new state.
-function place(
-  prevCol: Column | null,
-  rand: () => number,
-  text: string,
-  obstacles: Box[]
-): { insc: Inscription; col: Column } {
-  if (prevCol && prevCol.left > 0) {
-    const size = clamp(prevCol.size * (0.94 + rand() * 0.12), MIN_SIZE, MAX_SIZE); // gentle drift
-    const box = boxOf(prevCol.anchor, prevCol.x, prevCol.y, size, prevCol.rot, text);
-    // continue only while the next slot stays essentially clear of content; a
-    // tiny sliver is tolerated for the conservative rotated AABB, but anything
-    // more ends the column so it relocates instead of creeping onto the page.
-    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.06) {
-      const insc: Inscription = {
-        key: 0,
-        text,
-        x: prevCol.x,
-        y: prevCol.y,
-        rot: prevCol.rot,
-        size,
-        anchor: prevCol.anchor,
-        dur: writeDur(text),
-        glyphs: null,
-      };
-      const col: Column = {
-        ...prevCol,
-        x: prevCol.x + prevCol.advX * prevCol.gap,
-        y: prevCol.y + prevCol.advY * prevCol.gap,
-        left: prevCol.left - 1,
-      };
-      return { insc, col };
-    }
-  }
-  const col = startColumn(rand, text, obstacles);
+// assemble an inscription at a column's current slot: wrap to the column width,
+// build the rows, and return the new pen state advanced past the whole block.
+function layoutAt(col: Column, size: number, gseed: number, text: string): { insc: Inscription; col: Column } {
+  const texts = wrapRows(text, size, col.maxLen);
+  const lineHeight = size * LH;
   const insc: Inscription = {
     key: 0,
-    text,
     x: col.x,
     y: col.y,
     rot: col.rot,
-    size: col.size,
+    size,
     anchor: col.anchor,
-    dur: writeDur(text),
-    glyphs: null,
+    lineHeight,
+    rows: buildRows(gseed, size, texts),
   };
+  // advance past the whole block (so the next line clears a wrapped one)
+  const span = texts.length * lineHeight;
   const advanced: Column = {
     ...col,
-    x: col.x + col.advX * col.gap,
-    y: col.y + col.advY * col.gap,
+    x: col.x + col.advX * span,
+    y: col.y + col.advY * span,
     left: col.left - 1,
   };
   return { insc, col: advanced };
 }
 
-// squeeze a line so its rotated box fits the canvas in BOTH dimensions (any tilt)
-function fit(insc: Inscription) {
-  const w = estWidth(insc.text, insc.size);
-  const h = insc.size;
-  const th = (insc.rot * Math.PI) / 180;
+// Place one line: continue the current column if its (possibly wrapped) block
+// stays clear, else lift the pen and start a fresh column.
+function place(
+  prevCol: Column | null,
+  seedNum: number,
+  text: string,
+  obstacles: Box[]
+): { insc: Inscription; col: Column } {
+  const rand = mkRand(seedNum);
+  const gseed = (seedNum ^ 0x9e3779b9) >>> 0;
+  if (prevCol && prevCol.left > 0) {
+    const size = clamp(prevCol.size * (0.94 + rand() * 0.12), MIN_SIZE, MAX_SIZE); // gentle drift
+    const texts = wrapRows(text, size, prevCol.maxLen);
+    const box = blockBox(
+      prevCol.x, prevCol.y, size, prevCol.rot, prevCol.anchor,
+      maxRowWidth(texts, size), texts.length
+    );
+    // continue only while the block stays essentially clear of content; a tiny
+    // sliver is tolerated for the conservative AABB, but more ends the column so
+    // it relocates instead of creeping onto the page.
+    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.06) {
+      return layoutAt({ ...prevCol, size }, size, gseed, text);
+    }
+  }
+  const col = startColumn(rand, text, obstacles);
+  return layoutAt(col, col.size, gseed, text);
+}
+
+// squeeze a single ROW so its rotated box fits the canvas in BOTH dimensions
+// (a fallback for a word too long even to wrap; normal rows already fit).
+function fitRow(text: string, size: number, rot: number) {
+  const w = estWidth(text, size);
+  const th = (rot * Math.PI) / 180;
   const ac = Math.abs(Math.cos(th));
   const as = Math.abs(Math.sin(th));
-  const limW = ac > 1e-3 ? (W - 40 - h * as) / ac : Infinity;
-  const limH = as > 1e-3 ? (H - 40 - h * ac) / as : Infinity;
+  const limW = ac > 1e-3 ? (W - 40 - size * as) / ac : Infinity;
+  const limH = as > 1e-3 ? (H - 40 - size * ac) / as : Infinity;
   const lim = Math.max(120, Math.min(limW, limH));
   return w > lim
     ? { textLength: Math.round(lim), lengthAdjust: "spacingAndGlyphs" as const }
@@ -471,18 +545,11 @@ export default function SongScapeLyrics({
     lastIdx.current = idx;
 
     const list = inscriptionsRef.current;
-    const obstacles = collectForeground().concat(
-      doodleBoxes,
-      list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.rot, p.text))
-    );
-    const rand = mkRand(fnv(`${trackId}:${idx}`));
-    const { insc: base, col } = place(colRef.current, rand, text, obstacles);
+    const obstacles = collectForeground().concat(doodleBoxes, list.map(inscBox));
+    const { insc: base, col } = place(colRef.current, fnv(`${trackId}:${idx}`), text, obstacles);
     colRef.current = col;
 
-    const glyphs = COMPLEX.test(text)
-      ? null
-      : makeGlyphs(fnv(`${trackId}:${idx}:g`), base.size, text);
-    const next = [...list, { ...base, glyphs, key: counter.current++ }].slice(-MAX_VISIBLE);
+    const next = [...list, { ...base, key: counter.current++ }].slice(-MAX_VISIBLE);
     inscriptionsRef.current = next;
     setInscriptions(next);
   }, [idx, lines, trackId, doodleBoxes]);
@@ -512,29 +579,37 @@ export default function SongScapeLyrics({
                   transformOrigin: `${insc.x.toFixed(1)}px ${insc.y.toFixed(1)}px`,
                 }}
               >
-                <text
-                  x={insc.x}
-                  y={insc.y}
-                  textAnchor={insc.anchor}
-                  fill={ink}
-                  fontSize={insc.size}
-                  className={reduced ? undefined : "lyric-write"}
-                  // font-family via style (CSS) so var() resolves — it does NOT
-                  // substitute in the SVG presentation attribute.
-                  style={{
-                    fontFamily: LYRIC_FONT,
-                    ...(reduced ? {} : { "--lyric-dur": `${insc.dur.toFixed(2)}s` }),
-                  } as React.CSSProperties}
-                  {...fit(insc)}
-                >
-                  {insc.glyphs
-                    ? insc.glyphs.map((g, gi) => (
-                        <tspan key={gi} fontSize={g.size} dy={g.dy.toFixed(2)} rotate={g.rot.toFixed(1)}>
-                          {g.ch}
-                        </tspan>
-                      ))
-                    : insc.text}
-                </text>
+                {insc.rows.map((row, ri) => (
+                  <text
+                    key={ri}
+                    x={insc.x}
+                    y={insc.y + ri * insc.lineHeight}
+                    textAnchor={insc.anchor}
+                    fill={ink}
+                    fontSize={insc.size}
+                    className={reduced ? undefined : "lyric-write"}
+                    // font-family via style (CSS) so var() resolves — it does NOT
+                    // substitute in the SVG presentation attribute.
+                    style={{
+                      fontFamily: LYRIC_FONT,
+                      ...(reduced
+                        ? {}
+                        : {
+                            "--lyric-dur": `${row.dur.toFixed(2)}s`,
+                            "--lyric-delay": `${row.delay.toFixed(2)}s`,
+                          }),
+                    } as React.CSSProperties}
+                    {...fitRow(row.text, insc.size, insc.rot)}
+                  >
+                    {row.glyphs
+                      ? row.glyphs.map((g, gi) => (
+                          <tspan key={gi} fontSize={g.size} dy={g.dy.toFixed(2)} rotate={g.rot.toFixed(1)}>
+                            {g.ch}
+                          </tspan>
+                        ))
+                      : row.text}
+                  </text>
+                ))}
               </g>
             </motion.g>
           );

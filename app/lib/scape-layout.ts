@@ -49,8 +49,9 @@ export function collectForeground(pad = 18): Box[] {
     if (!el) return true;
     if (el.closest('[aria-hidden="true"]')) return true; // the backdrop itself
     if (el.closest("[data-lyrics-ignore]")) return true; // e.g. the post TOC
-    const cs = getComputedStyle(el);
-    return cs.visibility === "hidden" || cs.opacity === "0";
+    // NB: don't treat opacity:0 as hidden — content commonly fades IN from 0, and
+    // measuring during that animation would let the backdrop land on it.
+    return getComputedStyle(el).visibility === "hidden";
   };
 
   // every visible run of text, measured exactly via a Range

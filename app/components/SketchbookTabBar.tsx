@@ -216,7 +216,7 @@ export default function SketchbookTabBar() {
   const reduce = useReducedMotion();
 
   return (
-    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-50 md:hidden">
+    <nav aria-label="Primary" data-avoid-lyrics className="fixed inset-x-0 bottom-0 z-50 md:hidden">
       <div
         className="relative border-t border-line bg-paper"
         // clip horizontally so the active tab's scribble ring can't spill past
