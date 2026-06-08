@@ -73,6 +73,13 @@ function mkRand(seed: number) {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 type Anchor = "start" | "middle" | "end";
+// one glyph's hand-jitter (only for non-complex scripts — see makeGlyphs)
+interface Glyph {
+  ch: string;
+  size: number;
+  dy: number; // baseline shift RELATIVE to the previous glyph (so it wobbles)
+  rot: number; // per-glyph tilt, degrees
+}
 interface Inscription {
   key: number;
   text: string;
@@ -82,6 +89,30 @@ interface Inscription {
   size: number;
   anchor: Anchor;
   dur: number; // write-in seconds (longer lines take longer, like real writing)
+  glyphs: Glyph[] | null; // per-char jitter, or null to render the line whole
+}
+
+// Scripts whose glyphs SHAPE together (conjuncts, vowel signs) — splitting these
+// into per-char tspans would break rendering, so they stay whole (per-line
+// variation only). CJK/Hangul/Latin glyphs are independent, so they get jitter.
+const COMPLEX = /[ऀ-ॿঀ-৿]/;
+
+// per-character hand-jitter: small size, baseline and tilt wobble around the
+// line's nominal size, so no two letters sit exactly alike.
+function makeGlyphs(seed: number, size: number, text: string): Glyph[] {
+  const rand = mkRand(seed);
+  let prevDy = 0;
+  return Array.from(text).map((ch) => {
+    const absDy = (rand() * 2 - 1) * size * 0.055; // ±5.5% baseline wobble
+    const dy = absDy - prevDy;
+    prevDy = absDy;
+    return {
+      ch,
+      size: size * (0.88 + rand() * 0.24), // ±~12% per letter
+      dy,
+      rot: (rand() * 2 - 1) * 2.6, // ±2.6° per letter
+    };
+  });
 }
 
 /* --------------------- foreground-clash avoidance ----------------------- */
@@ -212,35 +243,80 @@ function makeCandidate(rand: () => number, text: string): Inscription {
       : o < 0.45
         ? sign * (16 + rand() * 26) // 16–42°, strong diagonal
         : sign * rand() * 11; // 0–11°, gentle tilt
-  const size = FONT * (0.84 + rand() * 0.34);
+  const size = FONT * (0.72 + rand() * 0.62); // wide per-line size variance (~0.72–1.34×)
   const dur = clamp(text.length * 0.04, 0.6, 2.2);
-  return { key: 0, text, x, y, rot, size, anchor, dur };
+  return { key: 0, text, x, y, rot, size, anchor, dur, glyphs: null };
 }
 
-// a little overlap is fine; beyond this fraction we'd rather reshuffle
-const ALLOW_OVERLAP = 0.22;
+// smallest angle between two orientations, treating a line and its 180° flip as
+// the same (0 = parallel, 90 = perpendicular)
+function angleDiff(a: number, b: number): number {
+  let d = Math.abs(a - b) % 180;
+  if (d > 90) d = 180 - d;
+  return d;
+}
 
-// Place a line: try several seeded candidates and take the first that mostly
-// clears the foreground (and the other current lines); if none do, take the
-// least-clashing one. Falls back to plain seeded placement when nothing is
-// measured (e.g. an empty page), preserving the natural scatter.
-function place(seedStr: string, text: string, obstacles: Box[]): Inscription {
+// A line written as the NEXT line of the previous one's hand: same orientation
+// (small drift), advanced one line-height in the direction lines stack — DOWN for
+// horizontal writing, SIDEWAYS for vertical — with a little stagger/indent. This
+// is what makes consecutive lines read as one flowing passage.
+function continueFrom(prev: Inscription, rand: () => number, text: string): Inscription {
+  const rot = prev.rot + (rand() * 2 - 1) * 4;
+  // drift size enough that even a flowing passage visibly varies line to line
+  const size = clamp(prev.size * (0.82 + rand() * 0.34), FONT * 0.72, FONT * 1.36);
+  const th = (rot * Math.PI) / 180;
+  // baseline direction (cos,sin); the line-advance is its perpendicular, flipped
+  // so it always points down the page (+y) — that's how the next line stacks.
+  let nx = -Math.sin(th);
+  let ny = Math.cos(th);
+  if (ny < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const gap = prev.size * (1.2 + rand() * 0.55);
+  const indent = (rand() * 2 - 1) * prev.size * 0.7; // stagger along the baseline
+  const x = prev.x + nx * gap + indent * Math.cos(th);
+  const y = prev.y + ny * gap + indent * Math.sin(th);
+  const dur = clamp(text.length * 0.04, 0.6, 2.2);
+  return { key: 0, text, x, y, rot, size, anchor: prev.anchor, dur, glyphs: null };
+}
+
+// Place a line. With no previous line, scatter freely. Otherwise build two pools
+// of candidates — "flow" (continue the previous hand) and "jump" (a fresh spot &
+// angle) — score each by foreground/line overlap + staying on-canvas + an
+// orientation-clash penalty (a differently-angled line sitting ON the last one is
+// what we most want to avoid), with a gentle bias toward flowing. Result: runs of
+// lines written as a passage, occasionally breaking away to a new spot/angle.
+function place(
+  seedStr: string,
+  text: string,
+  obstacles: Box[],
+  prev: Inscription | undefined
+): Inscription {
   const rand = mkRand(fnv(seedStr));
-  // always try a few so a tilted/vertical line that runs off-canvas can reshuffle
-  const tries = 14;
+  const pool: { insc: Inscription; flow: boolean }[] = [];
+  for (let i = 0; i < 8; i++) pool.push({ insc: makeCandidate(rand, text), flow: false });
+  if (prev) for (let i = 0; i < 8; i++) pool.push({ insc: continueFrom(prev, rand, text), flow: true });
+
+  // 70% of the time prefer flowing; the rest stay open to a clean break
+  const flowBonus = rand() < 0.7 ? 0.18 : 0;
+
   let best: Inscription | null = null;
   let bestScore = Infinity;
-  for (let i = 0; i < tries; i++) {
-    const cand = makeCandidate(rand, text);
-    const box = boxOf(cand.anchor, cand.x, cand.y, cand.size, cand.rot, text);
-    const over = overlapFrac(box, obstacles);
-    const off = offCanvasFrac(box);
-    const score = over + off * 1.6; // staying on-canvas weighs a bit heavier
+  for (const { insc, flow } of pool) {
+    const box = boxOf(insc.anchor, insc.x, insc.y, insc.size, insc.rot, text);
+    let score = overlapFrac(box, obstacles) + offCanvasFrac(box) * 1.6;
+    if (prev) {
+      const near =
+        Math.hypot(insc.x - prev.x, insc.y - prev.y) < (insc.size + prev.size) * 1.6;
+      // a different orientation right on top of the last line reads as a mistake
+      if (near) score += (angleDiff(insc.rot, prev.rot) / 90) * 0.9;
+    }
+    if (flow) score -= flowBonus;
     if (score < bestScore) {
-      best = cand;
+      best = insc;
       bestScore = score;
     }
-    if (over <= ALLOW_OVERLAP && off <= 0.06) break; // good enough — keep the natural pick
   }
   return best!;
 }
@@ -354,7 +430,13 @@ export default function SongScapeLyrics({
       const obstacles = foreground.concat(
         list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.rot, p.text))
       );
-      const insc = { ...place(`${trackId}:${idx}`, text, obstacles), key: counter.current++ };
+      const prev = list[list.length - 1];
+      const base = place(`${trackId}:${idx}`, text, obstacles, prev);
+      // per-glyph jitter for simple scripts; complex scripts stay whole
+      const glyphs = COMPLEX.test(text)
+        ? null
+        : makeGlyphs(fnv(`${trackId}:${idx}:g`), base.size, text);
+      const insc = { ...base, glyphs, key: counter.current++ };
       return [...list, insc].slice(-MAX);
     });
   }, [idx, lines, trackId]);
@@ -400,7 +482,18 @@ export default function SongScapeLyrics({
                   } as React.CSSProperties}
                   {...fit(insc)}
                 >
-                  {insc.text}
+                  {insc.glyphs
+                    ? insc.glyphs.map((g, gi) => (
+                        <tspan
+                          key={gi}
+                          fontSize={g.size}
+                          dy={g.dy.toFixed(2)}
+                          rotate={g.rot.toFixed(1)}
+                        >
+                          {g.ch}
+                        </tspan>
+                      ))
+                    : insc.text}
                 </text>
               </g>
             </motion.g>
