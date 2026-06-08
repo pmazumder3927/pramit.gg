@@ -279,9 +279,11 @@
   /* watermark + foxing breathe very slowly (the "breath of light" on the sheet) */
   .paper-marks { animation: paper-breathe 52s ease-in-out infinite; }
   @keyframes paper-breathe { 0%, 100% { opacity: 0.78; } 50% { opacity: 1; } }
-  /* deckle edge / press vignette — frames the doodles as a real sheet, not void */
-  .paper-vignette { box-shadow: inset 0 0 200px rgb(92 64 34 / 0.11), inset 0 0 64px rgb(92 64 34 / 0.05); }
-  .dark .paper-vignette { box-shadow: inset 0 0 230px rgb(0 0 0 / 0.6), inset 0 0 84px rgb(0 0 0 / 0.34); }
+  /* deckle / press vignette — DIRECTIONAL: transparent toward the song's light
+     (--lx/--ly, set by AlbumLight) and deepening on the shadow side. One light,
+     one shadow, shared across the whole backdrop. */
+  .paper-vignette { background: radial-gradient(125% 125% at var(--lx, 30%) var(--ly, 30%), transparent 42%, rgb(78 52 26 / 0.13) 100%); transition: background 1.4s ease; }
+  .dark .paper-vignette { background: radial-gradient(130% 130% at var(--lx, 30%) var(--ly, 30%), transparent 36%, rgb(0 0 0 / 0.64) 100%); }
   @media (prefers-reduced-motion: reduce) { .paper-marks { animation: none; } }
 
   /* ---------- songscape · sumi-no-mizu (calligraphy backdrop) ---------- */

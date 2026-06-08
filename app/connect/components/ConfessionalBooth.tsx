@@ -251,7 +251,7 @@ export default function ConfessionalBooth() {
                   value={message}
                   onChange={handleMessageChange}
                   placeholder="speak your truth..."
-                  className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-sm text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
+                  className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-base text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
                 />
                 <div className="absolute bottom-3 right-3 text-xs tabular-nums text-ink-faint">
                   {characterCount}/{maxLength}

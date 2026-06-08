@@ -66,7 +66,7 @@ export function ChaoticNowPlaying({
       className="relative mx-auto mb-16 max-w-3xl md:mb-24"
     >
       {/* pop-art starburst badge — the single status label */}
-      <div className="absolute -right-4 -top-9 z-30 h-24 w-24 rotate-6 md:-right-8 md:-top-10 md:h-28 md:w-28">
+      <div className="absolute right-1 -top-7 z-30 h-[4.5rem] w-[4.5rem] rotate-6 md:-right-8 md:-top-10 md:h-28 md:w-28">
         <svg viewBox="-50 -50 100 100" className="h-full w-full" style={{ filter: "drop-shadow(2px 3px 0 rgb(var(--fg) / 0.5))" }}>
           <polygon points={BURST} fill={accentColor} stroke="rgb(var(--fg))" strokeWidth="2.5" strokeLinejoin="round" />
         </svg>

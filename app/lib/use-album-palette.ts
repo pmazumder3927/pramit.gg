@@ -5,6 +5,19 @@ import { useEffect, useState } from "react";
 // A richer cousin of use-album-color: instead of a single dominant hex, it
 // pulls a small palette (vibrant + secondary + deep + light) plus overall
 // brightness/saturation, so a backdrop can be themed from the album art.
+// one regional swatch of the cover (a cell of a coarse grid): its dominant colour
+// and where it sits on the cover (x,y in 0..1) — lets the backdrop reproduce the
+// cover's actual colour COMPOSITION, not just an averaged palette.
+export interface Swatch {
+  x: number;
+  y: number;
+  r: number;
+  g: number;
+  b: number;
+  lum: number; // 0..1
+  sat: number; // 0..1
+}
+
 export interface AlbumPalette {
   vibrant: string; // dominant saturated hue
   secondary: string; // a distinct second hue (or a tint of vibrant)
@@ -12,6 +25,35 @@ export interface AlbumPalette {
   light: string; // brightest meaningful colour — highlights
   brightness: number; // 0..1 average luma
   saturation: number; // 0..1 average saturation
+  grid: Swatch[]; // GRID×GRID regional swatches of the cover (its composition)
+  lightX: number; // 0..1 — where the cover's light sits (brightest region)
+  lightY: number;
+}
+
+export const GRID = 3; // GRID×GRID regional swatches
+
+// a pleasant default composition (warm top-left → cool bottom-right) for no-cover
+function defaultGrid(): Swatch[] {
+  const warm = { r: 255, g: 107, b: 61 };
+  const cool = { r: 124, g: 119, b: 198 };
+  const out: Swatch[] = [];
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      const x = (col + 0.5) / GRID;
+      const y = (row + 0.5) / GRID;
+      const t = (x + y) / 2;
+      out.push({
+        x,
+        y,
+        r: warm.r + (cool.r - warm.r) * t,
+        g: warm.g + (cool.g - warm.g) * t,
+        b: warm.b + (cool.b - warm.b) * t,
+        lum: 0.5,
+        sat: 0.5,
+      });
+    }
+  }
+  return out;
 }
 
 export const DEFAULT_PALETTE: AlbumPalette = {
@@ -21,6 +63,9 @@ export const DEFAULT_PALETTE: AlbumPalette = {
   light: "#ffd9c4",
   brightness: 0.5,
   saturation: 0.55,
+  grid: defaultGrid(),
+  lightX: 0.3,
+  lightY: 0.3,
 };
 
 const cache = new Map<string, AlbumPalette>();
@@ -54,11 +99,23 @@ function extract(img: HTMLImageElement): AlbumPalette {
   let dark = { l: 2, r: 0, g: 0, b: 0 };
   let lite = { l: -1, r: 0, g: 0, b: 0 };
 
+  // regional grid accumulators (the cover's spatial colour composition)
+  const cells = GRID * GRID;
+  const cR = new Array(cells).fill(0);
+  const cG = new Array(cells).fill(0);
+  const cB = new Array(cells).fill(0);
+  const cL = new Array(cells).fill(0);
+  const cS = new Array(cells).fill(0);
+  const cN = new Array(cells).fill(0);
+
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
     if (data[i + 3] < 128) continue;
+    const px = (i >> 2) % N;
+    const py = (i >> 2) / N | 0;
+    const cell = Math.min(GRID - 1, (py * GRID / N) | 0) * GRID + Math.min(GRID - 1, (px * GRID / N) | 0);
 
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
@@ -69,6 +126,13 @@ function extract(img: HTMLImageElement): AlbumPalette {
     sumLuma += luma;
     sumSat += sat;
     count++;
+
+    cR[cell] += r;
+    cG[cell] += g;
+    cB[cell] += b;
+    cL[cell] += luma;
+    cS[cell] += sat;
+    cN[cell] += 1;
 
     let h = 0;
     if (delta !== 0) {
@@ -111,6 +175,26 @@ function extract(img: HTMLImageElement): AlbumPalette {
       ? { r: binR[b2] / binW[b2], g: binG[b2] / binW[b2], b: binB[b2] / binW[b2] }
       : { r: vib.r * 0.7 + 60, g: vib.g * 0.7 + 50, b: vib.b * 0.7 + 90 };
 
+  // build the regional grid + find where the cover's light sits (brightest cell)
+  const grid: Swatch[] = [];
+  let lightX = 0.5;
+  let lightY = 0.5;
+  let bestLum = -1;
+  for (let idx = 0; idx < cells; idx++) {
+    const col = idx % GRID;
+    const row = (idx / GRID) | 0;
+    const x = (col + 0.5) / GRID;
+    const y = (row + 0.5) / GRID;
+    const n = cN[idx] || 1;
+    const lum = cL[idx] / n;
+    grid.push({ x, y, r: cR[idx] / n, g: cG[idx] / n, b: cB[idx] / n, lum, sat: cS[idx] / n });
+    if (lum > bestLum) {
+      bestLum = lum;
+      lightX = x;
+      lightY = y;
+    }
+  }
+
   return {
     vibrant: hex(vib.r, vib.g, vib.b),
     secondary: hex(sec.r, sec.g, sec.b),
@@ -118,6 +202,9 @@ function extract(img: HTMLImageElement): AlbumPalette {
     light: lite.l >= 0 ? hex(lite.r, lite.g, lite.b) : hex(vib.r, vib.g, vib.b),
     brightness: sumLuma / count,
     saturation: sumSat / count,
+    grid,
+    lightX,
+    lightY,
   };
 }
 

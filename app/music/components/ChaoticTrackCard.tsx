@@ -342,7 +342,7 @@ function ChaoticTrackCardImpl({
 
             {/* Spotify icon */}
             <motion.div
-              className="flex-shrink-0 rounded-full p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+              className="flex-shrink-0 rounded-full p-1.5 opacity-70 transition-opacity md:opacity-0 md:group-hover:opacity-100"
               style={{ background: "rgb(var(--fg) / 0.05)" }}
               whileHover={{ scale: 1.2, rotate: 10 }}
             >

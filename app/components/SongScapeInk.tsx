@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
-import { useAlbumPalette, AlbumPalette } from "@/app/lib/use-album-palette";
+import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette";
 import type { DrawingStroke } from "@/app/lib/drawing/types";
 
 const W = 1600;
@@ -411,7 +411,17 @@ export default function SongScapeInk() {
             <AnimatePresence>
               <motion.g key={songKey} variants={container} initial="enter" animate="show" exit="leave">
                 {scape.drops.map((d, i) => {
-                  const col = inkColor(palette, dark, dropHue(palette, d.warmth));
+                  // the doodle wears the colour of the cover REGION it sits on,
+                  // kept on-soul by blending with the warm/cool pole hue
+                  const cell =
+                    palette.grid[
+                      Math.min(GRID - 1, Math.floor((d.oy / H) * GRID)) * GRID +
+                        Math.min(GRID - 1, Math.floor((d.ox / W) * GRID))
+                    ];
+                  const hue = cell
+                    ? mix(dropHue(palette, d.warmth), { r: cell.r, g: cell.g, b: cell.b }, 0.5)
+                    : dropHue(palette, d.warmth);
+                  const col = inkColor(palette, dark, hue);
                   const start = i * DOODLE_GAP; // assembly order
                   return (
                     // outer = exit lift (Motion); inner = scroll-swirl (CSS) — kept

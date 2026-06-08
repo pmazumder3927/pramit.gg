@@ -27,7 +27,7 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       title={theme === "dark" ? "lights on" : "lights off"}
-      className="group flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-card/70 text-ink-soft transition-all duration-300 hover:-translate-y-0.5 hover:border-accent-orange/60 hover:text-accent-orange"
+      className="group flex h-11 w-11 items-center justify-center rounded-full border border-line/80 bg-card/70 text-ink-soft transition-all duration-300 hover:-translate-y-0.5 hover:border-accent-orange/60 hover:text-accent-orange"
     >
       {/* keep markup stable before mount to avoid hydration flash */}
       <span className="sr-only">toggle theme</span>
