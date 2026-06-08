@@ -19,6 +19,9 @@ const H = 900;
 const FONT = 60;
 const MARGIN = 70; // keep ink off the very edge
 const MAX = 3; // current line + 2 lingering ghosts
+// nudge lines in slightly early so they read as in-time with the vocal rather
+// than chasing it — covers render + perceptual lag on top of measured latency.
+const LYRIC_LEAD_MS = 220;
 
 /* --------------------------- seeded placement --------------------------- */
 function fnv(str: string): number {
@@ -105,12 +108,17 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
   const progress = track?.progress ?? 0;
   const serverNow = track?.serverNow ?? 0;
   const fetchedAt = track?.fetchedAt ?? 0;
+  const latency = track?.clientLatency ?? 0;
 
   useEffect(() => {
     if (!lines.length) {
       setIdx(-1);
       return;
     }
+    // full latency budget so lines land in realtime:
+    //   cacheAge  — server-side staleness (cache TTL / upstream fetch time)
+    //   latency   — network transit server→client (this response)
+    //   elapsed   — client time since we received it (added per frame below)
     const cacheAge = serverNow && fetchedAt ? serverNow - fetchedAt : 0;
     const baseMs = progress + cacheAge;
     const findIdx = (ms: number) => {
@@ -124,20 +132,22 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
     };
 
     if (!playing) {
+      // paused: show the true current line; don't lead/compensate forward
       setIdx(findIdx(baseMs));
       return;
     }
+    const lead = latency + LYRIC_LEAD_MS;
     const recv = performance.now();
     let raf = 0;
     const tick = () => {
-      const ms = baseMs + (performance.now() - recv);
+      const ms = baseMs + lead + (performance.now() - recv);
       const next = findIdx(duration > 0 ? Math.min(ms, duration) : ms);
       setIdx((cur) => (cur === next ? cur : next));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [lines, playing, duration, progress, serverNow, fetchedAt]);
+  }, [lines, playing, duration, progress, serverNow, fetchedAt, latency]);
 
   return idx;
 }

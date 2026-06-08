@@ -20,6 +20,9 @@ export interface SpotifyTrack {
   /** Epoch ms (server clock) at response time — pairs with fetchedAt to
    *  correct for cache staleness when estimating the live playhead. */
   serverNow?: number;
+  /** Estimated one-way network latency (ms) for this response, ~half the
+   *  measured round-trip — the transit gap serverNow/fetchedAt can't see. */
+  clientLatency?: number;
 }
 
 type VisualVariant = "neon" | "glassy" | "minimal" | "accent";
@@ -33,7 +36,15 @@ interface NowPlayingContextValue {
 
 const NowPlayingContext = createContext<NowPlayingContextValue | null>(null);
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Time the round-trip so the playhead can compensate for network transit
+// (server→client) — the one delay serverNow/fetchedAt can't account for. Half
+// the RTT is a fair estimate of one-way latency for a freshly-fetched response.
+const fetcher = async (url: string) => {
+  const start = performance.now();
+  const res = await fetch(url);
+  const data = await res.json();
+  return { ...data, clientLatency: (performance.now() - start) / 2 };
+};
 
 function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000;
