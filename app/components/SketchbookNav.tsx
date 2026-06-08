@@ -82,13 +82,7 @@ export default function SketchbookNav() {
 
           <ThemeToggle />
         </div>
-
-        {/* mobile links — a tidy second row */}
-        <nav className="-mt-0.5 flex items-center justify-between gap-2 pb-2 md:hidden">
-          {LINKS.map((l) => (
-            <NavLink key={l.href} {...l} active={isActive(pathname, l.href)} size="sm" />
-          ))}
-        </nav>
+        {/* mobile navigation lives in the bottom tab bar (SketchbookTabBar) */}
       </div>
     </header>
   );

@@ -115,7 +115,7 @@ END:VCARD`;
   };
 
   return (
-    <div className="min-h-screen pb-28 md:pb-16">
+    <div className="min-h-screen pb-6 md:pb-16">
       <main className="relative z-10">
         {/* ============ GREETING — a handwritten salutation across the page ============ */}
         <section className="pt-16 md:pt-24">

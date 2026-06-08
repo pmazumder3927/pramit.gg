@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Caveat, Work_Sans } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
 import SketchbookNav from "./components/SketchbookNav";
+import SketchbookTabBar from "./components/SketchbookTabBar";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 import PaperBackground from "./components/PaperBackground";
 import AlbumThemeVars from "./components/AlbumThemeVars";
@@ -75,6 +76,11 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
+// viewport-fit: cover lets the bottom tab bar honor the iOS home-indicator inset.
+export const viewport: Viewport = {
+  viewportFit: "cover",
+};
+
 // Runs before paint to set the theme class, avoiding a flash of the wrong theme.
 const themeScript = `
 (function(){
@@ -111,8 +117,12 @@ export default function RootLayout({
             <AlbumThemeVars />
             <PaperBackground />
             <SketchbookNav />
-            <div className="relative z-10">{children}</div>
+            {/* extra bottom space on mobile so content clears the fixed tab bar */}
+            <div className="relative z-10 pb-[calc(env(safe-area-inset-bottom)+4.25rem)] md:pb-0">
+              {children}
+            </div>
             <NowPlaying />
+            <SketchbookTabBar />
           </NowPlayingProvider>
         </PostHogProvider>
       </body>
