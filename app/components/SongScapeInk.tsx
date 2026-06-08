@@ -19,6 +19,8 @@ import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion
 import { useNowPlayingContext } from "./NowPlayingContext";
 import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette";
 import type { DrawingStroke } from "@/app/lib/drawing/types";
+import { useLyrics } from "./useLyrics";
+import SongScapeLyrics from "./SongScapeLyrics";
 
 const W = 1600;
 const H = 900;
@@ -377,6 +379,11 @@ export default function SongScapeInk() {
   const sketches = useSketches();
   const scape = useMemo(() => makeScape(sketches, songKey), [songKey, sketches]);
 
+  // the song's words, inked into the scape (synced lines tracked live)
+  const lyrics = useLyrics(track);
+  const lyricHue = dropHue(palette, 0.15); // gently warm, on-soul
+  const lyricInk = cssRgb(inkColor(palette, dark, lyricHue), 1); // age dimming via group opacity
+
   useDiffuse(svgRef, track, reduced ?? null);
   useScrollSwirl(svgRef, reduced ?? null);
 
@@ -468,6 +475,18 @@ export default function SongScapeInk() {
             </AnimatePresence>
           </g>
         </g>
+
+        {/* the song's words — inked into the scape, tracking the live playhead */}
+        {lyrics.synced && (
+          <SongScapeLyrics
+            track={track}
+            trackId={songKey}
+            lines={lyrics.lines}
+            ink={lyricInk}
+            dark={dark}
+            reduced={!!reduced}
+          />
+        )}
       </svg>
     </div>
   );
