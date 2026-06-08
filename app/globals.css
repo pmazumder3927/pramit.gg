@@ -357,11 +357,24 @@
     50%      { transform: translate(5%, 3%); }
   }
   .ink-caustic { animation: ink-caustic 34s ease-in-out infinite; }
+  /* song-change repaint: the cover (revealed by .ink-write brush strokes in its
+     mask) holds, then washes DOWN into the fresh scape that inked in beneath it.
+     Paint ≈ 0–1.4s (mask), hold to 66%, wash + settle to the end. One-shot. */
+  @keyframes cover-wash {
+    0%, 66% { opacity: 1; transform: translateY(0); }
+    100%    { opacity: 0; transform: translateY(30px); }
+  }
+  .cover-wash {
+    animation: cover-wash 3s cubic-bezier(0.4, 0, 0.25, 1) both;
+    transform-box: view-box; transform-origin: 800px 450px;
+    will-change: opacity, transform;
+  }
   @media (prefers-reduced-motion: reduce) {
     .ink-sway, .ink-caustic { animation: none; }
     .ink-diffuse, .ink-stroke-wrap { transform: none; }
     .ink-write { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
     .lyric-write { animation: none; clip-path: none; opacity: 1; }
+    .cover-wash { animation: none; opacity: 0; }
   }
 
   /* equalizer bars for now-playing */

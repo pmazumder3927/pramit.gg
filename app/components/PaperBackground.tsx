@@ -1,8 +1,11 @@
 // Sketchbook paper backdrop. Pure CSS, theme-aware. Sits behind all content (z-0).
 //   · PaperSheet — the handmade-paper ground (tooth, watermark, foxing, vignette).
 //   · SongScapeInk — visitors' confessional doodles, inked (both themes).
+//   · CoverReveal — on song change, the new cover is brushed on over the old
+//     scape (a wipe), held, then washed down into the freshly-inked scape.
 import PaperSheet from "./PaperSheet";
 import SongScapeInk from "./SongScapeInk";
+import CoverReveal from "./CoverReveal";
 
 export default function PaperBackground() {
   return (
@@ -22,6 +25,10 @@ export default function PaperBackground() {
 
       {/* now-playing backdrop — visitors' confessional doodles, inked (both themes) */}
       <SongScapeInk />
+
+      {/* song-change repaint — brushes the new cover over the old scape, then
+          washes it down into the fresh one. One-shot per switch (no reduced-motion). */}
+      <CoverReveal />
     </div>
   );
 }

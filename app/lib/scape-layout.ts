@@ -18,13 +18,13 @@ export function boxesOverlap(a: Box, b: Box): boolean {
 }
 
 // Measure the visible foreground content and map its screen rects into view-box
-// space, so the backdrop can steer clear of it. Rather than a brittle tag list,
-// we capture every element that DIRECTLY holds visible text (a "text leaf" — no
-// element children of its own, so we get the innermost <span>/<h3>/<p>/… and not
-// their big wrappers), plus interactive/media (buttons, links, inputs, images)
-// which may be icon-only. Backdrop elements (aria-hidden) and opted-out chrome
-// ([data-lyrics-ignore], e.g. the post TOC) are skipped; [data-avoid-lyrics]
-// force-includes anything otherwise missed.
+// space, so the backdrop can steer clear of it. We walk TEXT NODES (not elements)
+// and measure each visible run with a Range — this captures text precisely no
+// matter how it's nested, including mixed-content like <h1>pramit mazumder<span>.
+// </span></h1> whose name lives in a bare text node an element scan would miss.
+// Plus interactive/media (buttons, links, inputs, images) which may be icon-only.
+// Backdrop content (aria-hidden) and opted-out chrome ([data-lyrics-ignore], e.g.
+// the post TOC) are skipped; [data-avoid-lyrics] force-includes anything missed.
 export function collectForeground(pad = 18): Box[] {
   if (typeof window === "undefined") return [];
   const vw = window.innerWidth;
@@ -35,17 +35,9 @@ export function collectForeground(pad = 18): Box[] {
   const offY = (vh - VB_H * scale) / 2;
 
   const boxes: Box[] = [];
-  const seen = new Set<Element>();
-  const add = (el: Element) => {
-    if (seen.has(el)) return;
-    if (el.closest('[aria-hidden="true"]')) return;
-    if (el.closest("[data-lyrics-ignore]")) return;
-    const r = el.getBoundingClientRect();
+  const push = (r: DOMRect) => {
     if (r.width < 6 || r.height < 6) return;
     if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
-    const cs = getComputedStyle(el);
-    if (cs.visibility === "hidden" || cs.opacity === "0") return;
-    seen.add(el);
     boxes.push({
       x0: (r.left - offX) / scale - pad,
       y0: (r.top - offY) / scale - pad,
@@ -53,14 +45,29 @@ export function collectForeground(pad = 18): Box[] {
       y1: (r.bottom - offY) / scale + pad,
     });
   };
+  const hidden = (el: Element | null): boolean => {
+    if (!el) return true;
+    if (el.closest('[aria-hidden="true"]')) return true; // the backdrop itself
+    if (el.closest("[data-lyrics-ignore]")) return true; // e.g. the post TOC
+    const cs = getComputedStyle(el);
+    return cs.visibility === "hidden" || cs.opacity === "0";
+  };
 
-  // text leaves: innermost elements that directly hold visible text (any tag)
-  document.querySelectorAll<HTMLElement>("body *").forEach((el) => {
-    if (el.childElementCount === 0 && (el.textContent ?? "").trim().length > 0) add(el);
-  });
-  // interactive / media — may have children or carry no text at all
+  // every visible run of text, measured exactly via a Range
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (!node.nodeValue || !node.nodeValue.trim()) continue;
+    if (hidden(node.parentElement)) continue;
+    range.selectNodeContents(node);
+    push(range.getBoundingClientRect());
+  }
+  // interactive / media — may carry no text at all (icon buttons, images)
   document
     .querySelectorAll<HTMLElement>("button,a[href],input,textarea,select,img,[data-avoid-lyrics]")
-    .forEach(add);
+    .forEach((el) => {
+      if (!hidden(el)) push(el.getBoundingClientRect());
+    });
   return boxes;
 }
