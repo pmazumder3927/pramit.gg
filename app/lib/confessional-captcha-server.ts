@@ -22,7 +22,7 @@ import { createPublicClient } from "@/utils/supabase/server";
 // Roughly this share of challenges ask for a pictographic-character inscription
 // (Chinese / Japanese / Egyptian) instead of a freeform doodle. The rest stay
 // freeform so the gallery keeps its mix of drawings.
-const GLYPH_CHALLENGE_RATE = 0.35;
+const GLYPH_CHALLENGE_RATE = 0.4;
 
 type PromptTier = {
   level: number;
@@ -192,14 +192,15 @@ export async function createConfessionalCaptchaChallenge() {
   const globalIndex = await getGlobalDrawingIndex();
   const tier = pickTier(globalIndex);
 
-  // Decide between a freeform doodle and a glyph inscription. Glyph difficulty
-  // is drawn from the same tier level the freeform prompts use.
+  // Decide between a freeform doodle and a glyph inscription. Glyph challenges
+  // are intentionally hard regardless of tier (pickGlyph biases toward the most
+  // intricate characters), so they do not use the freeform tier level.
   let kind: ChallengeKind = "freeform";
   let drawingPrompt = pick(tier.prompts);
   let glyph: ChallengeGlyph | undefined;
 
   if (Math.random() < GLYPH_CHALLENGE_RATE) {
-    const entry = pickGlyph(tier.level);
+    const entry = pickGlyph();
     if (entry) {
       kind = "glyph";
       // Carry the display + verify-rubric fields into the signed token. The

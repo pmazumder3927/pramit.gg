@@ -135,9 +135,10 @@ const TOOL_LABELS: Record<ToolMode, string> = {
 };
 
 // Lang hints help the browser pick the right CJK shaping; the font stack is set
-// explicitly either way. The hanzi we ship include traditional forms.
+// explicitly either way. All hanzi we ship are simplified forms (the brush face
+// is simplified-only).
 const GLYPH_LANG: Record<GlyphScript, string> = {
-  chinese: "zh-Hant",
+  chinese: "zh-Hans",
   japanese: "ja",
   egyptian: "",
 };

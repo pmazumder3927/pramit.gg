@@ -1,10 +1,12 @@
 // Pictographic-character challenges for the confessional captcha. The council
 // sometimes asks a visitor to *inscribe* a specific writing-system glyph —
-// Chinese hanzi, a Japanese kana/kanji, or an Egyptian hieroglyph — instead of
-// a freeform doodle. Reproducing an exact, exotic character is something a
-// human can attempt by tracing the reference, but that an LLM image generator
-// reliably mangles, so it fits the same anti-bot spirit as the cruel tier-5
-// freeform prompts.
+// Chinese hanzi, a Japanese kanji, or an Egyptian hieroglyph — instead of a
+// freeform doodle. The character is shown only as a small reference in the
+// council's header; there is NO tracing guide on the canvas, so visitors must
+// reproduce these intricate, unfamiliar glyphs freehand from a glance. The
+// botched results are the point. Reproducing an exact exotic character is also
+// something a human can attempt but that an LLM image generator reliably
+// mangles, so it fits the same anti-bot spirit as the cruel freeform prompts.
 //
 // This module is pure data + pure helpers so it is safe to import from both the
 // client (font stacks, types) and the server (challenge generation, the verify
@@ -16,10 +18,9 @@ export type GlyphEntry = {
   // The character(s) to inscribe.
   glyph: string;
   script: GlyphScript;
-  // Human-facing label for the eyebrow, e.g. "Chinese" / "Japanese · hiragana".
+  // Human-facing label for the eyebrow, e.g. "Chinese" / "Japanese · kanji".
   scriptLabel: string;
-  // Pinyin / romaji / transliteration. May be "" when there is no useful one
-  // (most hieroglyphs).
+  // Pinyin / romaji / transliteration. May be "".
   romanization: string;
   // What the character means / depicts.
   meaning: string;
@@ -27,19 +28,23 @@ export type GlyphEntry = {
   // human hint *and* as the grading rubric handed to the vision model, so the
   // verifier does not have to rely solely on recognizing an exotic glyph.
   shapeHint: string;
-  // Difficulty 1..5, mirroring the freeform PROMPT_TIERS ladder so glyph
-  // difficulty tracks the running submission count.
+  // Difficulty 3 (hard) … 5 (brutal). Only biases selection toward the harder
+  // glyphs — there is no easy tier here on purpose.
   level: number;
 };
 
 // CSS font-family stacks per script. These reference the variables wired up in
 // app/layout.tsx (`--font-cjk-hand` already exists for CJK lyrics; the JP and
 // hieroglyph faces are added there alongside it). Kept here so the canvas
-// component, the reference header, and the tracing ghost all stay in sync.
+// component and the reference header stay in sync.
+//
+// IMPORTANT: Ma Shan Zheng (--font-cjk-hand) is a Simplified-Chinese-only face,
+// so every Chinese entry below uses a simplified form (verified against the
+// font's cmap). Traditional forms would render as tofu.
 const FONT_BY_SCRIPT: Record<GlyphScript, string> = {
   chinese: "var(--font-cjk-hand)",
-  // Kana live only in the Japanese face; kanji can fall back to the Chinese
-  // brush face if the JP font is still loading.
+  // Kanji live in the Japanese face; fall back to the Chinese brush face if the
+  // JP font is still loading.
   japanese: "var(--font-jp-hand), var(--font-cjk-hand)",
   egyptian: "var(--font-egyptian)",
 };
@@ -48,508 +53,556 @@ export function glyphFontStack(script: GlyphScript): string {
   return `${FONT_BY_SCRIPT[script]}, serif`;
 }
 
-// The exact set of glyphs we ever render. Used to subset font requests / reason
-// about coverage if needed.
+// The exact set of glyphs we ever render. Handy for reasoning about / subsetting
+// font coverage.
 export function allGlyphCharacters(): string {
   return GLYPHS.map((g) => g.glyph).join("");
 }
 
 // ── Catalog ──────────────────────────────────────────────────────────────────
+//
+// Intentionally HARD with lots of variety. Every glyph was checked against the
+// actual font cmap (Ma Shan Zheng is simplified-only, so all hanzi are
+// simplified; Yuji Syuku and Noto Sans Egyptian Hieroglyphs cover their sets
+// fully), so none render as tofu.
 
 export const GLYPHS: GlyphEntry[] = [
-  // ── Chinese (hanzi) — rendered in the Ma Shan Zheng brush face ──────────────
+  // ── Chinese (simplified hanzi) — Ma Shan Zheng brush face ───────────────────
   {
-    glyph: "一",
+    glyph: "爨",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "yī",
-    meaning: "one",
-    shapeHint: "a single horizontal stroke.",
-    level: 1,
+    romanization: "cuàn",
+    meaning: "cooking-stove",
+    shapeHint:
+      "one of the most complex characters there is — a roof over a vessel, over two hands, over crossed wood and fire. ~30 strokes.",
+    level: 5,
   },
   {
-    glyph: "二",
+    glyph: "饕餮",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "èr",
-    meaning: "two",
-    shapeHint: "two stacked horizontal strokes, the lower one longer.",
-    level: 1,
+    romanization: "tāo tiè",
+    meaning: "taotie, a gluttonous mythical beast",
+    shapeHint:
+      "two dense characters side by side, each built on the 'eat/food' radical — a maw that devours everything.",
+    level: 5,
   },
   {
-    glyph: "三",
+    glyph: "鬱",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "sān",
-    meaning: "three",
-    shapeHint: "three stacked horizontal strokes, the bottom one longest.",
-    level: 1,
+    romanization: "yù",
+    meaning: "gloom / lush",
+    shapeHint:
+      "a famously dense character: trees flanking a vessel up top, over a cover, over a tangle of strokes. ~29 strokes.",
+    level: 5,
   },
   {
-    glyph: "人",
+    glyph: "黼",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "rén",
-    meaning: "person",
-    shapeHint: "two legs spreading from a single apex, like a walking figure.",
-    level: 1,
+    romanization: "fǔ",
+    meaning: "axe-shaped embroidery pattern",
+    shapeHint:
+      "the black-silk radical 黹 on the left (itself intricate) beside the 甫 component on the right.",
+    level: 5,
   },
   {
-    glyph: "大",
+    glyph: "鬻",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "dà",
-    meaning: "big",
-    shapeHint: "a person (人) with arms thrown wide — a horizontal bar across spreading legs.",
-    level: 1,
+    romanization: "yù",
+    meaning: "to sell / gruel",
+    shapeHint:
+      "two bow shapes 弓 flanking a 米 (rice) up top, all sitting over a 鬲 cauldron at the bottom.",
+    level: 5,
   },
   {
-    glyph: "口",
+    glyph: "鬣",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "kǒu",
-    meaning: "mouth",
-    shapeHint: "a simple open square / box.",
-    level: 1,
+    romanization: "liè",
+    meaning: "mane / bristles",
+    shapeHint:
+      "the long-hair radical 髟 arched over the top, over a stack of small components below.",
+    level: 5,
   },
   {
-    glyph: "日",
+    glyph: "巍",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "rì",
-    meaning: "sun / day",
-    shapeHint: "a tall rectangle with one horizontal line dividing it in the middle.",
-    level: 1,
+    romanization: "wēi",
+    meaning: "towering, lofty",
+    shapeHint: "the mountain 山 perched on top of the dense 魏 character beneath it.",
+    level: 5,
   },
   {
-    glyph: "月",
+    glyph: "鹦鹉",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "yuè",
-    meaning: "moon / month",
-    shapeHint: "a tall rounded rectangle with two short horizontal lines inside, open at the lower left.",
-    level: 2,
+    romanization: "yīng wǔ",
+    meaning: "parrot",
+    shapeHint:
+      "two characters, each ending in the bird radical 鸟 on the right, with dense components on the left.",
+    level: 5,
   },
   {
-    glyph: "山",
+    glyph: "蟋蟀",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "shān",
-    meaning: "mountain",
-    shapeHint: "three vertical peaks on one horizontal base, the middle peak tallest.",
-    level: 1,
+    romanization: "xī shuài",
+    meaning: "cricket",
+    shapeHint:
+      "two characters, each with the insect radical 虫 on the left and a dense component on the right.",
+    level: 5,
   },
   {
-    glyph: "川",
+    glyph: "鼎",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "chuān",
-    meaning: "river",
-    shapeHint: "three roughly vertical strokes side by side, like flowing water.",
-    level: 1,
+    romanization: "dǐng",
+    meaning: "ancient three-legged cauldron",
+    shapeHint:
+      "a boxy 目-like body up top sitting on a frame with two splayed legs — a bronze ritual cauldron.",
+    level: 4,
   },
   {
-    glyph: "水",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "shuǐ",
-    meaning: "water",
-    shapeHint: "a central vertical stroke with a hook, flanked by strokes sweeping out to each side, like a stream with branches.",
-    level: 2,
-  },
-  {
-    glyph: "火",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "huǒ",
-    meaning: "fire",
-    shapeHint: "a central figure like 人 with two short flanking strokes near the top, like rising flames.",
-    level: 2,
-  },
-  {
-    glyph: "木",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "mù",
-    meaning: "tree / wood",
-    shapeHint: "a vertical trunk crossed by one horizontal branch, with two roots sweeping down and out at the base.",
-    level: 2,
-  },
-  {
-    glyph: "中",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "zhōng",
-    meaning: "middle / center",
-    shapeHint: "a box with a single vertical line passing straight through its center, top to bottom.",
-    level: 2,
-  },
-  {
-    glyph: "目",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "mù",
-    meaning: "eye",
-    shapeHint: "a tall rectangle divided by two horizontal lines into three boxes.",
-    level: 2,
-  },
-  {
-    glyph: "心",
+    glyph: "鑫",
     script: "chinese",
     scriptLabel: "Chinese",
     romanization: "xīn",
-    meaning: "heart / mind",
-    shapeHint: "a shallow curved bowl with three dots — one inside, two trailing to the upper right.",
-    level: 3,
-  },
-  {
-    glyph: "手",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "shǒu",
-    meaning: "hand",
-    shapeHint: "three horizontal strokes crossed by a long vertical stroke that hooks at the bottom.",
-    level: 3,
-  },
-  {
-    glyph: "力",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "lì",
-    meaning: "strength / power",
-    shapeHint: "a hooked stroke bent like a flexed arm, with one diagonal slash across it.",
-    level: 2,
-  },
-  {
-    glyph: "雨",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "yǔ",
-    meaning: "rain",
-    shapeHint: "a roof-like frame enclosing four dots arranged in two columns, like raindrops behind a window.",
-    level: 3,
-  },
-  {
-    glyph: "魚",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "yú",
-    meaning: "fish",
-    shapeHint: "a stacked figure: a small head on top, a hatched body in the middle, four dots for fins/tail at the bottom.",
-    level: 3,
-  },
-  {
-    glyph: "鳥",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "niǎo",
-    meaning: "bird",
-    shapeHint: "a bird in profile: a head with a dot eye on top, a body, and four dots for tail feathers at the base.",
+    meaning: "prosperity (three golds)",
+    shapeHint:
+      "the character 金 (gold) drawn three times — one on top, two below — stacked into a pyramid.",
     level: 4,
   },
   {
-    glyph: "馬",
+    glyph: "淼",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "mǎ",
-    meaning: "horse",
-    shapeHint: "a dense figure with several horizontal strokes over four dots (galloping legs) at the bottom.",
+    romanization: "miǎo",
+    meaning: "a vast expanse of water (three waters)",
+    shapeHint: "the character 水 (water) drawn three times — one on top, two below.",
     level: 4,
   },
   {
-    glyph: "花",
+    glyph: "焱",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "huā",
-    meaning: "flower",
-    shapeHint: "the grass radical (two short stems over a horizontal bar) sitting on top of two lower components.",
-    level: 3,
-  },
-  {
-    glyph: "星",
-    script: "chinese",
-    scriptLabel: "Chinese",
-    romanization: "xīng",
-    meaning: "star",
-    shapeHint: "the sun box 日 on top, sitting over the 生 component (a few horizontal strokes crossed by a vertical).",
+    romanization: "yàn",
+    meaning: "flames / sparks (three fires)",
+    shapeHint: "the character 火 (fire) drawn three times — one on top, two below.",
     level: 4,
   },
   {
-    glyph: "海",
+    glyph: "矗",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "hǎi",
-    meaning: "sea",
-    shapeHint: "three short water-drops down the left side, beside the 每 component on the right.",
+    romanization: "chù",
+    meaning: "towering, upright",
+    shapeHint: "the character 直 (straight) drawn three times — one on top, two below.",
     level: 4,
   },
   {
-    glyph: "貓",
+    glyph: "颧",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "māo",
-    meaning: "cat",
-    shapeHint: "the clawed-beast radical down the left, beside the grass radical over 田 (a field box) on the right.",
+    romanization: "quán",
+    meaning: "cheekbone",
+    shapeHint:
+      "a dense left component (grass over two mouths over a bird) beside the 页 'head' radical on the right.",
     level: 4,
   },
   {
-    glyph: "福",
+    glyph: "馕",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "fú",
-    meaning: "fortune / luck",
-    shapeHint: "the altar radical on the left, beside a stack of one-mouth-field (一口田) on the right.",
+    romanization: "náng",
+    meaning: "naan (flatbread)",
+    shapeHint:
+      "the food radical 饣 on the left beside the tall, dense 囊 'sack' character on the right.",
     level: 4,
   },
   {
-    glyph: "愛",
+    glyph: "警",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "ài",
-    meaning: "love",
-    shapeHint: "a clawed top, a heart 心 in the middle, and a slow trailing foot stroke at the bottom.",
-    level: 5,
+    romanization: "jǐng",
+    meaning: "to warn / police",
+    shapeHint:
+      "the dense 敬 'respect' character on top, sitting over the 言 'speech' radical at the bottom.",
+    level: 4,
   },
   {
-    glyph: "夢",
+    glyph: "黛",
     script: "chinese",
     scriptLabel: "Chinese",
-    romanization: "mèng",
-    meaning: "dream",
-    shapeHint: "the grass radical over a 目 eye box, over a roof-like cover, over the evening 夕 stroke.",
-    level: 5,
+    romanization: "dài",
+    meaning: "dark eyebrow pigment",
+    shapeHint:
+      "the 代 component on top, sitting over the 黑 'black' radical (a dense box over four dots) below.",
+    level: 4,
   },
   {
-    glyph: "龜",
+    glyph: "龟",
     script: "chinese",
     scriptLabel: "Chinese",
     romanization: "guī",
     meaning: "turtle",
-    shapeHint: "a turtle seen from the side: a head on top, a hatched shell body, and legs/tail strokes — many strokes, very intricate.",
-    level: 5,
+    shapeHint:
+      "a turtle seen from the side: a small head on top, a hooked body/shell, and a hooked tail stroke.",
+    level: 4,
   },
   {
-    glyph: "龍",
+    glyph: "鹰",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "yīng",
+    meaning: "eagle / hawk",
+    shapeHint:
+      "a cliff radical sheltering a 'person + bird' inside, over the bird radical 鸟 at the bottom.",
+    level: 4,
+  },
+  {
+    glyph: "鹤",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "hè",
+    meaning: "crane",
+    shapeHint:
+      "a dense left component (a roof over 隹) beside the bird radical 鸟 on the right.",
+    level: 4,
+  },
+  {
+    glyph: "鼠",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "shǔ",
+    meaning: "rat / mouse",
+    shapeHint:
+      "a boxy head up top with whiskers, over a body with several short clawed strokes and a tail.",
+    level: 4,
+  },
+  {
+    glyph: "森",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "sēn",
+    meaning: "forest (three trees)",
+    shapeHint: "the character 木 (tree) drawn three times — one on top, two below.",
+    level: 3,
+  },
+  {
+    glyph: "磊",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "lěi",
+    meaning: "a pile of rocks (three stones)",
+    shapeHint: "the character 石 (stone) drawn three times — one on top, two below.",
+    level: 3,
+  },
+  {
+    glyph: "晶",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "jīng",
+    meaning: "sparkle / crystal (three suns)",
+    shapeHint: "the character 日 (sun) drawn three times — one on top, two below.",
+    level: 3,
+  },
+  {
+    glyph: "龙",
     script: "chinese",
     scriptLabel: "Chinese",
     romanization: "lóng",
     meaning: "dragon",
-    shapeHint: "a dense two-part character: a standing component on the left, and a stack of short horizontal strokes with three on the right — very intricate.",
-    level: 5,
-  },
-
-  // ── Japanese (kana + kanji) — rendered in the Yuji Syuku brush face ─────────
-  // Kana have sounds rather than meanings, so the bare romaji is the gloss and
-  // the redundant romanization field is left empty.
-  {
-    glyph: "い",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "i",
-    shapeHint: "two separate downward strokes, a tall curved one on the left and a short one on the right.",
-    level: 1,
-  },
-  {
-    glyph: "う",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "u",
-    shapeHint: "a short tick on top, then a single stroke that curves down and around to the right.",
-    level: 1,
-  },
-  {
-    glyph: "し",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "shi",
-    shapeHint: "one stroke that drops straight down then hooks up to the right at the bottom, like a fish hook.",
-    level: 1,
-  },
-  {
-    glyph: "つ",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "tsu",
-    shapeHint: "a single stroke that sweeps right across the top then curls down and back to the left.",
-    level: 1,
-  },
-  {
-    glyph: "の",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "no",
-    shapeHint: "one continuous stroke spiraling into a loop, like a stylized @ or a curl.",
-    level: 1,
-  },
-  {
-    glyph: "こ",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "ko",
-    shapeHint: "two short horizontal-ish strokes stacked, the lower one curving up at its right end.",
-    level: 1,
-  },
-  {
-    glyph: "あ",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "a",
-    shapeHint: "a horizontal stroke, a vertical stroke crossing it, and a curling loop on the lower right.",
-    level: 2,
-  },
-  {
-    glyph: "さ",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "sa",
-    shapeHint: "a horizontal stroke up top, then a stroke that curves down and to the left below it.",
-    level: 2,
-  },
-  {
-    glyph: "き",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "ki",
-    shapeHint: "two short horizontal strokes crossed by a vertical, with a curved hook below.",
-    level: 2,
-  },
-  {
-    glyph: "ね",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "ne",
-    shapeHint: "a vertical stroke on the left, then a stroke that loops into a curl on the right.",
-    level: 2,
-  },
-  {
-    glyph: "る",
-    script: "japanese",
-    scriptLabel: "Japanese · hiragana",
-    romanization: "",
-    meaning: "ru",
-    shapeHint: "a single stroke that zig-zags down then finishes in a small loop at the bottom.",
-    level: 2,
-  },
-  {
-    glyph: "カ",
-    script: "japanese",
-    scriptLabel: "Japanese · katakana",
-    romanization: "",
-    meaning: "ka",
-    shapeHint: "a hooked stroke like a flexed corner, crossed by one diagonal — the same shape as the kanji 力.",
-    level: 2,
-  },
-  {
-    glyph: "ロ",
-    script: "japanese",
-    scriptLabel: "Japanese · katakana",
-    romanization: "",
-    meaning: "ro",
-    shapeHint: "a simple square box.",
-    level: 1,
-  },
-  {
-    glyph: "ツ",
-    script: "japanese",
-    scriptLabel: "Japanese · katakana",
-    romanization: "",
-    meaning: "tsu",
-    shapeHint: "two short dashes on top, then a long stroke curving up from the bottom-left.",
+    shapeHint:
+      "a short stroke and a hooked stroke up top, with a long curved-and-hooked stroke sweeping down on the right.",
     level: 3,
   },
   {
-    glyph: "猫",
-    script: "japanese",
-    scriptLabel: "Japanese · kanji",
-    romanization: "neko",
-    meaning: "cat",
-    shapeHint: "the beast radical (a curved stroke with a vertical) on the left, beside the grass radical over a 田 field box on the right.",
-    level: 4,
-  },
-  {
-    glyph: "亀",
-    script: "japanese",
-    scriptLabel: "Japanese · kanji",
-    romanization: "kame",
-    meaning: "turtle",
-    shapeHint: "a turtle from the side: a small head on top, a boxy hatched shell, and a tail stroke at the base.",
-    level: 4,
-  },
-  {
-    glyph: "竜",
-    script: "japanese",
-    scriptLabel: "Japanese · kanji",
-    romanization: "ryū",
-    meaning: "dragon",
-    shapeHint: "a 立 'stand' component on top, over a 田 field box, over a single hooked vertical stroke.",
-    level: 4,
-  },
-  {
-    glyph: "桜",
-    script: "japanese",
-    scriptLabel: "Japanese · kanji",
-    romanization: "sakura",
-    meaning: "cherry blossom",
-    shapeHint: "the tree radical 木 on the left, beside three small strokes over a woman 女 component on the right.",
-    level: 4,
-  },
-  {
-    glyph: "夢",
-    script: "japanese",
-    scriptLabel: "Japanese · kanji",
-    romanization: "yume",
-    meaning: "dream",
-    shapeHint: "the grass radical over a 目 eye box, over a roof-like cover, over the evening 夕 stroke.",
-    level: 5,
+    glyph: "凤",
+    script: "chinese",
+    scriptLabel: "Chinese",
+    romanization: "fèng",
+    meaning: "phoenix",
+    shapeHint: "an enclosing hooked stroke wrapping around the 又 component inside it.",
+    level: 3,
   },
 
-  // ── Egyptian hieroglyphs — rendered in Noto Sans Egyptian Hieroglyphs ───────
-  // Pictographic by nature, so the shapeHint carries most of the grading load.
+  // ── Japanese (kanji) — Yuji Syuku brush face ────────────────────────────────
   {
-    glyph: "𓇳",
-    script: "egyptian",
-    scriptLabel: "Egyptian hieroglyph",
-    romanization: "rꜥ",
-    meaning: "sun",
-    shapeHint: "a circle with a single dot at its center — the sun disk.",
-    level: 1,
+    glyph: "鬱",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "utsu",
+    meaning: "gloom / depression",
+    shapeHint:
+      "a famously dense kanji (~29 strokes): trees flanking a vessel up top, over a cover, over a tangle of strokes.",
+    level: 5,
   },
   {
-    glyph: "𓈖",
-    script: "egyptian",
-    scriptLabel: "Egyptian hieroglyph",
-    romanization: "n",
-    meaning: "water",
-    shapeHint: "a single horizontal zig-zag line — ripples of water.",
-    level: 1,
+    glyph: "薔薇",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "bara",
+    meaning: "rose",
+    shapeHint: "two characters, each capped by the grass radical 艹 over dense lower halves.",
+    level: 5,
   },
   {
-    glyph: "𓏏",
-    script: "egyptian",
-    scriptLabel: "Egyptian hieroglyph",
-    romanization: "t",
-    meaning: "bread loaf",
-    shapeHint: "a small half-circle / domed loaf sitting on a flat base.",
-    level: 1,
+    glyph: "檸檬",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "remon",
+    meaning: "lemon",
+    shapeHint:
+      "two characters, each with the tree radical 木 on the left and a dense component on the right.",
+    level: 5,
   },
+  {
+    glyph: "麒麟",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "kirin",
+    meaning: "giraffe / the mythical qilin",
+    shapeHint:
+      "two characters, each built on the deer radical 鹿 on the left with a dense component on the right.",
+    level: 5,
+  },
+  {
+    glyph: "髑髏",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "dokuro",
+    meaning: "skull",
+    shapeHint:
+      "two characters, each with the bone radical 骨 on the left and a dense component on the right.",
+    level: 5,
+  },
+  {
+    glyph: "鳳凰",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "hōō",
+    meaning: "phoenix",
+    shapeHint:
+      "two characters, each an enclosing hooked frame wrapping a bird-like component inside.",
+    level: 5,
+  },
+  {
+    glyph: "顰",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "hisomu",
+    meaning: "to frown / knit the brows",
+    shapeHint:
+      "an extremely dense kanji — a wide grid of components over the 頻 character; almost no white space.",
+    level: 5,
+  },
+  {
+    glyph: "葡萄",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "budō",
+    meaning: "grapes",
+    shapeHint:
+      "two characters, each capped by the grass radical 艹 over a wrapped lower component.",
+    level: 4,
+  },
+  {
+    glyph: "籠",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "kago",
+    meaning: "basket / cage",
+    shapeHint: "the bamboo radical 竹 across the top, sitting over the dragon character 龍 below.",
+    level: 4,
+  },
+  {
+    glyph: "鯨",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "kujira",
+    meaning: "whale",
+    shapeHint:
+      "the fish radical 魚 on the left (a head, hatched body, four dots) beside the 京 component on the right.",
+    level: 4,
+  },
+  {
+    glyph: "蟹",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "kani",
+    meaning: "crab",
+    shapeHint:
+      "the dense 解 'untie' character up top, sitting over the insect radical 虫 at the bottom.",
+    level: 4,
+  },
+  {
+    glyph: "鰻",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "unagi",
+    meaning: "eel",
+    shapeHint: "the fish radical 魚 on the left beside the 曼 component on the right.",
+    level: 4,
+  },
+  {
+    glyph: "魔",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "ma",
+    meaning: "demon / magic",
+    shapeHint:
+      "the cliff/hemp radical 麻 sheltering the 鬼 'demon' character tucked underneath it.",
+    level: 4,
+  },
+  {
+    glyph: "闇",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "yami",
+    meaning: "darkness",
+    shapeHint: "the gate radical 門 enclosing the 音 'sound' character inside it.",
+    level: 4,
+  },
+  {
+    glyph: "燕",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "tsubame",
+    meaning: "swallow (the bird)",
+    shapeHint:
+      "a stack: 廿 on top, a hatched middle with 口 and flanks, over the four-dot fire radical at the bottom — a swallow in flight.",
+    level: 4,
+  },
+  {
+    glyph: "鬼",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "oni",
+    meaning: "demon / ogre",
+    shapeHint:
+      "a big boxy head (田) up top with a horn-stroke, over legs and a small curling tail to the right.",
+    level: 3,
+  },
+  {
+    glyph: "嵐",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "arashi",
+    meaning: "storm",
+    shapeHint:
+      "the mountain 山 on top, sitting over the wind character 風 (a hooked frame around an insect) below.",
+    level: 3,
+  },
+  {
+    glyph: "雷",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "kaminari",
+    meaning: "thunder",
+    shapeHint:
+      "the rain radical 雨 (a roofed frame with four drops) on top, over a single 田 field box below.",
+    level: 3,
+  },
+  {
+    glyph: "椿",
+    script: "japanese",
+    scriptLabel: "Japanese · kanji",
+    romanization: "tsubaki",
+    meaning: "camellia",
+    shapeHint: "the tree radical 木 on the left beside the 春 'spring' character on the right.",
+    level: 3,
+  },
+
+  // ── Egyptian hieroglyphs — Noto Sans Egyptian Hieroglyphs ───────────────────
+  // Pictographic, so the shapeHint carries the grading load.
   {
     glyph: "𓂀",
     script: "egyptian",
     scriptLabel: "Egyptian hieroglyph",
     romanization: "wḏꜢt",
-    meaning: "Eye of Horus",
-    shapeHint: "an almond eye with a brow above, a straight line dropping below, and a curl spiraling out beneath it.",
+    meaning: "the Eye of Horus",
+    shapeHint:
+      "an almond eye with a brow above, a straight line dropping below, and a long curl spiraling out beneath it.",
     level: 4,
+  },
+  {
+    glyph: "𓆣",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "ḫpr",
+    meaning: "scarab beetle",
+    shapeHint:
+      "a dung beetle seen from above — a rounded body with a notched head and legs splayed to each side.",
+    level: 4,
+  },
+  {
+    glyph: "𓅃",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "ḥr",
+    meaning: "falcon (the god Horus)",
+    shapeHint: "a falcon standing in profile, body upright, wings folded, facing right.",
+    level: 4,
+  },
+  {
+    glyph: "𓄿",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "Ꜣ",
+    meaning: "Egyptian vulture",
+    shapeHint: "a vulture standing in profile with a hooked beak and a long drooping tail.",
+    level: 4,
+  },
+  {
+    glyph: "𓃭",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "rw",
+    meaning: "reclining lion",
+    shapeHint: "a lion lying down in profile, legs folded beneath it, tail curving up.",
+    level: 4,
+  },
+  {
+    glyph: "𓃒",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "kꜢ",
+    meaning: "bull",
+    shapeHint: "a bull standing in profile, with curved horns and a long tail.",
+    level: 4,
+  },
+  {
+    glyph: "𓀭",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "nṯr",
+    meaning: "a seated god",
+    shapeHint: "a bearded figure seated on a low throne, seen in profile, knees forward.",
+    level: 4,
+  },
+  {
+    glyph: "𓆤",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "bjt",
+    meaning: "bee",
+    shapeHint:
+      "a bee seen from above — a fat segmented body with wings and legs spread to the sides.",
+    level: 4,
+  },
+  {
+    glyph: "𓋹",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "ꜥnḫ",
+    meaning: "ankh — life",
+    shapeHint: "a cross with a teardrop loop on top — the looped ankh, symbol of life.",
+    level: 3,
   },
   {
     glyph: "𓅓",
@@ -561,49 +614,59 @@ export const GLYPHS: GlyphEntry[] = [
     level: 3,
   },
   {
-    glyph: "𓆑",
+    glyph: "𓆓",
     script: "egyptian",
     scriptLabel: "Egyptian hieroglyph",
-    romanization: "f",
-    meaning: "horned viper",
-    shapeHint: "a snake lying along the ground, a low wavy horizontal body with a small horn near the head.",
+    romanization: "ḏ",
+    meaning: "cobra",
+    shapeHint: "a cobra resting along the ground then rearing up at the head end.",
     level: 3,
   },
   {
-    glyph: "𓃭",
+    glyph: "𓅱",
     script: "egyptian",
     scriptLabel: "Egyptian hieroglyph",
-    romanization: "rw",
-    meaning: "lion",
-    shapeHint: "a lion lying down in profile, legs folded, tail curving up.",
-    level: 4,
+    romanization: "w",
+    meaning: "quail chick",
+    shapeHint: "a small, fat quail chick standing in profile with a stubby tail.",
+    level: 3,
   },
   {
-    glyph: "𓀀",
+    glyph: "𓊖",
     script: "egyptian",
     scriptLabel: "Egyptian hieroglyph",
-    romanization: "ꜣ",
-    meaning: "seated man",
-    shapeHint: "a man seated on the ground in profile, knees drawn up, one hand toward his mouth.",
+    romanization: "njwt",
+    meaning: "town / village",
+    shapeHint: "a circle quartered by a cross inside it — crossroads within a town wall.",
+    level: 3,
+  },
+  {
+    glyph: "𓁹",
+    script: "egyptian",
+    scriptLabel: "Egyptian hieroglyph",
+    romanization: "jr",
+    meaning: "eye",
+    shapeHint: "a single human eye, almond-shaped with a pupil and a brow line above.",
     level: 3,
   },
 ];
 
-// Pick a glyph whose difficulty sits at or below the current tier, biased to
-// the top of that range so glyph difficulty tracks the freeform tier ladder.
-// Returns null only if the catalog is somehow empty.
-export function pickGlyph(maxLevel: number): GlyphEntry | null {
-  const withinTier = GLYPHS.filter((g) => g.level <= maxLevel);
-  if (withinTier.length === 0) {
-    return GLYPHS.length > 0 ? GLYPHS[0] : null;
+// Pick a glyph, biased toward the harder ones (weight ∝ level) while keeping the
+// pool varied. Difficulty is independent of the freeform tier ladder — glyph
+// challenges are meant to be hard for everyone.
+export function pickGlyph(): GlyphEntry | null {
+  if (GLYPHS.length === 0) return null;
+  const total = GLYPHS.reduce((sum, g) => sum + g.level, 0);
+  let r = Math.random() * total;
+  for (const g of GLYPHS) {
+    r -= g.level;
+    if (r < 0) return g;
   }
-  const band = withinTier.filter((g) => g.level >= Math.max(1, maxLevel - 1));
-  const pool = band.length > 0 ? band : withinTier;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return GLYPHS[GLYPHS.length - 1];
 }
 
 // A readable label stored as the drawing's `prompt` (shown in the gallery) and
-// used in council copy, e.g.  水 — "water" (Chinese).
+// used in council copy, e.g.  爨 — "cooking-stove" (Chinese).
 export function glyphPromptLabel(entry: GlyphEntry): string {
   return `${entry.glyph} — “${entry.meaning}” (${entry.scriptLabel})`;
 }

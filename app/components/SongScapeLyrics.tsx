@@ -323,8 +323,10 @@ function evalSeed(
     flowRoom * 0.8 +
     rand() * 0.6;
 
-  const linesByRoom = Math.max(1, Math.floor(advRun / gap));
-  const left = clamp(2 + Math.floor(rand() * 4), 1, linesByRoom); // 2..5, capped by room
+  // quota of lines for this column. We deliberately DON'T cap by the thin-ray
+  // advance estimate — that collapses to 1 on a busy page and kills flow. The
+  // real terminator is the per-line clear-check while flowing (see place()).
+  const left = 2 + Math.floor(rand() * 4); // 2..5
   return { col: { x: px, y: py, rot, size, anchor, advX, advY, gap, left }, score };
 }
 
@@ -351,7 +353,9 @@ function place(
   if (prevCol && prevCol.left > 0) {
     const size = clamp(prevCol.size * (0.94 + rand() * 0.12), MIN_SIZE, MAX_SIZE); // gentle drift
     const box = boxOf(prevCol.anchor, prevCol.x, prevCol.y, size, prevCol.rot, text);
-    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.05) {
+    // continue while the next slot is essentially clear; a sliver is tolerated so
+    // the conservative rotated AABB doesn't break an otherwise good flow.
+    if (overlapFrac(box, obstacles) < 0.1 && offCanvasFrac(box) < 0.08) {
       const insc: Inscription = {
         key: 0,
         text,
