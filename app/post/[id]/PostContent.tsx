@@ -935,8 +935,55 @@ function NavCard({ post, dir }: { post: PostNav; dir: "newer" | "older" }) {
 // Share controls — copy the permalink, hand it to the OS share sheet, or post
 // to X. Styled as hand-inked links to keep the journal voice.
 // ---------------------------------------------------------------------------
+// Hand-inked glyphs — drawn in currentColor so they ride the same hover/active
+// color transitions as the label, with round caps + a touch of wobble to match
+// the sketchbook doodles.
+function ShareGlyph({ name }: { name: "link" | "check" | "share" | "x" }) {
+  const common = {
+    className: "h-[1.05em] w-[1.05em] shrink-0",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.1,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  switch (name) {
+    case "link":
+      return (
+        <svg {...common}>
+          <path d="M9.6 14.4 a3.6 3.6 0 0 0 5.1 0 l2.7 -2.7 a3.6 3.6 0 0 0 -5.1 -5.1 l-1.3 1.3" />
+          <path d="M14.4 9.6 a3.6 3.6 0 0 0 -5.1 0 l-2.7 2.7 a3.6 3.6 0 0 0 5.1 5.1 l1.3 -1.3" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="M4.5 13 c1.7 1 2.9 2.3 3.7 3.9 c2 -4.6 5 -8.1 9.3 -10.6" />
+        </svg>
+      );
+    case "share":
+      return (
+        <svg {...common}>
+          <path d="M12 3.4 v11" />
+          <path d="M8 7 l4 -3.6 l4 3.6" />
+          <path d="M6.4 12 v6.4 a1.3 1.3 0 0 0 1.3 1.3 h8.6 a1.3 1.3 0 0 0 1.3 -1.3 v-6.4" />
+        </svg>
+      );
+    case "x":
+      return (
+        <svg {...common}>
+          <path d="M5.2 5 L18.8 19" />
+          <path d="M18.8 5 L5.2 19" />
+        </svg>
+      );
+  }
+}
+
 function ShareItem({
   label,
+  glyph,
   onClick,
   href,
   tone = "rust",
@@ -944,6 +991,7 @@ function ShareItem({
   ariaLabel,
 }: {
   label: string;
+  glyph: "link" | "check" | "share" | "x";
   onClick?: () => void;
   href?: string;
   tone?: Tone;
@@ -951,12 +999,13 @@ function ShareItem({
   ariaLabel?: string;
 }) {
   const cls =
-    "group/sh relative inline-flex items-center font-hand text-xl leading-none transition-colors";
+    "group/sh relative inline-flex items-center gap-1.5 font-hand text-xl leading-none transition-colors";
   const color = active
     ? "text-accent-orange"
     : "text-ink-soft hover:text-accent-rust focus-visible:text-accent-rust";
   const inner = (
     <>
+      <ShareGlyph name={glyph} />
       {label}
       <Doodle
         name="underline"
@@ -1038,7 +1087,8 @@ function ShareControls({
   const items = (
     <>
       <ShareItem
-        label={copied ? "copied ✓" : "copy link"}
+        label={copied ? "copied" : "copy link"}
+        glyph={copied ? "check" : "link"}
         onClick={copy}
         tone="orange"
         active={copied}
@@ -1046,13 +1096,20 @@ function ShareControls({
       />
       {canShare && (
         <ShareItem
-          label="share…"
+          label="share"
+          glyph="share"
           onClick={nativeShare}
           tone="purple"
           ariaLabel="Share this entry"
         />
       )}
-      <ShareItem label="on X" href={xHref} tone="rust" ariaLabel="Share on X" />
+      <ShareItem
+        label="on X"
+        glyph="x"
+        href={xHref}
+        tone="rust"
+        ariaLabel="Share on X"
+      />
     </>
   );
 
