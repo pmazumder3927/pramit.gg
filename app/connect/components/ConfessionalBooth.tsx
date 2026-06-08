@@ -8,7 +8,14 @@ import DrawingCaptcha, {
   type DrawingCaptchaHandle,
 } from "@/app/connect/components/DrawingCaptcha";
 import CatCouncil from "@/app/connect/components/CatCouncil";
-import { Doodle, HandNote, Tape, PaperClip, TornEdge, RuledPaper } from "@/app/components/sketchbook";
+import {
+  Doodle,
+  HandNote,
+  Tape,
+  PaperClip,
+  TornEdge,
+  RuledPaper,
+} from "@/app/components/sketchbook";
 
 type Phase = "form" | "judging" | "approve" | "reject" | "received";
 
@@ -76,7 +83,10 @@ export default function ConfessionalBooth() {
         }
       }
     } catch (snapshotError) {
-      console.error("[confessional] snapshot generation failed:", snapshotError);
+      console.error(
+        "[confessional] snapshot generation failed:",
+        snapshotError,
+      );
     }
 
     const minJudgingDeadline = sleep(MIN_JUDGING_MS);
@@ -98,9 +108,9 @@ export default function ConfessionalBooth() {
       if (response.ok) {
         approved = true;
       } else {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         rejectionNote =
           data?.error ?? "the council did not accept your drawing.";
       }
@@ -157,14 +167,20 @@ export default function ConfessionalBooth() {
           <HandNote tone="purple" rotate={-3} className="text-2xl">
             leave a doodle in my sketchbook
           </HandNote>
-          <Doodle name="arrow" tone="purple" className="h-5 w-10" strokeWidth={3} />
+          <Doodle
+            name="arrow"
+            tone="purple"
+            className="h-5 w-10"
+            strokeWidth={3}
+          />
         </div>
         <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
           draw me something, whisper something
         </h2>
         <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          anonymous. sketch on the page, drop a note, and the council
-          decides if it stays. say hi, leave a burning rant or feedback, whatever u want dude.
+          anonymous. sketch on the page, drop a note, and the council decides if
+          it stays. say hi, leave a burning rant or feedback, whatever u want
+          dude.
         </p>
       </motion.div>
 
@@ -176,7 +192,11 @@ export default function ConfessionalBooth() {
       >
         <Tape tone="purple" rotate={-3} className="-top-3 left-10" width={90} />
         <Tape tone="orange" rotate={4} className="-top-3 right-10" width={90} />
-        <PaperClip className="-top-4 right-1/2 translate-x-1/2 md:right-16 md:translate-x-0" rotate={8} tone="ink" />
+        <PaperClip
+          className="-top-4 right-1/2 translate-x-1/2 md:right-16 md:translate-x-0"
+          rotate={8}
+          tone="ink"
+        />
         <AnimatePresence mode="wait">
           {showCouncil ? (
             <motion.div
@@ -243,75 +263,84 @@ export default function ConfessionalBooth() {
               exit={{ opacity: 0 }}
             >
               <RuledPaper variant="ruled" className="rounded-[3px] p-5 md:p-7">
-              <div className="relative mx-auto mb-2 max-w-3xl">
-                <HandNote tone="rust" rotate={-1.5} className="mb-1.5 block text-lg">
-                  1 · jot a note
-                </HandNote>
-                <textarea
-                  value={message}
-                  onChange={handleMessageChange}
-                  placeholder="speak your truth..."
-                  className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-base text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
-                />
-                <div className="absolute bottom-3 right-3 text-xs tabular-nums text-ink-faint">
-                  {characterCount}/{maxLength}
-                </div>
-              </div>
-
-              <div className="mx-auto mb-5 flex max-w-3xl items-center gap-2 font-hand text-base text-ink-faint">
-                <svg
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                <div className="relative mx-auto mb-2 max-w-3xl">
+                  <HandNote
+                    tone="rust"
+                    rotate={-1.5}
+                    className="mb-1.5 block text-lg"
+                  >
+                    1 · jot a note (only i can see these)
+                  </HandNote>
+                  <textarea
+                    value={message}
+                    onChange={handleMessageChange}
+                    placeholder="speak your truth..."
+                    className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-base text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
                   />
-                </svg>
-                <span>completely anonymous · no tracking</span>
-              </div>
-
-              <HandNote tone="rust" rotate={-1.5} className="mx-auto mb-2 block max-w-3xl text-lg">
-                2 · draw the council a little something
-              </HandNote>
-              <div className="mb-6">
-                <DrawingCaptcha
-                  ref={drawingRef}
-                  disabled={isBusy}
-                  refreshKey={captchaRefreshKey}
-                  onChange={(payload, ready) => {
-                    setCaptchaPayload(payload);
-                    setCaptchaReady(ready);
-                    setSubmitError(null);
-                  }}
-                />
-              </div>
-
-              {submitError ? (
-                <div className="mx-auto mb-6 max-w-3xl rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 px-4 py-3 text-sm text-accent-rust">
-                  {submitError}
+                  <div className="absolute bottom-3 right-3 text-xs tabular-nums text-ink-faint">
+                    {characterCount}/{maxLength}
+                  </div>
                 </div>
-              ) : null}
 
-              <motion.button
-                onClick={submitMessage}
-                disabled={!message.trim() || isBusy || !captchaReady}
-                className="mx-auto block w-full max-w-3xl rounded-xl border-[1.6px] border-line bg-paper-2/50 py-3 font-serif text-sm text-ink-soft transition-all duration-300 hover:border-accent-orange/60 hover:bg-accent-orange/10 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                whileHover={{
-                  scale: message.trim() && captchaReady && !isBusy ? 1.01 : 1,
-                }}
-                whileTap={{
-                  scale: message.trim() && captchaReady && !isBusy ? 0.99 : 1,
-                }}
-              >
-                {captchaReady
-                  ? "submit to the council"
-                  : "draw something for the council first"}
-              </motion.button>
+                <div className="mx-auto mb-5 flex max-w-3xl items-center gap-2 font-hand text-base text-ink-faint">
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  <span>completely anonymous · no tracking</span>
+                </div>
+
+                <HandNote
+                  tone="rust"
+                  rotate={-1.5}
+                  className="mx-auto mb-2 block max-w-3xl text-lg"
+                >
+                  2 · draw the council a little something (these will be
+                  publicly visible)
+                </HandNote>
+                <div className="mb-6">
+                  <DrawingCaptcha
+                    ref={drawingRef}
+                    disabled={isBusy}
+                    refreshKey={captchaRefreshKey}
+                    onChange={(payload, ready) => {
+                      setCaptchaPayload(payload);
+                      setCaptchaReady(ready);
+                      setSubmitError(null);
+                    }}
+                  />
+                </div>
+
+                {submitError ? (
+                  <div className="mx-auto mb-6 max-w-3xl rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 px-4 py-3 text-sm text-accent-rust">
+                    {submitError}
+                  </div>
+                ) : null}
+
+                <motion.button
+                  onClick={submitMessage}
+                  disabled={!message.trim() || isBusy || !captchaReady}
+                  className="mx-auto block w-full max-w-3xl rounded-xl border-[1.6px] border-line bg-paper-2/50 py-3 font-serif text-sm text-ink-soft transition-all duration-300 hover:border-accent-orange/60 hover:bg-accent-orange/10 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  whileHover={{
+                    scale: message.trim() && captchaReady && !isBusy ? 1.01 : 1,
+                  }}
+                  whileTap={{
+                    scale: message.trim() && captchaReady && !isBusy ? 0.99 : 1,
+                  }}
+                >
+                  {captchaReady
+                    ? "submit to the council"
+                    : "draw something for the council first"}
+                </motion.button>
               </RuledPaper>
             </motion.div>
           )}
