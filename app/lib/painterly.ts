@@ -25,7 +25,8 @@ export function mulberry32(seed: number) {
   };
 }
 const TAU = Math.PI * 2;
-const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+const clamp = (v: number, lo: number, hi: number) =>
+  v < lo ? lo : v > hi ? hi : v;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smoothstep = (e0: number, e1: number, x: number) => {
@@ -44,7 +45,12 @@ export interface Field {
 }
 
 // separable Gaussian blur of a scalar Float32 buffer
-function blurF32(src: Float32Array, w: number, h: number, radius: number): Float32Array {
+function blurF32(
+  src: Float32Array,
+  w: number,
+  h: number,
+  radius: number,
+): Float32Array {
   if (radius < 1) return src;
   const k: number[] = [];
   let ksum = 0;
@@ -60,14 +66,16 @@ function blurF32(src: Float32Array, w: number, h: number, radius: number): Float
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let s = 0;
-      for (let i = -radius; i <= radius; i++) s += src[y * w + clamp(x + i, 0, w - 1)] * k[i + radius];
+      for (let i = -radius; i <= radius; i++)
+        s += src[y * w + clamp(x + i, 0, w - 1)] * k[i + radius];
       tmp[y * w + x] = s;
     }
   }
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let s = 0;
-      for (let i = -radius; i <= radius; i++) s += tmp[clamp(y + i, 0, h - 1) * w + x] * k[i + radius];
+      for (let i = -radius; i <= radius; i++)
+        s += tmp[clamp(y + i, 0, h - 1) * w + x] * k[i + radius];
       out[y * w + x] = s;
     }
   }
@@ -75,7 +83,12 @@ function blurF32(src: Float32Array, w: number, h: number, radius: number): Float
 }
 
 // Build the flow field from analysis-resolution RGBA pixels.
-export function buildField(rgb: Uint8ClampedArray, AW: number, AH: number, seed: number): Field {
+export function buildField(
+  rgb: Uint8ClampedArray,
+  AW: number,
+  AH: number,
+  seed: number,
+): Field {
   const N = AW * AH;
   const L = new Float32Array(N);
   for (let i = 0; i < N; i++) {
@@ -85,16 +98,25 @@ export function buildField(rgb: Uint8ClampedArray, AW: number, AH: number, seed:
   // Sobel → gradient
   const gx = new Float32Array(N);
   const gy = new Float32Array(N);
-  const at = (x: number, y: number) => L[clamp(y, 0, AH - 1) * AW + clamp(x, 0, AW - 1)];
+  const at = (x: number, y: number) =>
+    L[clamp(y, 0, AH - 1) * AW + clamp(x, 0, AW - 1)];
   for (let y = 0; y < AH; y++) {
     for (let x = 0; x < AW; x++) {
       const i = y * AW + x;
       gx[i] =
-        at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) -
-        at(x - 1, y - 1) - 2 * at(x - 1, y) - at(x - 1, y + 1);
+        at(x + 1, y - 1) +
+        2 * at(x + 1, y) +
+        at(x + 1, y + 1) -
+        at(x - 1, y - 1) -
+        2 * at(x - 1, y) -
+        at(x - 1, y + 1);
       gy[i] =
-        at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) -
-        at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1);
+        at(x - 1, y + 1) +
+        2 * at(x, y + 1) +
+        at(x + 1, y + 1) -
+        at(x - 1, y - 1) -
+        2 * at(x, y - 1) -
+        at(x + 1, y - 1);
     }
   }
   // structure tensor, smoothed → coherent direction + anisotropy
@@ -121,7 +143,9 @@ export function buildField(rgb: Uint8ClampedArray, AW: number, AH: number, seed:
   for (let y = 0; y < AH; y++) {
     for (let x = 0; x < AW; x++) {
       const i = y * AW + x;
-      const e = Eb[i], f = Fb[i], g = Gb[i];
+      const e = Eb[i],
+        f = Fb[i],
+        g = Gb[i];
       // principal gradient orientation; rotate +90° → flow along the edge
       const theta = 0.5 * Math.atan2(2 * f, e - g);
       const edge = theta + Math.PI / 2;
@@ -130,7 +154,10 @@ export function buildField(rgb: Uint8ClampedArray, AW: number, AH: number, seed:
       const an = d / (tr + 1e-3); // anisotropy 0..1
       anis[i] = an;
       // smooth global field for the flat regions (no reliable edge there)
-      const gAng = baseAng + 0.8 * Math.sin((x / AW) * TAU * 1.4 + sa) + 0.6 * Math.sin((y / AH) * TAU * 1.1 + sb);
+      const gAng =
+        baseAng +
+        0.8 * Math.sin((x / AW) * TAU * 1.4 + sa) +
+        0.6 * Math.sin((y / AH) * TAU * 1.1 + sb);
       const w = smoothstep(0.015, 0.16, an);
       const cx = lerp(Math.cos(gAng), Math.cos(edge), w);
       const cy = lerp(Math.sin(gAng), Math.sin(edge), w);
@@ -147,17 +174,32 @@ function fieldDir(field: Field, ax: number, ay: number): [number, number] {
   const { AW, AH, cos, sin } = field;
   const x = clamp(ax, 0, AW - 1.001);
   const y = clamp(ay, 0, AH - 1.001);
-  const ix = x | 0, iy = y | 0;
-  const fx = x - ix, fy = y - iy;
-  const i00 = iy * AW + ix, i10 = i00 + 1, i01 = i00 + AW, i11 = i01 + 1;
+  const ix = x | 0,
+    iy = y | 0;
+  const fx = x - ix,
+    fy = y - iy;
+  const i00 = iy * AW + ix,
+    i10 = i00 + 1,
+    i01 = i00 + AW,
+    i11 = i01 + 1;
   const cx =
-    cos[i00] * (1 - fx) * (1 - fy) + cos[i10] * fx * (1 - fy) + cos[i01] * (1 - fx) * fy + cos[i11] * fx * fy;
+    cos[i00] * (1 - fx) * (1 - fy) +
+    cos[i10] * fx * (1 - fy) +
+    cos[i01] * (1 - fx) * fy +
+    cos[i11] * fx * fy;
   const cy =
-    sin[i00] * (1 - fx) * (1 - fy) + sin[i10] * fx * (1 - fy) + sin[i01] * (1 - fx) * fy + sin[i11] * fx * fy;
+    sin[i00] * (1 - fx) * (1 - fy) +
+    sin[i10] * fx * (1 - fy) +
+    sin[i01] * (1 - fx) * fy +
+    sin[i11] * fx * fy;
   const l = Math.hypot(cx, cy) || 1;
   return [cx / l, cy / l];
 }
-const colorAt = (field: Field, ax: number, ay: number): [number, number, number] => {
+const colorAt = (
+  field: Field,
+  ax: number,
+  ay: number,
+): [number, number, number] => {
   const x = clamp(ax | 0, 0, field.AW - 1);
   const y = clamp(ay | 0, 0, field.AH - 1);
   const j = (y * field.AW + x) * 4;
@@ -219,36 +261,60 @@ function growCenterline(
   sy: number,
   maxSteps: number,
   step: number,
-  colorThresh: number
+  colorThresh: number,
 ): number[] {
   const seedCol = colorAt(field, sx / scale, sy / scale);
   const walk = (sign: number): number[] => {
     const out: number[] = [];
-    let x = sx, y = sy, pdx = 0, pdy = 0, has = false;
+    let x = sx,
+      y = sy,
+      pdx = 0,
+      pdy = 0,
+      has = false;
     for (let i = 0; i < maxSteps; i++) {
       if (x < -step || y < -step || x > w + step || y > h + step) break;
       let [dx, dy] = fieldDir(field, x / scale, y / scale);
-      if (sign < 0) { dx = -dx; dy = -dy; }
-      if (has && dx * pdx + dy * pdy < 0) { dx = -dx; dy = -dy; } // no 180° flips
+      if (sign < 0) {
+        dx = -dx;
+        dy = -dy;
+      }
+      if (has && dx * pdx + dy * pdy < 0) {
+        dx = -dx;
+        dy = -dy;
+      } // no 180° flips
       if (has) {
         dx = 0.55 * dx + 0.45 * pdx;
         dy = 0.55 * dy + 0.45 * pdy;
         const l = Math.hypot(dx, dy) || 1;
-        dx /= l; dy /= l;
+        dx /= l;
+        dy /= l;
       }
-      const nx = x + dx * step, ny = y + dy * step;
-      if (i > 0 && colDist(colorAt(field, nx / scale, ny / scale), seedCol) > colorThresh) break;
+      const nx = x + dx * step,
+        ny = y + dy * step;
+      if (
+        i > 0 &&
+        colDist(colorAt(field, nx / scale, ny / scale), seedCol) > colorThresh
+      )
+        break;
       out.push(nx, ny);
-      x = nx; y = ny; pdx = dx; pdy = dy; has = true;
+      x = nx;
+      y = ny;
+      pdx = dx;
+      pdy = dy;
+      has = true;
     }
     return out;
   };
   const fwd = walk(1);
   const bwd = walk(-1);
   const line: number[] = [];
-  for (let i = bwd.length - 2; i >= 0; i -= 2) { line.push(bwd[i], bwd[i + 1]); }
+  for (let i = bwd.length - 2; i >= 0; i -= 2) {
+    line.push(bwd[i], bwd[i + 1]);
+  }
   line.push(sx, sy);
-  for (let i = 0; i < fwd.length; i += 2) { line.push(fwd[i], fwd[i + 1]); }
+  for (let i = 0; i < fwd.length; i += 2) {
+    line.push(fwd[i], fwd[i + 1]);
+  }
   return line;
 }
 
@@ -258,9 +324,11 @@ function makeOccupancy(dsep: number) {
   const key = (cx: number, cy: number) => cx * 100003 + cy;
   return {
     taken(x: number, y: number): boolean {
-      const cx = Math.floor(x / dsep), cy = Math.floor(y / dsep);
+      const cx = Math.floor(x / dsep),
+        cy = Math.floor(y / dsep);
       for (let dx = -1; dx <= 1; dx++)
-        for (let dy = -1; dy <= 1; dy++) if (set.has(key(cx + dx, cy + dy))) return true;
+        for (let dy = -1; dy <= 1; dy++)
+          if (set.has(key(cx + dx, cy + dy))) return true;
       return false;
     },
     add(x: number, y: number) {
@@ -270,13 +338,21 @@ function makeOccupancy(dsep: number) {
 }
 
 // ink the cover's colour a touch toward its own value so it reads as pigment, not print
-function inkColor(rgb: number[], dark: boolean, jit: number): [number, number, number] {
+function inkColor(
+  rgb: number[],
+  dark: boolean,
+  jit: number,
+): [number, number, number] {
   const lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
   const ease = dark ? 0.16 : 0.12;
   let r = lerp(rgb[0], lum, ease) + jit;
   let g = lerp(rgb[1], lum, ease) + jit;
   let b = lerp(rgb[2], lum, ease) + jit;
-  if (dark) { r = lerp(r, 255, 0.05); g = lerp(g, 255, 0.05); b = lerp(b, 255, 0.05); }
+  if (dark) {
+    r = lerp(r, 255, 0.05);
+    g = lerp(g, 255, 0.05);
+    b = lerp(b, 255, 0.05);
+  }
   return [clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)];
 }
 
@@ -287,7 +363,7 @@ function buildBristles(
   baseColor: number[],
   alpha: number,
   dark: boolean,
-  rng: () => number
+  rng: () => number,
 ): Bristle[] {
   const N = line.length / 2;
   if (N < 2) return [];
@@ -295,7 +371,8 @@ function buildBristles(
   const nx = new Float32Array(N);
   const ny = new Float32Array(N);
   for (let i = 0; i < N; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1);
+    const a = Math.max(0, i - 1),
+      b = Math.min(N - 1, i + 1);
     const tx = line[b * 2] - line[a * 2];
     const ty = line[b * 2 + 1] - line[a * 2 + 1];
     const l = Math.hypot(tx, ty) || 1;
@@ -311,7 +388,9 @@ function buildBristles(
     const off = (nB === 1 ? 0 : k / (nB - 1) - 0.5) * spread;
     const central = Math.abs(off) < spread * 0.22;
     // outer bristles run dry early → ragged, tapered tip
-    const endFrac = central ? 1 : 1 - (Math.abs(off) / (spread / 2)) * (0.25 + rng() * 0.3);
+    const endFrac = central
+      ? 1
+      : 1 - (Math.abs(off) / (spread / 2)) * (0.25 + rng() * 0.3);
     const cnt = Math.max(2, Math.floor(N * endFrac));
     const jit = (rng() - 0.5) * (dark ? 16 : 22);
     const col = inkColor(baseColor, dark, jit);
@@ -339,7 +418,7 @@ export function planPainting(
   AH: number,
   w: number,
   h: number,
-  opts: PaintOptions = {}
+  opts: PaintOptions = {},
 ): Painting {
   const dark = !!opts.dark;
   const seed = opts.seed ?? 1;
@@ -355,9 +434,33 @@ export function planPainting(
 
   const unit = Math.min(w, h);
   const layers: LayerSpec[] = [
-    { R: unit * 0.05, dsep: unit * 0.045, maxSteps: 16, alpha: dark ? 0.26 : 0.3, edgeMin: 0, win0: 0.0, win1: 1.5 },
-    { R: unit * 0.026, dsep: unit * 0.024, maxSteps: 20, alpha: dark ? 0.24 : 0.27, edgeMin: 0, win0: 0.95, win1: 2.35 },
-    { R: unit * 0.014, dsep: unit * 0.013, maxSteps: 14, alpha: dark ? 0.3 : 0.34, edgeMin: 0.07, win0: 1.8, win1: 3.0 },
+    {
+      R: unit * 0.01,
+      dsep: unit * 0.045,
+      maxSteps: 16,
+      alpha: dark ? 0.26 : 0.3,
+      edgeMin: 0,
+      win0: 0.0,
+      win1: 1.5,
+    },
+    {
+      R: unit * 0.03,
+      dsep: unit * 0.024,
+      maxSteps: 20,
+      alpha: dark ? 0.24 : 0.27,
+      edgeMin: 0,
+      win0: 0.95,
+      win1: 2.35,
+    },
+    {
+      R: unit * 0.09,
+      dsep: unit * 0.013,
+      maxSteps: 14,
+      alpha: dark ? 0.3 : 0.34,
+      edgeMin: 0.07,
+      win0: 1.8,
+      win1: 3.0,
+    },
   ];
 
   const strokes: Stroke[] = [];
@@ -370,7 +473,10 @@ export function planPainting(
     const seeds: [number, number][] = [];
     for (let y = L.dsep * 0.5; y < h; y += L.dsep)
       for (let x = L.dsep * 0.5; x < w; x += L.dsep)
-        seeds.push([x + (rng() - 0.5) * L.dsep * 0.7, y + (rng() - 0.5) * L.dsep * 0.7]);
+        seeds.push([
+          x + (rng() - 0.5) * L.dsep * 0.7,
+          y + (rng() - 0.5) * L.dsep * 0.7,
+        ]);
     for (let i = seeds.length - 1; i > 0; i--) {
       const j = (rng() * (i + 1)) | 0;
       [seeds[i], seeds[j]] = [seeds[j], seeds[i]];
@@ -379,14 +485,28 @@ export function planPainting(
       if (strokes.length >= maxStrokes) break;
       if (sxp < 0 || syp < 0 || sxp > w || syp > h) continue;
       if (occ.taken(sxp, syp)) continue;
-      if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin) continue;
-      const line = growCenterline(field, scale, w, h, sxp, syp, L.maxSteps, step, colorThresh);
+      if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin)
+        continue;
+      const line = growCenterline(
+        field,
+        scale,
+        w,
+        h,
+        sxp,
+        syp,
+        L.maxSteps,
+        step,
+        colorThresh,
+      );
       const N = line.length / 2;
       if (N < 2) continue;
       // length + centroid, register occupancy along the line
       let len = 0;
       for (let p = 1; p < N; p++) {
-        len += Math.hypot(line[p * 2] - line[(p - 1) * 2], line[p * 2 + 1] - line[(p - 1) * 2 + 1]);
+        len += Math.hypot(
+          line[p * 2] - line[(p - 1) * 2],
+          line[p * 2 + 1] - line[(p - 1) * 2 + 1],
+        );
         occ.add(line[p * 2], line[p * 2 + 1]);
       }
       occ.add(sxp, syp);
@@ -396,7 +516,8 @@ export function planPainting(
       const seedCol = colorAt(field, sxp / scale, syp / scale);
       const bristles = buildBristles(line, L.R, seedCol, L.alpha, dark, rng);
       if (!bristles.length) continue;
-      const sweep = ((sxCorner ? 1 - cxN : cxN) + (syCorner ? 1 - cyN : cyN)) / 2;
+      const sweep =
+        ((sxCorner ? 1 - cxN : cxN) + (syCorner ? 1 - cyN : cyN)) / 2;
       const start = L.win0 + sweep * (L.win1 - L.win0) + rng() * 0.06;
       const dur = clamp(len / speed, 0.26, 0.95);
       strokes.push({ bristles, start, dur });
@@ -443,7 +564,7 @@ export function animatePainting(
   painting: Painting,
   dpr: number,
   now: () => number,
-  onDone: () => void
+  onDone: () => void,
 ): PaintController {
   const { w, h, strokes } = painting;
   const dry = document.createElement("canvas");
@@ -464,11 +585,13 @@ export function animatePainting(
     if (t0 < 0) t0 = tn;
     const t = (tn - t0) / 1000;
 
-    while (idx < strokes.length && strokes[idx].start <= t) active.push(strokes[idx++]);
+    while (idx < strokes.length && strokes[idx].start <= t)
+      active.push(strokes[idx++]);
     if (active.length) {
       const still: Stroke[] = [];
       for (const s of active) {
-        if (t >= s.start + s.dur) drawStroke(dctx, s, 1); // finished → bake into dry
+        if (t >= s.start + s.dur)
+          drawStroke(dctx, s, 1); // finished → bake into dry
         else still.push(s);
       }
       active = still;
@@ -504,12 +627,17 @@ export function analyzeCover(
   imgH: number,
   frameW: number,
   frameH: number,
-  longSide = 240
+  longSide = 240,
 ): { rgb: Uint8ClampedArray; AW: number; AH: number } | null {
   const aspect = frameW / frameH;
   let AW: number, AH: number;
-  if (aspect >= 1) { AW = longSide; AH = Math.max(1, Math.round(longSide / aspect)); }
-  else { AH = longSide; AW = Math.max(1, Math.round(longSide * aspect)); }
+  if (aspect >= 1) {
+    AW = longSide;
+    AH = Math.max(1, Math.round(longSide / aspect));
+  } else {
+    AH = longSide;
+    AW = Math.max(1, Math.round(longSide * aspect));
+  }
   const c = document.createElement("canvas");
   c.width = AW;
   c.height = AH;
@@ -517,7 +645,8 @@ export function analyzeCover(
   if (!cx) return null;
   // cover-fit the square source into AW×AH (crop overflow, no distortion)
   const s = Math.max(AW / imgW, AH / imgH);
-  const dw = imgW * s, dh = imgH * s;
+  const dw = imgW * s,
+    dh = imgH * s;
   cx.drawImage(img, (AW - dw) / 2, (AH - dh) / 2, dw, dh);
   try {
     const rgb = cx.getImageData(0, 0, AW, AH).data;
