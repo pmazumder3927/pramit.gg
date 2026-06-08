@@ -28,10 +28,16 @@ const LYRIC_LEAD_MS = 220;
 // Japanese brush face — then serif. Per-glyph fallback means each language gets
 // an on-theme handwritten face instead of the browser's default sans.
 const LYRIC_FONT =
+  // dedicated webfonts FIRST — each is scoped to its own script by unicode-range,
+  // and Caveat-first claims Latin, so none can wrongly grab another's glyphs.
   "var(--font-caveat), " +
-  "var(--font-cjk-hand), 'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Kaiti TC', 'Xingkai SC', " +
-  "var(--font-kr-hand), 'Apple SD Gothic Neo', 'Malgun Gothic', " +
-  "var(--font-hi-hand), 'Kohinoor Devanagari', 'Nirmala UI', " +
+  "var(--font-cjk-hand), var(--font-kr-hand), var(--font-hi-hand), var(--font-bn-hand), " +
+  // system fallbacks AFTER, only reached if a webfont fails to load. NB: pan-Indic
+  // faces like 'Nirmala UI' cover Bengali+Devanagari, so they must stay below the
+  // dedicated webfonts or they'd intercept those scripts with a flat face.
+  "'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Kaiti TC', 'Xingkai SC', " +
+  "'Apple SD Gothic Neo', 'Malgun Gothic', " +
+  "'Kohinoor Devanagari', 'Kohinoor Bangla', 'Bangla Sangam MN', 'Vrinda', 'Nirmala UI', " +
   "'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif CJK SC', 'Songti SC', " +
   "cursive, serif";
 
@@ -39,7 +45,7 @@ const LYRIC_FONT =
 // estimate line width so long lines (especially CJK) get squeezed back on-canvas.
 const WIDE =
   /[ᄀ-ᇿ⺀-〿぀-ヿ㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿＀-￯]/;
-const MED = /[ऀ-ॿ]/; // Devanagari (Hindi) — proportional, ~0.6em
+const MED = /[ऀ-ॿঀ-৿]/; // Devanagari (Hindi) + Bengali — proportional, ~0.6em
 function estWidth(text: string, size: number): number {
   let w = 0;
   for (const ch of text) w += (WIDE.test(ch) ? 1.0 : MED.test(ch) ? 0.6 : 0.42) * size;
@@ -78,10 +84,72 @@ interface Inscription {
   dur: number; // write-in seconds (longer lines take longer, like real writing)
 }
 
-// place a line in one of three natural columns, scattered in y and nudged away
-// from the previous line so consecutive words don't collide.
-function place(seedStr: string, text: string, prev?: Inscription): Inscription {
-  const rand = mkRand(fnv(seedStr));
+/* --------------------- foreground-clash avoidance ----------------------- */
+// A rectangle in the SVG's 1600×900 view-box space.
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+// the view-box-space box a line would occupy (ignoring its small rotation)
+function boxOf(anchor: Anchor, x: number, y: number, size: number, text: string): Box {
+  const w = estWidth(text, size);
+  const x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+  // baseline sits at y; allow for ascenders above and a little descent below
+  return { x0, y0: y - size * 0.78, x1: x0 + w, y1: y + size * 0.28 };
+}
+
+// fraction of a line's own box that overlaps the obstacles (0 = clear)
+function overlapFrac(b: Box, obstacles: Box[]): number {
+  const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
+  let covered = 0;
+  for (const o of obstacles) {
+    const ix = Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0);
+    const iy = Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0);
+    if (ix > 0 && iy > 0) covered += ix * iy;
+  }
+  return covered / area;
+}
+
+// Measure the visible FOREGROUND text/controls and map their screen rects into
+// view-box space, so placement can steer clear of them. The SongScape SVG is a
+// fixed, full-viewport backdrop drawn with preserveAspectRatio="xMidYMid slice"
+// (cover), so we invert that mapping. Backdrop elements (aria-hidden) are skipped.
+function collectObstacles(): Box[] {
+  if (typeof window === "undefined") return [];
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (!vw || !vh) return [];
+  const scale = Math.max(vw / W, vh / H); // slice = cover
+  const offX = (vw - W * scale) / 2;
+  const offY = (vh - H * scale) / 2;
+  const toVB = (r: DOMRect): Box => ({
+    x0: (r.left - offX) / scale,
+    y0: (r.top - offY) / scale,
+    x1: (r.right - offX) / scale,
+    y1: (r.bottom - offY) / scale,
+  });
+
+  const boxes: Box[] = [];
+  const els = document.querySelectorAll<HTMLElement>(
+    "h1,h2,h3,h4,h5,p,li,blockquote,figure,nav,header,button,a[href],input,textarea,img,[data-avoid-lyrics]"
+  );
+  els.forEach((el) => {
+    if (el.closest('[aria-hidden="true"]')) return; // skip the backdrop itself
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return;
+    if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
+    const cs = getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.opacity === "0") return;
+    boxes.push(toVB(r));
+  });
+  return boxes;
+}
+
+// one seeded candidate placement (a natural column + scattered y + jitter)
+function makeCandidate(rand: () => number, text: string): Inscription {
   const roll = rand();
   let anchor: Anchor;
   let x: number;
@@ -95,18 +163,35 @@ function place(seedStr: string, text: string, prev?: Inscription): Inscription {
     anchor = "end";
     x = (0.84 + rand() * 0.1) * W;
   }
-
-  let y = (0.16 + rand() * 0.66) * H;
-  if (prev && Math.abs(y - prev.y) < H * 0.16) {
-    // shove it into the opposite vertical half from the previous line
-    y = prev.y < H * 0.5 ? prev.y + H * 0.22 : prev.y - H * 0.22;
-  }
-  y = clamp(y, 0.14 * H, 0.84 * H);
-
+  const y = clamp((0.16 + rand() * 0.66) * H, 0.14 * H, 0.84 * H);
   const rot = (rand() * 2 - 1) * 2.8;
   const size = FONT * (0.84 + rand() * 0.34);
   const dur = clamp(text.length * 0.04, 0.6, 2.2);
   return { key: 0, text, x, y, rot, size, anchor, dur };
+}
+
+// a little overlap is fine; beyond this fraction we'd rather reshuffle
+const ALLOW_OVERLAP = 0.22;
+
+// Place a line: try several seeded candidates and take the first that mostly
+// clears the foreground (and the other current lines); if none do, take the
+// least-clashing one. Falls back to plain seeded placement when nothing is
+// measured (e.g. an empty page), preserving the natural scatter.
+function place(seedStr: string, text: string, obstacles: Box[]): Inscription {
+  const rand = mkRand(fnv(seedStr));
+  const tries = obstacles.length ? 12 : 1;
+  let best: Inscription | null = null;
+  let bestFrac = Infinity;
+  for (let i = 0; i < tries; i++) {
+    const cand = makeCandidate(rand, text);
+    const frac = overlapFrac(boxOf(cand.anchor, cand.x, cand.y, cand.size, text), obstacles);
+    if (frac < bestFrac) {
+      best = cand;
+      bestFrac = frac;
+    }
+    if (frac <= ALLOW_OVERLAP) break; // good enough — keep the natural pick
+  }
+  return best!;
 }
 
 // squeeze a line that would run off-canvas back inside its column
@@ -209,9 +294,14 @@ export default function SongScapeLyrics({
     if (!text) return;
     if (idx === lastIdx.current) return;
     lastIdx.current = idx;
+    // measure the foreground once, here in the effect (not in the state updater)
+    const foreground = collectObstacles();
     setInscriptions((list) => {
-      const prev = list[list.length - 1];
-      const insc = { ...place(`${trackId}:${idx}`, text, prev), key: counter.current++ };
+      // steer clear of the page's text AND the other lines currently on screen
+      const obstacles = foreground.concat(
+        list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.text))
+      );
+      const insc = { ...place(`${trackId}:${idx}`, text, obstacles), key: counter.current++ };
       return [...list, insc].slice(-MAX);
     });
   }, [idx, lines, trackId]);
@@ -246,14 +336,15 @@ export default function SongScapeLyrics({
                   y={insc.y}
                   textAnchor={insc.anchor}
                   fill={ink}
-                  fontFamily={LYRIC_FONT}
                   fontSize={insc.size}
                   className={reduced ? undefined : "lyric-write"}
-                  style={
-                    reduced
-                      ? undefined
-                      : ({ "--lyric-dur": `${insc.dur.toFixed(2)}s` } as React.CSSProperties)
-                  }
+                  // font-family via style (CSS), NOT the SVG presentation
+                  // attribute — var() is only substituted in real CSS, so the
+                  // attribute form silently fell through to the generic fallback.
+                  style={{
+                    fontFamily: LYRIC_FONT,
+                    ...(reduced ? {} : { "--lyric-dur": `${insc.dur.toFixed(2)}s` }),
+                  } as React.CSSProperties}
                   {...fit(insc)}
                 >
                   {insc.text}

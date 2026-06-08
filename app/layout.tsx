@@ -7,6 +7,7 @@ import {
   Nanum_Pen_Script,
   Kalam,
 } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
@@ -67,6 +68,18 @@ const kalam = Kalam({
   display: "swap",
   preload: false,
   variable: "--font-hi-hand",
+});
+
+// Bengali handwriting for lyrics — self-hosted "BenSen Handwriting" (GPL w/ font
+// exception). Google's Bengali set has no true handwriting face (only the brush-
+// display Galada / calligraphic Tiro Bangla), so this is local. Lazy via
+// preload:false so it only loads when a Bengali song renders.
+const bensenHandwriting = localFont({
+  src: "./fonts/bensen-handwriting-regular.woff2",
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-bn-hand",
 });
 
 export const metadata: Metadata = {
@@ -136,7 +149,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable}`}
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable} ${bensenHandwriting.variable}`}
       suppressHydrationWarning
     >
       <head>
