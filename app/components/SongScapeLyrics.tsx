@@ -23,6 +23,26 @@ const MAX = 3; // current line + 2 lingering ghosts
 // than chasing it — covers render + perceptual lag on top of measured latency.
 const LYRIC_LEAD_MS = 220;
 
+// Handwriting stack: Caveat for Latin, then a Chinese brush script (lazy webfont
+// + system kaiti fallbacks), then a Japanese brush face, then serif. Per-glyph
+// fallback means each language gets an inked, on-theme face instead of the
+// browser's default sans.
+const LYRIC_FONT =
+  "var(--font-caveat), " +
+  "var(--font-cjk-hand), 'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Kaiti TC', 'Xingkai SC', " +
+  "'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif CJK SC', 'Songti SC', " +
+  "cursive, serif";
+
+// full-width glyphs (CJK ideographs, kana, hangul) are ~1em; Latin ~0.42em —
+// estimate line width so long lines (especially CJK) get squeezed back on-canvas.
+const WIDE =
+  /[ᄀ-ᇿ⺀-〿぀-ヿ㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿＀-￯]/;
+function estWidth(text: string, size: number): number {
+  let w = 0;
+  for (const ch of text) w += (WIDE.test(ch) ? 1.0 : 0.42) * size;
+  return w;
+}
+
 /* --------------------------- seeded placement --------------------------- */
 function fnv(str: string): number {
   let h = 2166136261;
@@ -94,7 +114,7 @@ function fit(insc: Inscription) {
       : insc.anchor === "end"
         ? insc.x - MARGIN
         : Math.min(insc.x, W - insc.x) * 2 - MARGIN;
-  const est = insc.text.length * insc.size * 0.4;
+  const est = estWidth(insc.text, insc.size);
   return est > room
     ? { textLength: Math.max(120, room), lengthAdjust: "spacingAndGlyphs" as const }
     : {};
@@ -223,7 +243,7 @@ export default function SongScapeLyrics({
                   y={insc.y}
                   textAnchor={insc.anchor}
                   fill={ink}
-                  fontFamily="var(--font-caveat), cursive"
+                  fontFamily={LYRIC_FONT}
                   fontSize={insc.size}
                   className={reduced ? undefined : "lyric-write"}
                   style={

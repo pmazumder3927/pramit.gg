@@ -6,9 +6,13 @@ const SPOTIFY_NOW_PLAYING_URL =
 const SPOTIFY_RECENTLY_PLAYED_URL =
   "https://api.spotify.com/v1/me/player/recently-played?limit=1";
 
-// Cache headers for now-playing (short TTL since it changes frequently)
+// No HTTP/CDN caching: a cached body would freeze `serverNow`, so the client
+// couldn't tell how stale the playhead is (stale-while-revalidate would serve a
+// body up to several seconds old with no way to compensate → lyrics drift
+// behind). The in-memory `payloadCache` below still coalesces upstream Spotify
+// calls, so every poll stays cheap while always returning a fresh `serverNow`.
 const CACHE_HEADERS = {
-  "Cache-Control": "public, s-maxage=3, stale-while-revalidate=8",
+  "Cache-Control": "no-store, must-revalidate",
 };
 
 // Now-playing reflects a single (the owner's) account, so it's the same for

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Caveat, Work_Sans } from "next/font/google";
+import { Fraunces, Caveat, Work_Sans, Ma_Shan_Zheng } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
@@ -31,6 +31,17 @@ const workSans = Work_Sans({
   style: ["normal", "italic"],
   display: "swap",
   variable: "--font-work",
+});
+
+// Chinese brush-script handwriting for lyrics in CJK. preload:false (and no
+// subsets) so this large font is fetched lazily — only when a glyph that needs
+// it actually renders, i.e. when a Chinese song is playing. Latin still uses
+// Caveat; this only catches glyphs Caveat lacks, via the font stack.
+const maShanZheng = Ma_Shan_Zheng({
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-cjk-hand",
 });
 
 export const metadata: Metadata = {
@@ -100,7 +111,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable}`}
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable}`}
       suppressHydrationWarning
     >
       <head>

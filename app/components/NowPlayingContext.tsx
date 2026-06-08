@@ -41,7 +41,9 @@ const NowPlayingContext = createContext<NowPlayingContextValue | null>(null);
 // the RTT is a fair estimate of one-way latency for a freshly-fetched response.
 const fetcher = async (url: string) => {
   const start = performance.now();
-  const res = await fetch(url);
+  // no-store: never let the browser serve a stale body (its frozen serverNow
+  // would make the playhead un-compensatable). Each poll is a fresh sample.
+  const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
   return { ...data, clientLatency: (performance.now() - start) / 2 };
 };
