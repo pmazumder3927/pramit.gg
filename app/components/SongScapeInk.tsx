@@ -85,6 +85,7 @@ type Stroke = {
   depth: number; // scroll parallax depth
   wt: number; // write-in duration (s)
   dim: number; // opacity multiplier (doodles near the reading centre are dimmer)
+  bbox: { x0: number; y0: number; x1: number; y1: number }; // extent (lyrics avoid it)
 };
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
@@ -180,7 +181,12 @@ function buildSketchAt(
   });
   if (!hairs.length) return null;
 
-  return { hairs, warmth, ox: cx, oy: cy, sdir, depth, wt: 1.3, dim };
+  // the inked drawing spans bw*scale × bh*scale centred at (cx,cy); expose it
+  // (padded for brush width) so the lyrics layer can avoid drawing over it.
+  const halfW = (bw * scale) / 2 + 8;
+  const halfH = (bh * scale) / 2 + 8;
+  const bbox = { x0: cx - halfW, y0: cy - halfH, x1: cx + halfW, y1: cy + halfH };
+  return { hairs, warmth, ox: cx, oy: cy, sdir, depth, wt: 1.3, dim, bbox };
 }
 
 // compose the scape: scatter doodles NATURALLY (uneven, hand-placed) via rejection
@@ -383,6 +389,8 @@ export default function SongScapeInk() {
   const lyrics = useLyrics(track);
   const lyricHue = dropHue(palette, 0.15); // gently warm, on-soul
   const lyricInk = cssRgb(inkColor(palette, dark, lyricHue), 1); // age dimming via group opacity
+  // doodle extents so the lyrics layer can write AROUND the sketches, not over them
+  const doodleBoxes = useMemo(() => scape.drops.map((d) => d.bbox), [scape]);
 
   useDiffuse(svgRef, track, reduced ?? null);
   useScrollSwirl(svgRef, reduced ?? null);
@@ -485,6 +493,7 @@ export default function SongScapeInk() {
             ink={lyricInk}
             dark={dark}
             reduced={!!reduced}
+            doodleBoxes={doodleBoxes}
           />
         )}
       </svg>

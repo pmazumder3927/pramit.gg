@@ -6,6 +6,8 @@ import {
   Ma_Shan_Zheng,
   Nanum_Pen_Script,
   Kalam,
+  Yuji_Syuku,
+  Noto_Sans_Egyptian_Hieroglyphs,
 } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -15,6 +17,7 @@ import SketchbookNav from "./components/SketchbookNav";
 import SketchbookTabBar from "./components/SketchbookTabBar";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 import PaperBackground from "./components/PaperBackground";
+import PageTurnInk from "./components/PageTurnInk";
 import AlbumThemeVars from "./components/AlbumThemeVars";
 import JsonLd from "./components/JsonLd";
 import { personSchema, websiteSchema } from "./lib/structured-data";
@@ -80,6 +83,26 @@ const bensenHandwriting = localFont({
   display: "swap",
   preload: false,
   variable: "--font-bn-hand",
+});
+
+// Japanese brush face (kana + kanji) for the confessional glyph challenge. Same
+// brush spirit as the Chinese Ma Shan Zheng above so CJK inscriptions look
+// cohesive. Lazy (preload:false, no subsets) — only fetched when a Japanese
+// glyph challenge actually renders on the connect page.
+const yujiSyuku = Yuji_Syuku({
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-jp-hand",
+});
+
+// Egyptian hieroglyphs for the glyph challenge. Covers the full Unicode
+// hieroglyph block. Lazy like the faces above.
+const egyptianHieroglyphs = Noto_Sans_Egyptian_Hieroglyphs({
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-egyptian",
 });
 
 export const metadata: Metadata = {
@@ -149,7 +172,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable} ${bensenHandwriting.variable}`}
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable} ${bensenHandwriting.variable} ${yujiSyuku.variable} ${egyptianHieroglyphs.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -165,6 +188,7 @@ export default function RootLayout({
           <NowPlayingProvider>
             <AlbumThemeVars />
             <PaperBackground />
+            <PageTurnInk />
             <SketchbookNav />
             {/* extra bottom space on mobile so content clears the fixed tab bar */}
             <div className="relative z-10 pb-[calc(env(safe-area-inset-bottom)+4.25rem)] md:pb-0">

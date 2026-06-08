@@ -30,6 +30,10 @@ import {
   type ConfessionalCaptchaSubmission,
   evaluateDrawing,
 } from "@/app/lib/confessional-captcha";
+import {
+  glyphFontStack,
+  type GlyphScript,
+} from "@/app/lib/confessional-glyphs";
 import { BRUSH_ORDER } from "@/app/lib/drawing/brushes";
 import { renderScene, renderStroke } from "@/app/lib/drawing/paint";
 import { randomSeed } from "@/app/lib/drawing/rng";
@@ -130,6 +134,14 @@ const TOOL_LABELS: Record<ToolMode, string> = {
   ellipse: "ellipse",
 };
 
+// Lang hints help the browser pick the right CJK shaping; the font stack is set
+// explicitly either way. The hanzi we ship include traditional forms.
+const GLYPH_LANG: Record<GlyphScript, string> = {
+  chinese: "zh-Hant",
+  japanese: "ja",
+  egyptian: "",
+};
+
 
 const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   function DrawingCaptcha(
@@ -227,6 +239,10 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   const token = challengeResponse?.token ?? "";
   const drawingEvaluation = evaluateDrawing(strokes);
   const ready = Boolean(challenge && drawingEvaluation.ok);
+
+  // Glyph-inscription challenges show the target character as a reference + a
+  // faint tracing ghost behind the canvas, instead of a freeform prompt.
+  const glyph = challenge?.kind === "glyph" ? challenge.glyph ?? null : null;
 
   const loadChallenge = useCallback(async () => {
     setIsLoading(true);
@@ -710,34 +726,82 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
       >
         {/* Header — the council's request, in mystical voice */}
         <header className="relative flex shrink-0 items-start justify-between gap-4 px-5 pb-2.5 pt-4 sm:px-6 sm:pt-5">
-          <div className="flex min-w-0 flex-col gap-1">
-            <p
-              className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
-              style={{ fontWeight: 300 }}
-            >
-              <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-ink-faint">
-                edict {romanize(challenge.level)}
-              </span>
-              <span aria-hidden className="text-ink-faint/60">
-                ·
-              </span>
-              <span className="truncate">the council implores you to draw</span>
-            </p>
-            <h3
-              className={`${councilSerif.className} flex items-baseline gap-2.5 truncate text-ink`}
-              style={{ fontWeight: 400 }}
-            >
-              <span
-                aria-hidden
-                className="text-base leading-none text-accent-orange/80"
+          {glyph ? (
+            <div className="flex min-w-0 flex-col gap-1">
+              <p
+                className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
+                style={{ fontWeight: 300 }}
               >
-                ✦
-              </span>
-              <span className="truncate text-2xl italic tracking-tight sm:text-3xl">
-                {challenge.drawingPrompt}
-              </span>
-            </h3>
-          </div>
+                <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-ink-faint">
+                  inscription {romanize(challenge.level)}
+                </span>
+                <span aria-hidden className="text-ink-faint/60">
+                  ·
+                </span>
+                <span className="truncate">{glyph.scriptLabel}</span>
+              </p>
+              <h3
+                className={`${councilSerif.className} flex min-w-0 items-baseline gap-3 text-ink`}
+                style={{ fontWeight: 400 }}
+              >
+                <span
+                  aria-hidden
+                  className="text-base leading-none text-accent-orange/80"
+                >
+                  ✦
+                </span>
+                <span
+                  lang={GLYPH_LANG[glyph.script] || undefined}
+                  className="shrink-0 text-4xl not-italic leading-none text-ink sm:text-5xl"
+                  style={{ fontFamily: glyphFontStack(glyph.script) }}
+                >
+                  {glyph.glyph}
+                </span>
+                <span className="min-w-0 truncate text-xl italic tracking-tight text-ink-soft sm:text-2xl">
+                  “{glyph.meaning}”
+                  {glyph.romanization ? (
+                    <span className="ml-2 font-sans text-[11px] not-italic uppercase tracking-[0.2em] text-ink-faint">
+                      {glyph.romanization}
+                    </span>
+                  ) : null}
+                </span>
+              </h3>
+              <p className="mt-0.5 max-w-prose font-serif text-xs italic text-ink-faint">
+                reproduce the character — {glyph.shapeHint}
+              </p>
+            </div>
+          ) : (
+            <div className="flex min-w-0 flex-col gap-1">
+              <p
+                className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
+                style={{ fontWeight: 300 }}
+              >
+                <span className="font-sans text-[10px] not-italic uppercase tracking-[0.36em] text-ink-faint">
+                  edict {romanize(challenge.level)}
+                </span>
+                <span aria-hidden className="text-ink-faint/60">
+                  ·
+                </span>
+                <span className="truncate">
+                  the council implores you to draw
+                </span>
+              </p>
+              <h3
+                className={`${councilSerif.className} flex items-baseline gap-2.5 truncate text-ink`}
+                style={{ fontWeight: 400 }}
+              >
+                <span
+                  aria-hidden
+                  className="text-base leading-none text-accent-orange/80"
+                >
+                  ✦
+                </span>
+                <span className="truncate text-2xl italic tracking-tight sm:text-3xl">
+                  {challenge.drawingPrompt}
+                </span>
+              </h3>
+            </div>
+          )}
 
           <div className="flex shrink-0 items-center gap-2 pt-0.5">
             <div className="hidden sm:block">
@@ -870,7 +934,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 <div
                   className={`${councilSerif.className} text-base italic tracking-wide text-ink-faint sm:text-lg`}
                 >
-                  make your offering
+                  {glyph ? "reproduce it from memory" : "make your offering"}
                 </div>
               </motion.div>
             ) : null}

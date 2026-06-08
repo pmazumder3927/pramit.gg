@@ -1,13 +1,20 @@
 "use client";
 
-// The now-playing song's words, written INTO the scape like marginalia. Each
-// line, as the live playhead reaches it, is inked at its own hand-placed spot —
-// drifting between the left margin, the centre and the right margin, at a slight
-// angle and a jittered size, never a centred stack. It writes in left→right (a
-// moving ink front, like the doodles' brush), then lingers as faint ink and
-// drifts up as later lines arrive, finally lifting away — the same hand-off the
-// doodles use on a song change. The current line burns brightest; its ghosts
-// fade behind it, so the page reads as a few recent words scattered in ink.
+// The song's words, written INTO the scape like a hand filling a page.
+//
+// Model — a PEN writing in COLUMNS:
+//   · A column has a position, orientation, size and an advance direction. Lines
+//     flow one after another along it (a real passage), each "written in" with a
+//     left→right ink wipe.
+//   · When the next slot is blocked — by a doodle, the page's own text, another
+//     line or the edge — or the column's quota runs out, the pen lifts and starts
+//     a FRESH column in open space, sized to whatever gap it finds (a small note
+//     in a tight spot, big text down an open margin).
+//   · So flow is the default and placements still fill the gaps; "obstacles" are
+//     the foreground DOM text, the doodles (passed in) and the live lines.
+//
+// Timing rides the same interpolated playhead the doodles use, so lines land in
+// step with the vocal; see useActiveLine.
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -17,42 +24,49 @@ import type { SpotifyTrack } from "./NowPlayingContext";
 const W = 1600;
 const H = 900;
 const FONT = 60;
-const MARGIN = 70; // keep ink off the very edge
-const MAX = 3; // current line + 2 lingering ghosts
-// nudge lines in slightly early so they read as in-time with the vocal rather
-// than chasing it — covers render + perceptual lag on top of measured latency.
+const MIN_SIZE = FONT * 0.5; // can shrink to tuck into a small gap
+const MAX_SIZE = FONT * 1.9; // …or grow to fill a margin
+const MAX_VISIBLE = 3; // current line + 2 fading ghosts
+// nudge lines in slightly early so they read in-time with the vocal, not chasing.
 const LYRIC_LEAD_MS = 220;
 
-// Handwriting stack: Caveat for Latin, then per-script inked faces (lazy webfonts
-// + system fallbacks) — Chinese brush, Korean pen, Hindi/Devanagari hand, a
-// Japanese brush face — then serif. Per-glyph fallback means each language gets
-// an on-theme handwritten face instead of the browser's default sans.
+/* -------------------------------- fonts -------------------------------- */
+// Caveat for Latin, then per-script inked faces (lazy webfonts + system
+// fallbacks), then serif. Webfonts first so each script gets its own hand; the
+// broad system fallbacks (e.g. pan-Indic Nirmala UI) sit last so they can't
+// intercept a script that has a dedicated face.
 const LYRIC_FONT =
-  // dedicated webfonts FIRST — each is scoped to its own script by unicode-range,
-  // and Caveat-first claims Latin, so none can wrongly grab another's glyphs.
   "var(--font-caveat), " +
   "var(--font-cjk-hand), var(--font-kr-hand), var(--font-hi-hand), var(--font-bn-hand), " +
-  // system fallbacks AFTER, only reached if a webfont fails to load. NB: pan-Indic
-  // faces like 'Nirmala UI' cover Bengali+Devanagari, so they must stay below the
-  // dedicated webfonts or they'd intercept those scripts with a flat face.
-  "'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Kaiti TC', 'Xingkai SC', " +
+  "'Kaiti SC', 'STKaiti', 'KaiTi', 'Kaiti TC', 'Xingkai SC', " +
   "'Apple SD Gothic Neo', 'Malgun Gothic', " +
   "'Kohinoor Devanagari', 'Kohinoor Bangla', 'Bangla Sangam MN', 'Vrinda', 'Nirmala UI', " +
   "'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif CJK SC', 'Songti SC', " +
   "cursive, serif";
 
-// full-width glyphs (CJK ideographs, kana, hangul) are ~1em; Latin ~0.42em —
-// estimate line width so long lines (especially CJK) get squeezed back on-canvas.
+// width estimate per glyph class: full-width (CJK/kana/hangul) ~1em; Devanagari/
+// Bengali ~0.6em; Latin ~0.42em — so line lengths are roughly right for layout.
 const WIDE =
   /[ᄀ-ᇿ⺀-〿぀-ヿ㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿＀-￯]/;
-const MED = /[ऀ-ॿঀ-৿]/; // Devanagari (Hindi) + Bengali — proportional, ~0.6em
+const MED = /[ऀ-ॿঀ-৿]/; // Devanagari + Bengali
 function estWidth(text: string, size: number): number {
   let w = 0;
   for (const ch of text) w += (WIDE.test(ch) ? 1.0 : MED.test(ch) ? 0.6 : 0.42) * size;
   return w;
 }
 
-/* --------------------------- seeded placement --------------------------- */
+// Scripts that SHAPE together (conjuncts, vowel signs) must render whole; per-
+// char tspans would break them. CJK/Hangul/Latin glyphs are independent.
+const COMPLEX = /[ऀ-ॿঀ-৿]/;
+
+/* ------------------------------ geometry ------------------------------- */
+export interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 function fnv(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -73,70 +87,11 @@ function mkRand(seed: number) {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 type Anchor = "start" | "middle" | "end";
-// one glyph's hand-jitter (only for non-complex scripts — see makeGlyphs)
-interface Glyph {
-  ch: string;
-  size: number;
-  dy: number; // baseline shift RELATIVE to the previous glyph (so it wobbles)
-  rot: number; // per-glyph tilt, degrees
-}
-interface Inscription {
-  key: number;
-  text: string;
-  x: number;
-  y: number;
-  rot: number;
-  size: number;
-  anchor: Anchor;
-  dur: number; // write-in seconds (longer lines take longer, like real writing)
-  glyphs: Glyph[] | null; // per-char jitter, or null to render the line whole
-}
 
-// Scripts whose glyphs SHAPE together (conjuncts, vowel signs) — splitting these
-// into per-char tspans would break rendering, so they stay whole (per-line
-// variation only). CJK/Hangul/Latin glyphs are independent, so they get jitter.
-const COMPLEX = /[ऀ-ॿঀ-৿]/;
-
-// per-character hand-jitter: small size, baseline and tilt wobble around the
-// line's nominal size, so no two letters sit exactly alike.
-function makeGlyphs(seed: number, size: number, text: string): Glyph[] {
-  const rand = mkRand(seed);
-  let prevDy = 0;
-  return Array.from(text).map((ch) => {
-    const absDy = (rand() * 2 - 1) * size * 0.055; // ±5.5% baseline wobble
-    const dy = absDy - prevDy;
-    prevDy = absDy;
-    return {
-      ch,
-      size: size * (0.88 + rand() * 0.24), // ±~12% per letter
-      dy,
-      rot: (rand() * 2 - 1) * 2.6, // ±2.6° per letter
-    };
-  });
-}
-
-/* --------------------- foreground-clash avoidance ----------------------- */
-// A rectangle in the SVG's 1600×900 view-box space.
-interface Box {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
-// the axis-aligned box a line occupies AFTER its rotation about the anchor (x,y),
-// in view-box space — so avoidance stays accurate at any tilt, vertical included.
-function boxOf(
-  anchor: Anchor,
-  x: number,
-  y: number,
-  size: number,
-  rot: number,
-  text: string
-): Box {
+// the axis-aligned box a line occupies AFTER rotation about its anchor (x,y)
+function boxOf(anchor: Anchor, x: number, y: number, size: number, rot: number, text: string): Box {
   const w = estWidth(text, size);
   const left = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
-  // baseline at y; ascenders above, a little descent below
   const corners: [number, number][] = [
     [left, y - size * 0.78],
     [left + w, y - size * 0.78],
@@ -160,16 +115,7 @@ function boxOf(
   return { x0, y0, x1, y1 };
 }
 
-// fraction of a line's box that falls OUTSIDE the canvas (0 = fully on-screen)
-function offCanvasFrac(b: Box): number {
-  const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
-  const ix = Math.min(b.x1, W) - Math.max(b.x0, 0);
-  const iy = Math.min(b.y1, H) - Math.max(b.y0, 0);
-  const inside = ix > 0 && iy > 0 ? ix * iy : 0;
-  return 1 - inside / area;
-}
-
-// fraction of a line's own box that overlaps the obstacles (0 = clear)
+// fraction of a box that overlaps the obstacles (0 = clear)
 function overlapFrac(b: Box, obstacles: Box[]): number {
   const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
   let covered = 0;
@@ -181,156 +127,281 @@ function overlapFrac(b: Box, obstacles: Box[]): number {
   return covered / area;
 }
 
-// Measure the visible FOREGROUND text/controls and map their screen rects into
-// view-box space, so placement can steer clear of them. The SongScape SVG is a
-// fixed, full-viewport backdrop drawn with preserveAspectRatio="xMidYMid slice"
-// (cover), so we invert that mapping. Backdrop elements (aria-hidden) are skipped.
-function collectObstacles(): Box[] {
+// fraction of a box that falls outside the canvas (0 = fully on-screen)
+function offCanvasFrac(b: Box): number {
+  const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
+  const ix = Math.min(b.x1, W) - Math.max(b.x0, 0);
+  const iy = Math.min(b.y1, H) - Math.max(b.y0, 0);
+  const inside = ix > 0 && iy > 0 ? ix * iy : 0;
+  return 1 - inside / area;
+}
+
+// near-slab entry distance of a ray vs a box — null if it misses (0 = inside)
+function rayBoxEntry(px: number, py: number, dx: number, dy: number, o: Box): number | null {
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  if (Math.abs(dx) < 1e-9) {
+    if (px < o.x0 || px > o.x1) return null;
+  } else {
+    let t1 = (o.x0 - px) / dx;
+    let t2 = (o.x1 - px) / dx;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+  }
+  if (Math.abs(dy) < 1e-9) {
+    if (py < o.y0 || py > o.y1) return null;
+  } else {
+    let t1 = (o.y0 - py) / dy;
+    let t2 = (o.y1 - py) / dy;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+  }
+  if (tmax < tmin || tmax < 0) return null;
+  return tmin > 0 ? tmin : 0;
+}
+
+// free run of space from (px,py) along a unit dir before hitting obstacle/edge
+function rayDist(px: number, py: number, dx: number, dy: number, obstacles: Box[]): number {
+  let best = Infinity;
+  if (dx > 0) best = Math.min(best, (W - px) / dx);
+  else if (dx < 0) best = Math.min(best, -px / dx);
+  if (dy > 0) best = Math.min(best, (H - py) / dy);
+  else if (dy < 0) best = Math.min(best, -py / dy);
+  for (const o of obstacles) {
+    const t = rayBoxEntry(px, py, dx, dy, o);
+    if (t !== null && t < best) best = t;
+  }
+  return Math.max(0, best);
+}
+
+// a seeded orientation: mostly gentle tilt, some strong diagonal, often vertical
+function pickRot(rand: () => number): number {
+  const sign = rand() < 0.5 ? -1 : 1;
+  const o = rand();
+  return o < 0.26
+    ? sign * (74 + rand() * 16) // ~74–90°, near-vertical
+    : o < 0.55
+      ? sign * (16 + rand() * 28) // 16–44°, strong diagonal
+      : sign * rand() * 12; // 0–12°, gentle tilt
+}
+
+/* ------------------------- per-character jitter ------------------------ */
+interface Glyph {
+  ch: string;
+  size: number;
+  dy: number; // baseline shift relative to the previous glyph (wobble)
+  rot: number; // per-glyph tilt, degrees
+}
+function makeGlyphs(seed: number, size: number, text: string): Glyph[] {
+  const rand = mkRand(seed);
+  let prevDy = 0;
+  return Array.from(text).map((ch) => {
+    const absDy = (rand() * 2 - 1) * size * 0.055;
+    const dy = absDy - prevDy;
+    prevDy = absDy;
+    return { ch, size: size * (0.88 + rand() * 0.24), dy, rot: (rand() * 2 - 1) * 2.6 };
+  });
+}
+
+/* ----------------------- foreground measurement ------------------------ */
+// The visible foreground text/controls, mapped from screen rects into the SVG's
+// 1600×900 space. The SongScape SVG is a fixed full-viewport backdrop drawn with
+// preserveAspectRatio="xMidYMid slice" (cover), so we invert that mapping.
+function collectForeground(): Box[] {
   if (typeof window === "undefined") return [];
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   if (!vw || !vh) return [];
-  const scale = Math.max(vw / W, vh / H); // slice = cover
+  const scale = Math.max(vw / W, vh / H);
   const offX = (vw - W * scale) / 2;
   const offY = (vh - H * scale) / 2;
-  const toVB = (r: DOMRect): Box => ({
-    x0: (r.left - offX) / scale,
-    y0: (r.top - offY) / scale,
-    x1: (r.right - offX) / scale,
-    y1: (r.bottom - offY) / scale,
-  });
-
+  const PAD = 18; // keep a margin from text rather than just clearing it
   const boxes: Box[] = [];
   const els = document.querySelectorAll<HTMLElement>(
     "h1,h2,h3,h4,h5,p,li,blockquote,figure,nav,header,button,a[href],input,textarea,img,[data-avoid-lyrics]"
   );
   els.forEach((el) => {
-    if (el.closest('[aria-hidden="true"]')) return; // skip the backdrop itself
-    if (el.closest("[data-lyrics-ignore]")) return; // secondary chrome (e.g. the post TOC)
+    if (el.closest('[aria-hidden="true"]')) return; // the backdrop itself
+    if (el.closest("[data-lyrics-ignore]")) return; // secondary chrome (e.g. post TOC)
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) return;
     if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
     const cs = getComputedStyle(el);
     if (cs.visibility === "hidden" || cs.opacity === "0") return;
-    boxes.push(toVB(r));
+    boxes.push({
+      x0: (r.left - offX) / scale - PAD,
+      y0: (r.top - offY) / scale - PAD,
+      x1: (r.right - offX) / scale + PAD,
+      y1: (r.bottom - offY) / scale + PAD,
+    });
   });
   return boxes;
 }
 
-// one seeded candidate placement (a natural column + scattered y + jitter)
-function makeCandidate(rand: () => number, text: string): Inscription {
-  const roll = rand();
-  let anchor: Anchor;
-  let x: number;
-  if (roll < 0.36) {
-    anchor = "start";
-    x = (0.06 + rand() * 0.1) * W;
-  } else if (roll < 0.64) {
-    anchor = "middle";
-    x = (0.4 + rand() * 0.2) * W;
-  } else {
-    anchor = "end";
-    x = (0.84 + rand() * 0.1) * W;
-  }
-  const y = clamp((0.16 + rand() * 0.66) * H, 0.14 * H, 0.84 * H);
-  // mix of orientations: mostly gentle tilt, sometimes a strong diagonal, and
-  // occasionally near-vertical — so the words scatter across the page like notes.
-  const sign = rand() < 0.5 ? -1 : 1;
-  const o = rand();
-  const rot =
-    o < 0.18
-      ? sign * (76 + rand() * 14) // ~76–90°, near-vertical
-      : o < 0.45
-        ? sign * (16 + rand() * 26) // 16–42°, strong diagonal
-        : sign * rand() * 11; // 0–11°, gentle tilt
-  const size = FONT * (0.72 + rand() * 0.62); // wide per-line size variance (~0.72–1.34×)
-  const dur = clamp(text.length * 0.04, 0.6, 2.2);
-  return { key: 0, text, x, y, rot, size, anchor, dur, glyphs: null };
+/* ------------------------------ the pen -------------------------------- */
+interface Inscription {
+  key: number;
+  text: string;
+  x: number;
+  y: number;
+  rot: number;
+  size: number;
+  anchor: Anchor;
+  dur: number; // write-in seconds
+  glyphs: Glyph[] | null; // per-char jitter, or null to render whole
+}
+interface Column {
+  x: number; // anchor of the NEXT line
+  y: number;
+  rot: number;
+  size: number;
+  anchor: Anchor;
+  advX: number; // unit advance toward the next line
+  advY: number;
+  gap: number; // distance between lines
+  left: number; // lines still allowed in this column
 }
 
-// smallest angle between two orientations, treating a line and its 180° flip as
-// the same (0 = parallel, 90 = perpendicular)
-function angleDiff(a: number, b: number): number {
-  let d = Math.abs(a - b) % 180;
-  if (d > 90) d = 180 - d;
-  return d;
-}
+const writeDur = (text: string) => clamp(text.length * 0.04, 0.6, 2.2);
 
-// A line written as the NEXT line of the previous one's hand: same orientation
-// (small drift), advanced one line-height in the direction lines stack — DOWN for
-// horizontal writing, SIDEWAYS for vertical — with a little stagger/indent. This
-// is what makes consecutive lines read as one flowing passage.
-function continueFrom(prev: Inscription, rand: () => number, text: string): Inscription {
-  const rot = prev.rot + (rand() * 2 - 1) * 4;
-  // drift size enough that even a flowing passage visibly varies line to line
-  const size = clamp(prev.size * (0.82 + rand() * 0.34), FONT * 0.72, FONT * 1.36);
-  const th = (rot * Math.PI) / 180;
-  // baseline direction (cos,sin); the line-advance is its perpendicular, flipped
-  // so it always points down the page (+y) — that's how the next line stacks.
-  let nx = -Math.sin(th);
-  let ny = Math.cos(th);
-  if (ny < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  const gap = prev.size * (1.2 + rand() * 0.55);
-  const indent = (rand() * 2 - 1) * prev.size * 0.7; // stagger along the baseline
-  const x = prev.x + nx * gap + indent * Math.cos(th);
-  const y = prev.y + ny * gap + indent * Math.sin(th);
-  const dur = clamp(text.length * 0.04, 0.6, 2.2);
-  return { key: 0, text, x, y, rot, size, anchor: prev.anchor, dur, glyphs: null };
-}
-
-// Place a line. With no previous line, scatter freely. Otherwise build two pools
-// of candidates — "flow" (continue the previous hand) and "jump" (a fresh spot &
-// angle) — score each by foreground/line overlap + staying on-canvas + an
-// orientation-clash penalty (a differently-angled line sitting ON the last one is
-// what we most want to avoid), with a gentle bias toward flowing. Result: runs of
-// lines written as a passage, occasionally breaking away to a new spot/angle.
-function place(
-  seedStr: string,
+// Eye a blank spot: drop a pen at (px,py) and feel the free run along the chosen
+// orientation (both ways) and across it, then size a line to fill that gap, and
+// pick the more open perpendicular side to stack future lines toward.
+function evalSeed(
+  px: number,
+  py: number,
+  rot: number,
   text: string,
   obstacles: Box[],
-  prev: Inscription | undefined
-): Inscription {
-  const rand = mkRand(fnv(seedStr));
-  const pool: { insc: Inscription; flow: boolean }[] = [];
-  for (let i = 0; i < 8; i++) pool.push({ insc: makeCandidate(rand, text), flow: false });
-  if (prev) for (let i = 0; i < 8; i++) pool.push({ insc: continueFrom(prev, rand, text), flow: true });
+  rand: () => number
+): { col: Column; score: number } {
+  const th = (rot * Math.PI) / 180;
+  const bx = Math.cos(th);
+  const by = Math.sin(th);
+  const fwd = rayDist(px, py, bx, by, obstacles);
+  const bwd = rayDist(px, py, -bx, -by, obstacles);
+  const up = rayDist(px, py, Math.sin(th), -Math.cos(th), obstacles);
+  const down = rayDist(px, py, -Math.sin(th), Math.cos(th), obstacles);
 
-  // 70% of the time prefer flowing; the rest stay open to a clean break
-  const flowBonus = rand() < 0.7 ? 0.18 : 0;
-
-  let best: Inscription | null = null;
-  let bestScore = Infinity;
-  for (const { insc, flow } of pool) {
-    const box = boxOf(insc.anchor, insc.x, insc.y, insc.size, insc.rot, text);
-    let score = overlapFrac(box, obstacles) + offCanvasFrac(box) * 1.6;
-    if (prev) {
-      const near =
-        Math.hypot(insc.x - prev.x, insc.y - prev.y) < (insc.size + prev.size) * 1.6;
-      // a different orientation right on top of the last line reads as a mistake
-      if (near) score += (angleDiff(insc.rot, prev.rot) / 90) * 0.9;
-    }
-    if (flow) score -= flowBonus;
-    if (score < bestScore) {
-      best = insc;
-      bestScore = score;
-    }
+  const lo = Math.min(fwd, bwd);
+  const hi = Math.max(fwd, bwd);
+  let anchor: Anchor;
+  let lenBudget: number;
+  if (lo > hi * 0.45) {
+    anchor = "middle";
+    lenBudget = lo * 2;
+  } else {
+    anchor = fwd >= bwd ? "start" : "end";
+    lenBudget = hi;
   }
-  return best!;
+
+  const unit = estWidth(text, 1) || 1;
+  const size = clamp(Math.min(lenBudget / unit, Math.min(up / 0.82, down / 0.4)), MIN_SIZE, MAX_SIZE);
+  const gap = size * 1.35;
+
+  // stack future lines toward whichever perpendicular side is more open
+  const runA = rayDist(px, py, -by, bx, obstacles);
+  const runB = rayDist(px, py, by, -bx, obstacles);
+  const towardA = runA >= runB;
+  const advX = towardA ? -by : by;
+  const advY = towardA ? bx : -bx;
+  const advRun = Math.max(runA, runB);
+
+  const box = boxOf(anchor, px, py, size, rot, text);
+  const w = unit * size;
+  const fill = clamp(w / Math.max(1, lenBudget), 0, 1);
+  const sizeNorm = (size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
+  const flowRoom = clamp(advRun / (gap * 3), 0, 1); // room for a few lines
+  // higher is better: clear of obstacles, on-canvas, a satisfying fill (snug OR
+  // bold), room to flow, plus a little randomness for unexpected choices.
+  const score =
+    -overlapFrac(box, obstacles) * 8 -
+    offCanvasFrac(box) * 3 +
+    Math.max(fill, sizeNorm) * 1.0 +
+    flowRoom * 0.8 +
+    rand() * 0.6;
+
+  const linesByRoom = Math.max(1, Math.floor(advRun / gap));
+  const left = clamp(2 + Math.floor(rand() * 4), 1, linesByRoom); // 2..5, capped by room
+  return { col: { x: px, y: py, rot, size, anchor, advX, advY, gap, left }, score };
 }
 
-// squeeze a line so its rotated box fits the canvas in BOTH dimensions — works
-// for any tilt (a vertical line is bounded by the canvas height, not width).
+// Begin a fresh column: try many seeds across the page, keep the best.
+function startColumn(rand: () => number, text: string, obstacles: Box[]): Column {
+  let best: { col: Column; score: number } | null = null;
+  for (let i = 0; i < 20; i++) {
+    const px = (0.05 + rand() * 0.9) * W;
+    const py = (0.09 + rand() * 0.82) * H;
+    const s = evalSeed(px, py, pickRot(rand), text, obstacles, rand);
+    if (!best || s.score > best.score) best = s;
+  }
+  return best!.col;
+}
+
+// Place one line: continue the current column if the next slot is clear, else
+// lift the pen and start a fresh column. Returns the line and the pen's new state.
+function place(
+  prevCol: Column | null,
+  rand: () => number,
+  text: string,
+  obstacles: Box[]
+): { insc: Inscription; col: Column } {
+  if (prevCol && prevCol.left > 0) {
+    const size = clamp(prevCol.size * (0.94 + rand() * 0.12), MIN_SIZE, MAX_SIZE); // gentle drift
+    const box = boxOf(prevCol.anchor, prevCol.x, prevCol.y, size, prevCol.rot, text);
+    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.05) {
+      const insc: Inscription = {
+        key: 0,
+        text,
+        x: prevCol.x,
+        y: prevCol.y,
+        rot: prevCol.rot,
+        size,
+        anchor: prevCol.anchor,
+        dur: writeDur(text),
+        glyphs: null,
+      };
+      const col: Column = {
+        ...prevCol,
+        x: prevCol.x + prevCol.advX * prevCol.gap,
+        y: prevCol.y + prevCol.advY * prevCol.gap,
+        left: prevCol.left - 1,
+      };
+      return { insc, col };
+    }
+  }
+  const col = startColumn(rand, text, obstacles);
+  const insc: Inscription = {
+    key: 0,
+    text,
+    x: col.x,
+    y: col.y,
+    rot: col.rot,
+    size: col.size,
+    anchor: col.anchor,
+    dur: writeDur(text),
+    glyphs: null,
+  };
+  const advanced: Column = {
+    ...col,
+    x: col.x + col.advX * col.gap,
+    y: col.y + col.advY * col.gap,
+    left: col.left - 1,
+  };
+  return { insc, col: advanced };
+}
+
+// squeeze a line so its rotated box fits the canvas in BOTH dimensions (any tilt)
 function fit(insc: Inscription) {
   const w = estWidth(insc.text, insc.size);
   const h = insc.size;
   const th = (insc.rot * Math.PI) / 180;
   const ac = Math.abs(Math.cos(th));
   const as = Math.abs(Math.sin(th));
-  const limW = ac > 1e-3 ? (W - 2 * MARGIN - h * as) / ac : Infinity;
-  const limH = as > 1e-3 ? (H - 2 * MARGIN - h * ac) / as : Infinity;
+  const limW = ac > 1e-3 ? (W - 40 - h * as) / ac : Infinity;
+  const limH = as > 1e-3 ? (H - 40 - h * ac) / as : Infinity;
   const lim = Math.max(120, Math.min(limW, limH));
   return w > lim
     ? { textLength: Math.round(lim), lengthAdjust: "spacingAndGlyphs" as const }
@@ -352,10 +423,6 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
       setIdx(-1);
       return;
     }
-    // full latency budget so lines land in realtime:
-    //   cacheAge  — server-side staleness (cache TTL / upstream fetch time)
-    //   latency   — network transit server→client (this response)
-    //   elapsed   — client time since we received it (added per frame below)
     const cacheAge = serverNow && fetchedAt ? serverNow - fetchedAt : 0;
     const baseMs = progress + cacheAge;
     const findIdx = (ms: number) => {
@@ -369,7 +436,6 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
     };
 
     if (!playing) {
-      // paused: show the true current line; don't lead/compensate forward
       setIdx(findIdx(baseMs));
       return;
     }
@@ -397,49 +463,55 @@ export default function SongScapeLyrics({
   ink,
   dark,
   reduced,
+  doodleBoxes,
 }: {
   track: SpotifyTrack | null;
   trackId: string;
   lines: LyricLine[];
-  ink: string; // solid ink rgb; age dimming handled via group opacity
+  ink: string; // solid ink rgb; age dimming via group opacity
   dark: boolean;
   reduced: boolean;
+  doodleBoxes: Box[];
 }) {
   const idx = useActiveLine(track, lines);
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+  const inscriptionsRef = useRef<Inscription[]>([]);
+  const colRef = useRef<Column | null>(null);
   const counter = useRef(0);
   const lastIdx = useRef(-1);
 
-  // new song → clear the page
+  // new song → clear the page and lift the pen
   useEffect(() => {
-    setInscriptions([]);
+    inscriptionsRef.current = [];
+    colRef.current = null;
     lastIdx.current = -1;
+    setInscriptions([]);
   }, [trackId]);
 
-  // playhead crossed into a new (non-empty) line → ink it in somewhere fresh
+  // playhead crossed into a new (non-empty) line → write it
   useEffect(() => {
     if (idx < 0) return;
     const text = lines[idx]?.text?.trim();
     if (!text) return;
     if (idx === lastIdx.current) return;
     lastIdx.current = idx;
-    // measure the foreground once, here in the effect (not in the state updater)
-    const foreground = collectObstacles();
-    setInscriptions((list) => {
-      // steer clear of the page's text AND the other lines currently on screen
-      const obstacles = foreground.concat(
-        list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.rot, p.text))
-      );
-      const prev = list[list.length - 1];
-      const base = place(`${trackId}:${idx}`, text, obstacles, prev);
-      // per-glyph jitter for simple scripts; complex scripts stay whole
-      const glyphs = COMPLEX.test(text)
-        ? null
-        : makeGlyphs(fnv(`${trackId}:${idx}:g`), base.size, text);
-      const insc = { ...base, glyphs, key: counter.current++ };
-      return [...list, insc].slice(-MAX);
-    });
-  }, [idx, lines, trackId]);
+
+    const list = inscriptionsRef.current;
+    const obstacles = collectForeground().concat(
+      doodleBoxes,
+      list.map((p) => boxOf(p.anchor, p.x, p.y, p.size, p.rot, p.text))
+    );
+    const rand = mkRand(fnv(`${trackId}:${idx}`));
+    const { insc: base, col } = place(colRef.current, rand, text, obstacles);
+    colRef.current = col;
+
+    const glyphs = COMPLEX.test(text)
+      ? null
+      : makeGlyphs(fnv(`${trackId}:${idx}:g`), base.size, text);
+    const next = [...list, { ...base, glyphs, key: counter.current++ }].slice(-MAX_VISIBLE);
+    inscriptionsRef.current = next;
+    setInscriptions(next);
+  }, [idx, lines, trackId, doodleBoxes]);
 
   if (!inscriptions.length) return null;
 
@@ -473,9 +545,8 @@ export default function SongScapeLyrics({
                   fill={ink}
                   fontSize={insc.size}
                   className={reduced ? undefined : "lyric-write"}
-                  // font-family via style (CSS), NOT the SVG presentation
-                  // attribute — var() is only substituted in real CSS, so the
-                  // attribute form silently fell through to the generic fallback.
+                  // font-family via style (CSS) so var() resolves — it does NOT
+                  // substitute in the SVG presentation attribute.
                   style={{
                     fontFamily: LYRIC_FONT,
                     ...(reduced ? {} : { "--lyric-dur": `${insc.dur.toFixed(2)}s` }),
@@ -484,12 +555,7 @@ export default function SongScapeLyrics({
                 >
                   {insc.glyphs
                     ? insc.glyphs.map((g, gi) => (
-                        <tspan
-                          key={gi}
-                          fontSize={g.size}
-                          dy={g.dy.toFixed(2)}
-                          rotate={g.rot.toFixed(1)}
-                        >
+                        <tspan key={gi} fontSize={g.size} dy={g.dy.toFixed(2)} rotate={g.rot.toFixed(1)}>
                           {g.ch}
                         </tspan>
                       ))

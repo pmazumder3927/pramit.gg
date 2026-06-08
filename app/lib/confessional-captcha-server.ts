@@ -9,12 +9,20 @@ import {
   CAPTCHA_VERSION,
   DRAWING_CANVAS_HEIGHT,
   DRAWING_CANVAS_WIDTH,
+  type ChallengeGlyph,
+  type ChallengeKind,
   type ConfessionalCaptchaChallenge,
   type ConfessionalCaptchaSubmission,
   type DrawingStroke,
   evaluateDrawing,
 } from "@/app/lib/confessional-captcha";
+import { glyphPromptLabel, pickGlyph } from "@/app/lib/confessional-glyphs";
 import { createPublicClient } from "@/utils/supabase/server";
+
+// Roughly this share of challenges ask for a pictographic-character inscription
+// (Chinese / Japanese / Egyptian) instead of a freeform doodle. The rest stay
+// freeform so the gallery keeps its mix of drawings.
+const GLYPH_CHALLENGE_RATE = 0.35;
 
 type PromptTier = {
   level: number;
@@ -183,7 +191,30 @@ export async function createConfessionalCaptchaChallenge() {
   const issuedAt = Date.now();
   const globalIndex = await getGlobalDrawingIndex();
   const tier = pickTier(globalIndex);
-  const drawingPrompt = pick(tier.prompts);
+
+  // Decide between a freeform doodle and a glyph inscription. Glyph difficulty
+  // is drawn from the same tier level the freeform prompts use.
+  let kind: ChallengeKind = "freeform";
+  let drawingPrompt = pick(tier.prompts);
+  let glyph: ChallengeGlyph | undefined;
+
+  if (Math.random() < GLYPH_CHALLENGE_RATE) {
+    const entry = pickGlyph(tier.level);
+    if (entry) {
+      kind = "glyph";
+      // Carry the display + verify-rubric fields into the signed token. The
+      // internal difficulty `level` already lives on the challenge itself.
+      glyph = {
+        glyph: entry.glyph,
+        script: entry.script,
+        scriptLabel: entry.scriptLabel,
+        romanization: entry.romanization,
+        meaning: entry.meaning,
+        shapeHint: entry.shapeHint,
+      };
+      drawingPrompt = glyphPromptLabel(entry);
+    }
+  }
 
   const challenge: ConfessionalCaptchaChallenge = {
     version: CAPTCHA_VERSION,
@@ -195,6 +226,8 @@ export async function createConfessionalCaptchaChallenge() {
     level: tier.level,
     levelLabel: tier.label,
     globalIndex,
+    kind,
+    ...(glyph ? { glyph } : {}),
   };
 
   return {
@@ -276,6 +309,8 @@ export async function verifyConfessionalCaptchaSubmission(
   const verdict = await classifyDrawing({
     prompt: challenge.drawingPrompt,
     level: challenge.level,
+    kind: challenge.kind,
+    glyph: challenge.glyph,
     imageDataUrl,
   });
 
@@ -284,10 +319,11 @@ export async function verifyConfessionalCaptchaSubmission(
   }
 
   if (!verdict.matches) {
-    return {
-      ok: false,
-      error: `The council is unconvinced. this ${challenge.drawingPrompt} sucks`,
-    };
+    const unconvinced =
+      challenge.kind === "glyph" && challenge.glyph
+        ? `The council squints. that does not read as ${challenge.glyph.glyph} (${challenge.glyph.meaning}).`
+        : `The council is unconvinced. this ${challenge.drawingPrompt} sucks`;
+    return { ok: false, error: unconvinced };
   }
 
   return { ok: true, challenge, matchReason: verdict.reason };
@@ -350,13 +386,77 @@ type DrawingVerdict =
   | { ok: true; matches: boolean; reason: string }
   | { ok: false; error: string };
 
+type ImageDetail = "low" | "high" | "auto";
+
+type Grading = {
+  systemPrompt: string;
+  targetLine: string;
+  imageDetail: ImageDetail;
+};
+
+function buildFreeformGrading(prompt: string, level: number): Grading {
+  // Higher tiers (multi-element scenes, specific text/counts, recursive
+  // composition) deserve credit for capturing the *spirit* — humans cannot
+  // realistically nail every constraint with a finger on a phone canvas.
+  const grading =
+    level >= 4
+      ? "This prompt is intentionally elaborate. Accept the drawing if it makes a sincere attempt at the major elements (the subject + at least one or two of the specific qualifiers). Do not require every detail — labels, exact counts, or perfect spatial relationships can be approximated."
+      : "Accept any sincere, recognizable attempt at the target subject, even if crude or stylized. Reject only if the canvas is essentially empty or shows an unrelated subject.";
+
+  const systemPrompt =
+    "You verify captcha sketches. The user was asked to draw a specific subject and you must decide if the sketch depicts that subject.\n\n" +
+    grading +
+    "\n\nReject (matches: false) when ANY of these apply:\n" +
+    "- The drawing is blank or near-blank (a single dot, a tiny mark, almost nothing on the canvas).\n" +
+    "- The drawing is just random scribbles, lines, or noise with no recognizable subject.\n" +
+    "- The drawing depicts an entirely different subject than the target.\n\n" +
+    "Be generous about artistic skill — these are rough finger sketches — but strict about whether the right *kind* of thing was attempted. " +
+    'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.';
+
+  const targetLine =
+    level >= 4
+      ? `Target prompt (level ${level}): ${prompt}. Did the human capture the spirit of this prompt — the subject and at least one specific qualifier?`
+      : `Target subject (level ${level}): ${prompt}. Does this sketch reasonably depict that subject?`;
+
+  return { systemPrompt, targetLine, imageDetail: "low" };
+}
+
+function buildGlyphGrading(glyph: ChallengeGlyph): Grading {
+  // The user was shown the reference glyph and asked to reproduce/trace it. We
+  // hand the model the character, its meaning, and an explicit shape rubric so
+  // it can grade the form even when it cannot read an exotic script (e.g. a
+  // hieroglyph). Strict about which character was drawn, lenient about skill.
+  const systemPrompt =
+    "You verify a captcha where the user was shown a single writing-system character (a Chinese hanzi, a Japanese kana/kanji, or an Egyptian hieroglyph) and asked to reproduce it by hand on a canvas. Decide whether the drawing recognizably reproduces THAT specific character.\n\n" +
+    "Be generous about penmanship — these are rough finger drawings, so wobbly strokes, uneven proportions, and shaky lines are fine. Judge the overall structure and the major strokes/parts against the expected form, not the neatness.\n\n" +
+    "Reject (matches: false) when ANY of these apply:\n" +
+    "- The canvas is blank or near-blank (a single dot, a tiny mark, almost nothing).\n" +
+    "- The marks are random scribbles or noise with no resemblance to the character.\n" +
+    "- The drawing is clearly a different character, a Latin letter/word, or an unrelated picture.\n" +
+    "- The overall structure is plainly wrong (e.g. the wrong number of major strokes/components, or the wrong arrangement).\n\n" +
+    'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.';
+
+  const romanization = glyph.romanization ? ` (${glyph.romanization})` : "";
+  const targetLine =
+    `Target character: ${glyph.glyph}${romanization} — ${glyph.scriptLabel}, meaning "${glyph.meaning}".\n` +
+    `Expected form: ${glyph.shapeHint}\n` +
+    `Does this drawing recognizably reproduce that character's shape?`;
+
+  // Character matching benefits from finer stroke detail than a freeform blob.
+  return { systemPrompt, targetLine, imageDetail: "auto" };
+}
+
 async function classifyDrawing({
   prompt,
   level,
+  kind,
+  glyph,
   imageDataUrl,
 }: {
   prompt: string;
   level: number;
+  kind: ChallengeKind;
+  glyph?: ChallengeGlyph;
   imageDataUrl: string;
 }): Promise<DrawingVerdict> {
   const client = getOpenAIClient();
@@ -369,17 +469,10 @@ async function classifyDrawing({
 
   const model = process.env.OPENAI_VISION_MODEL?.trim() || DEFAULT_VISION_MODEL;
 
-  // Higher tiers (multi-element scenes, specific text/counts, recursive
-  // composition) deserve credit for capturing the *spirit* — humans cannot
-  // realistically nail every constraint with a finger on a phone canvas.
-  const grading =
-    level >= 4
-      ? "This prompt is intentionally elaborate. Accept the drawing if it makes a sincere attempt at the major elements (the subject + at least one or two of the specific qualifiers). Do not require every detail — labels, exact counts, or perfect spatial relationships can be approximated."
-      : "Accept any sincere, recognizable attempt at the target subject, even if crude or stylized. Reject only if the canvas is essentially empty or shows an unrelated subject.";
-  const targetLine =
-    level >= 4
-      ? `Target prompt (level ${level}): ${prompt}. Did the human capture the spirit of this prompt — the subject and at least one specific qualifier?`
-      : `Target subject (level ${level}): ${prompt}. Does this sketch reasonably depict that subject?`;
+  const { systemPrompt, targetLine, imageDetail } =
+    kind === "glyph" && glyph
+      ? buildGlyphGrading(glyph)
+      : buildFreeformGrading(prompt, level);
 
   try {
     const response = await client.chat.completions.create(
@@ -390,15 +483,7 @@ async function classifyDrawing({
         messages: [
           {
             role: "system",
-            content:
-              "You verify captcha sketches. The user was asked to draw a specific subject and you must decide if the sketch depicts that subject.\n\n" +
-              grading +
-              "\n\nReject (matches: false) when ANY of these apply:\n" +
-              "- The drawing is blank or near-blank (a single dot, a tiny mark, almost nothing on the canvas).\n" +
-              "- The drawing is just random scribbles, lines, or noise with no recognizable subject.\n" +
-              "- The drawing depicts an entirely different subject than the target.\n\n" +
-              "Be generous about artistic skill — these are rough finger sketches — but strict about whether the right *kind* of thing was attempted. " +
-              'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.',
+            content: systemPrompt,
           },
           {
             role: "user",
@@ -409,7 +494,7 @@ async function classifyDrawing({
               },
               {
                 type: "image_url",
-                image_url: { url: imageDataUrl, detail: "low" },
+                image_url: { url: imageDataUrl, detail: imageDetail },
               },
             ],
           },

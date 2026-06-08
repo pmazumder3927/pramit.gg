@@ -1,6 +1,7 @@
+import type { GlyphEntry } from "./confessional-glyphs";
 import type { DrawingPoint, DrawingStroke } from "./drawing/types";
 
-export const CAPTCHA_VERSION = 4 as const;
+export const CAPTCHA_VERSION = 5 as const;
 export const CAPTCHA_TTL_MS = 10 * 60 * 1000;
 export const CAPTCHA_MIN_SOLVE_MS = 6_000;
 export const DRAWING_CANVAS_WIDTH = 480;
@@ -10,6 +11,17 @@ export const DRAWING_MIN_TOTAL_LENGTH = 640;
 export const DRAWING_MAX_LEVEL = 5;
 
 export type { DrawingPoint, DrawingStroke } from "./drawing/types";
+export type { GlyphScript } from "./confessional-glyphs";
+
+// What kind of offering the council is asking for: a freeform doodle of a
+// subject, or the faithful inscription of a specific writing-system character.
+export type ChallengeKind = "freeform" | "glyph";
+
+// The glyph payload carried inside a signed challenge token. It is a subset of
+// GlyphEntry (the difficulty `level` is already on the challenge itself). Being
+// part of the HMAC-signed token makes it tamper-proof, so the verifier can
+// trust it as the source of truth without a second lookup.
+export type ChallengeGlyph = Omit<GlyphEntry, "level">;
 
 export type ConfessionalCaptchaChallenge = {
   version: typeof CAPTCHA_VERSION;
@@ -17,10 +29,15 @@ export type ConfessionalCaptchaChallenge = {
   issuedAt: number;
   expiresAt: number;
   minSolveMs: number;
+  // Always present; for glyph challenges this is a readable label such as
+  // `水 — "water" (Chinese)` so the gallery and council copy render nicely.
   drawingPrompt: string;
   level: number;
   levelLabel: string;
   globalIndex: number;
+  kind: ChallengeKind;
+  // Present only when `kind === "glyph"`.
+  glyph?: ChallengeGlyph;
 };
 
 export type ConfessionalCaptchaSubmission = {
