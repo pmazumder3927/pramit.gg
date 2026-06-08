@@ -1,10 +1,6 @@
-// Sketchbook paper backdrop. Pure CSS, theme-aware. Everything here is driven by
-// the now-playing song so the whole page reflects it as one cohesive world:
-//   · AlbumLight — the cover's own colour composition becomes the atmosphere +
-//                  light, blended onto the orange/purple poles.
-//   · PaperSheet — the handmade-paper ground; its vignette obeys AlbumLight's light.
-//   · SongScapeInk — visitors' confessional doodles, inked in the cover's colours.
-import AlbumLight from "./AlbumLight";
+// Sketchbook paper backdrop. Pure CSS, theme-aware. Sits behind all content (z-0).
+//   · PaperSheet — the handmade-paper ground (tooth, watermark, foxing, vignette).
+//   · SongScapeInk — visitors' confessional doodles, inked (both themes).
 import PaperSheet from "./PaperSheet";
 import SongScapeInk from "./SongScapeInk";
 
@@ -14,10 +10,6 @@ export default function PaperBackground() {
       aria-hidden
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
-      {/* the song's light — the album cover's colours, at their real positions,
-          washed across the page and blended onto the warm/cool poles. */}
-      <AlbumLight />
-
       {/* faint notebook margin rule on the left */}
       <div
         className="absolute inset-y-0 left-[54px] w-px opacity-[0.5] hidden sm:block"

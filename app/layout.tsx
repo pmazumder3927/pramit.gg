@@ -7,6 +7,9 @@ import SketchbookNav from "./components/SketchbookNav";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 import PaperBackground from "./components/PaperBackground";
 import AlbumThemeVars from "./components/AlbumThemeVars";
+import JsonLd from "./components/JsonLd";
+import { personSchema, websiteSchema } from "./lib/structured-data";
+import { PostHogProvider } from "./providers";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -32,31 +35,29 @@ const workSans = Work_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: siteConfig.name,
-    template: `%s | ${siteConfig.name}`,
+    default: `${siteConfig.name} · ${siteConfig.author}`,
+    template: `%s · ${siteConfig.name}`,
   },
   description: siteConfig.description,
   keywords: siteConfig.keywords,
-  authors: [{ name: "Pramit Mazumder", url: siteConfig.url }],
+  authors: [{ name: siteConfig.author, url: siteConfig.url }],
   creator: siteConfig.creator,
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteConfig.url,
-    title: siteConfig.name,
+    title: `${siteConfig.name} · ${siteConfig.author}`,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-        alt: siteConfig.name,
-      },
-    ],
+    // Social image comes from app/opengraph-image.tsx (generated at the edge)
   },
   twitter: {
     card: "summary_large_image",
+    title: `${siteConfig.name} · ${siteConfig.author}`,
+    description: siteConfig.description,
     creator: siteConfig.creator,
   },
   robots: {
@@ -98,19 +99,22 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <JsonLd data={[personSchema, websiteSchema]} />
         <link rel="dns-prefetch" href="https://i.scdn.co" />
         <link rel="dns-prefetch" href="https://mosaic.scdn.co" />
         <link rel="dns-prefetch" href="https://img.youtube.com" />
         <link rel="preconnect" href="https://i.scdn.co" crossOrigin="anonymous" />
       </head>
       <body className="grain min-h-screen">
-        <NowPlayingProvider>
-          <AlbumThemeVars />
-          <PaperBackground />
-          <SketchbookNav />
-          <div className="relative z-10">{children}</div>
-          <NowPlaying />
-        </NowPlayingProvider>
+        <PostHogProvider>
+          <NowPlayingProvider>
+            <AlbumThemeVars />
+            <PaperBackground />
+            <SketchbookNav />
+            <div className="relative z-10">{children}</div>
+            <NowPlaying />
+          </NowPlayingProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

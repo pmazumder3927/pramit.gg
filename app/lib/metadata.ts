@@ -2,51 +2,80 @@ import { Metadata } from "next";
 
 const siteConfig = {
   name: "pramit.gg",
+  // Used for the Person / author entity (knowledge-graph disambiguation)
+  author: "Pramit Mazumder",
   description:
     "a living, evolving journal of interests, projects, and experiences",
   url: "https://pramit.gg",
-  ogImage: "/og-image.jpg",
+  // Default social card is now generated at /opengraph-image (see app/opengraph-image.tsx)
+  ogImage: "/opengraph-image",
   creator: "@PramitMazumder",
-  keywords: ["pramit", "mazumder", "blog", "portfolio", "music", "technology"],
+  email: "me@pramit.gg",
+  keywords: [
+    "pramit",
+    "pramit mazumder",
+    "pramit.gg",
+    "mazumder",
+    "blog",
+    "portfolio",
+    "music",
+    "technology",
+    "reinforcement learning",
+    "robotics",
+  ],
+  // Verified profiles — power the `sameAs` entity links for the knowledge panel
+  sameAs: [
+    "https://github.com/pmazumder3927",
+    "https://www.instagram.com/mazoomzoom/",
+  ],
 };
 
 export function createMetadata({
   title,
   description = siteConfig.description,
-  image = siteConfig.ogImage,
+  image,
+  path,
   noIndex = false,
   ...props
 }: {
   title: string;
   description?: string;
+  /** Custom social image URL. When omitted, the route's generated opengraph-image is used. */
   image?: string;
+  /** Site-relative path (e.g. "/music") used for the canonical + og:url. */
+  path?: string;
   noIndex?: boolean;
 } & Metadata): Metadata {
+  // Pull openGraph out of overrides so we deep-merge rather than clobber it
+  const { openGraph: ogOverrides, twitter: twitterOverrides, ...rest } = props;
+  const url = path ? `${siteConfig.url}${path}` : siteConfig.url;
+
   return {
     title,
     description,
     keywords: siteConfig.keywords,
-    authors: [{ name: "Pramit Mazumder", url: siteConfig.url }],
+    authors: [{ name: siteConfig.author, url: siteConfig.url }],
     creator: siteConfig.creator,
+    ...(path ? { alternates: { canonical: path } } : {}),
     openGraph: {
       type: "website",
       locale: "en_US",
-      url: siteConfig.url,
+      url,
       title,
       description,
       siteName: siteConfig.name,
-      images: [
-        {
-          url: image,
-          width: 1200,
-          height: 630,
-          alt: title,
-        },
-      ],
+      ...(image
+        ? { images: [{ url: image, width: 1200, height: 630, alt: title }] }
+        : {}),
+      ...ogOverrides,
     },
     twitter: {
       card: "summary_large_image",
+      title,
+      description,
       creator: siteConfig.creator,
+      ...(image ? { images: [image] } : {}),
+      ...twitterOverrides,
     },
     robots: {
       index: !noIndex,
@@ -59,7 +88,7 @@ export function createMetadata({
         "max-snippet": -1,
       },
     },
-    ...props,
+    ...rest,
   };
 }
 

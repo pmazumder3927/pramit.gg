@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent, { type PostNav } from "./PostContent";
 import { createPublicClient } from "@/utils/supabase/server";
-import { createMetadata } from "@/app/lib/metadata";
+import { createMetadata, siteConfig } from "@/app/lib/metadata";
+import { articleSchema, breadcrumbSchema } from "@/app/lib/structured-data";
+import JsonLd from "@/app/components/JsonLd";
 import { Metadata } from "next";
 
 interface PostPageProps {
@@ -106,12 +108,19 @@ export async function generateMetadata({
   return createMetadata({
     title: post.title,
     description: post.description || generateExcerpt(post.content),
-    image: post.meta_image || post.media_url,
+    // When no custom image exists, omit it so the generated per-post
+    // opengraph-image (app/post/[id]/opengraph-image.tsx) is used.
+    image: post.meta_image || post.media_url || undefined,
+    path: `/post/${post.slug}`,
+    keywords: post.tags?.length
+      ? [...siteConfig.keywords, ...post.tags]
+      : siteConfig.keywords,
     openGraph: {
       type: "article",
       publishedTime: post.created_at,
       modifiedTime: post.updated_at || post.created_at,
-      authors: ["Pramit Mazumder"],
+      authors: [siteConfig.author],
+      tags: post.tags,
     },
   });
 }
@@ -126,8 +135,21 @@ export default async function PostPage({ params }: PostPageProps) {
 
   const { prev, next } = await fetchNeighbors(post.created_at);
 
+  const postUrl = `${siteConfig.url}/post/${post.slug}`;
+  const schemaImage =
+    post.meta_image || `${postUrl}/opengraph-image`;
+
   return (
     <div className="min-h-screen page-reveal">
+      <JsonLd
+        data={[
+          articleSchema(post, schemaImage),
+          breadcrumbSchema([
+            { name: "home", url: siteConfig.url },
+            { name: post.title, url: postUrl },
+          ]),
+        ]}
+      />
       <main className="post-reading relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
         <PostContent key={post.id} post={post} prev={prev} next={next} />
       </main>

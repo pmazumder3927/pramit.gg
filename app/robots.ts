@@ -1,12 +1,21 @@
 import { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = "https://pramit.gg";
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/dashboard/", "/api/"],
+      disallow: [
+        "/api/",
+        "/dashboard/",
+        "/music/manage/",
+        "/music/review/",
+        "/music/sequencer/",
+        "/post/*/preview",
+      ],
     },
-    sitemap: "https://pramit.gg/sitemap.xml",
+    sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
   };
 }

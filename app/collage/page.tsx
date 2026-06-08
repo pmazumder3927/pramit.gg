@@ -1,20 +1,20 @@
-import type { Metadata } from "next";
-
 import {
   fetchAllHomepageBanners,
   type HomepageBanner,
 } from "@/app/lib/homepage-banner";
 import { createPublicClient } from "@/utils/supabase/server";
+import { createMetadata } from "@/app/lib/metadata";
 
 import CollageExperience from "./CollageExperience";
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   title: "collage",
   description:
     "every sketch left in the confession booth gets painted into an image along with its peers",
-};
+  path: "/collage",
+});
 
 type SketchPreview = {
   id: string;
