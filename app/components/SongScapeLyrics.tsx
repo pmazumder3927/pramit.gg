@@ -23,13 +23,15 @@ const MAX = 3; // current line + 2 lingering ghosts
 // than chasing it — covers render + perceptual lag on top of measured latency.
 const LYRIC_LEAD_MS = 220;
 
-// Handwriting stack: Caveat for Latin, then a Chinese brush script (lazy webfont
-// + system kaiti fallbacks), then a Japanese brush face, then serif. Per-glyph
-// fallback means each language gets an inked, on-theme face instead of the
-// browser's default sans.
+// Handwriting stack: Caveat for Latin, then per-script inked faces (lazy webfonts
+// + system fallbacks) — Chinese brush, Korean pen, Hindi/Devanagari hand, a
+// Japanese brush face — then serif. Per-glyph fallback means each language gets
+// an on-theme handwritten face instead of the browser's default sans.
 const LYRIC_FONT =
   "var(--font-caveat), " +
   "var(--font-cjk-hand), 'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Kaiti TC', 'Xingkai SC', " +
+  "var(--font-kr-hand), 'Apple SD Gothic Neo', 'Malgun Gothic', " +
+  "var(--font-hi-hand), 'Kohinoor Devanagari', 'Nirmala UI', " +
   "'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif CJK SC', 'Songti SC', " +
   "cursive, serif";
 

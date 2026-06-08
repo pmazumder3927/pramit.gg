@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Caveat, Work_Sans, Ma_Shan_Zheng } from "next/font/google";
+import {
+  Fraunces,
+  Caveat,
+  Work_Sans,
+  Ma_Shan_Zheng,
+  Nanum_Pen_Script,
+  Kalam,
+} from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
@@ -42,6 +49,24 @@ const maShanZheng = Ma_Shan_Zheng({
   display: "swap",
   preload: false,
   variable: "--font-cjk-hand",
+});
+
+// Korean pen-handwriting for lyrics, lazy-loaded like the Chinese face above.
+const nanumPen = Nanum_Pen_Script({
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-kr-hand",
+});
+
+// Hindi (Devanagari) handwriting for lyrics; smaller than the CJK faces but
+// still lazy so it only loads when a Devanagari glyph renders.
+const kalam = Kalam({
+  weight: "400",
+  subsets: ["devanagari"],
+  display: "swap",
+  preload: false,
+  variable: "--font-hi-hand",
 });
 
 export const metadata: Metadata = {
@@ -111,7 +136,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable}`}
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable}`}
       suppressHydrationWarning
     >
       <head>
