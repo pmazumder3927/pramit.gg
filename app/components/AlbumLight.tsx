@@ -50,7 +50,7 @@ function warmth(c: RGB): number {
 // to a wash and blended onto the warm/cool poles (poleBias↑ when art is muted)
 function buildField(p: AlbumPalette, dark: boolean): string {
   const poleBias = 0.5 - 0.34 * p.saturation; // vivid cover → less pole, more cover
-  const base = dark ? 0.16 : 0.1;
+  const base = dark ? 0.17 : 0.14;
   const mood = 0.8 + 0.45 * p.brightness;
   const light = toRgb(p.light);
   const layers: string[] = [];

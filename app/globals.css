@@ -232,7 +232,7 @@
   .btn-sketch {
     display: inline-flex; align-items: center; gap: 0.5rem;
     font-family: var(--font-work), sans-serif; font-weight: 600; font-size: 0.9rem;
-    padding: 0.65rem 1.2rem;
+    padding: 0.8rem 1.3rem; min-height: 44px;
     border-radius: 24px 22px 24px 20px / 22px 24px 20px 24px;
     border: 1.8px solid rgb(var(--fg));
     color: rgb(var(--fg));
