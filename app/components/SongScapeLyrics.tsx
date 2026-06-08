@@ -39,9 +39,10 @@ const LYRIC_FONT =
 // estimate line width so long lines (especially CJK) get squeezed back on-canvas.
 const WIDE =
   /[ᄀ-ᇿ⺀-〿぀-ヿ㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿＀-￯]/;
+const MED = /[ऀ-ॿ]/; // Devanagari (Hindi) — proportional, ~0.6em
 function estWidth(text: string, size: number): number {
   let w = 0;
-  for (const ch of text) w += (WIDE.test(ch) ? 1.0 : 0.42) * size;
+  for (const ch of text) w += (WIDE.test(ch) ? 1.0 : MED.test(ch) ? 0.6 : 0.42) * size;
   return w;
 }
 
