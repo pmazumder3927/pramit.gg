@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useSpring,
+  useTransform,
+} from "motion/react";
 import useSWR, { preload } from "swr";
 import { useAlbumColor, preloadColors } from "@/app/lib/use-album-color";
 import {
@@ -97,6 +103,11 @@ export default function MusicClient() {
   // Track which tabs have been opened so we mount them once and keep them alive
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(["recent"]));
 
+  // The "suggest me a song" panel collapses inline in the hero so it's a CTA,
+  // not a buried section. Open it → scroll it into view.
+  const [showSuggest, setShowSuggest] = useState(false);
+  const suggestRef = useRef<HTMLDivElement | null>(null);
+
   const handleTabSelect = (id: string) => {
     setSelectedTab(id as "recent" | "top" | "playlists");
     setVisitedTabs((prev) => {
@@ -185,6 +196,22 @@ export default function MusicClient() {
     };
   }, [mouseX, mouseY]);
 
+  useEffect(() => {
+    if (showSuggest) {
+      // wait for the 0.45s height animation to finish so we center the panel
+      // at its full size, not mid-expand
+      const id = setTimeout(
+        () =>
+          suggestRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          }),
+        480
+      );
+      return () => clearTimeout(id);
+    }
+  }, [showSuggest]);
+
   const tabs = [
     {
       id: "recent" as const,
@@ -258,7 +285,7 @@ export default function MusicClient() {
                 a window into my (sonic) world
               </p>
 
-              <div className="mt-5 flex items-center justify-center gap-4">
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                 <a
                   href="https://open.spotify.com/user/jtjyzh7ke7twmvg5t3bwm4skf"
                   target="_blank"
@@ -274,8 +301,54 @@ export default function MusicClient() {
                   </svg>
                   follow on spotify
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSuggest((v) => !v)}
+                  aria-expanded={showSuggest}
+                  className="btn-sketch btn-sketch-solid group/suggest"
+                >
+                  <svg
+                    className="h-4 w-4 transition-transform group-hover/suggest:rotate-12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                  </svg>
+                  {showSuggest ? "maybe later" : "suggest me a song"}
+                </button>
               </div>
+
+              <p className="mt-3 -rotate-1 font-hand text-lg text-ink-faint">
+                ↑ pick a song and it lands in my &lsquo;beloved user
+                suggestions&rsquo; playlist
+              </p>
             </motion.div>
+
+            {/* Suggest-a-song — collapses inline so it reads as a CTA */}
+            <AnimatePresence initial={false}>
+              {showSuggest && (
+                <motion.div
+                  key="suggest-panel"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    ref={suggestRef}
+                    className="mx-auto max-w-2xl px-1 pb-2 pt-8 text-left"
+                  >
+                    <SideB onClose={() => setShowSuggest(false)} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Now Playing */}
             {nowPlaying && (
@@ -363,16 +436,6 @@ export default function MusicClient() {
             </div>
           )}
         </div>
-
-        {/* Side B — leave me a song (drops into "beloved user suggestions") */}
-        <section className="max-w-3xl mx-auto px-4 md:px-8 pb-28 md:pb-24">
-          <div className="mb-10 flex items-center justify-center gap-3 md:mb-14">
-            <Doodle name="squiggle" tone="rust" className="h-4 w-20 md:w-28" strokeWidth={2.5} />
-            <Doodle name="star" tone="purple" className="h-4 w-4" strokeWidth={2} />
-            <Doodle name="squiggle" tone="rust" className="h-4 w-20 md:w-28" strokeWidth={2.5} />
-          </div>
-          <SideB />
-        </section>
       </main>
     </div>
   );

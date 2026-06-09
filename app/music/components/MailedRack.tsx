@@ -46,7 +46,7 @@ export default function MailedRack() {
       <div className="mt-6 flex items-center gap-2 border-t border-dashed border-line pt-4">
         <Doodle name="squiggle" tone="purple" className="h-3 w-12" strokeWidth={2} />
         <HandNote tone="rust" rotate={-1} className="text-base text-ink-faint">
-          no tapes on the rack yet — be the first to put something on side b.
+          no suggestions yet — be the first to leave me one.
         </HandNote>
       </div>
     );
@@ -58,7 +58,7 @@ export default function MailedRack() {
     <div className="mt-6 border-t border-dashed border-line pt-4">
       <div className="mb-2.5 flex items-center gap-2">
         <HandNote tone="purple" rotate={-2} className="text-base">
-          recently mailed
+          recently suggested
         </HandNote>
         <Doodle name="squiggle" tone="purple" className="h-3 w-14" strokeWidth={2} />
       </div>

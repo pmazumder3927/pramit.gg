@@ -141,54 +141,75 @@ async function findPlaylistByName(name: string): Promise<string | null> {
   return null;
 }
 
+// Coalesce concurrent first-time calls within this server instance so two
+// simultaneous suggestions can't each create a duplicate playlist before the
+// id is cached. (A cross-instance race is still theoretically possible but
+// matches the graveyard's accepted posture, and find-by-name catches it next.)
+let ensureInFlight: Promise<string> | null = null;
+
 /**
  * Find-or-create the "beloved user suggestions" playlist, caching its id in
  * spotify_review_sync_state (same singleton-settings table the graveyard uses).
  */
 async function ensureSuggestionsPlaylist(): Promise<string> {
-  const supabase = createAdminClient();
+  if (ensureInFlight) return ensureInFlight;
 
-  const { data: cached } = await supabase
-    .from("spotify_review_sync_state")
-    .select("metadata")
-    .eq("scope", PLAYLIST_SCOPE)
-    .single();
+  ensureInFlight = (async () => {
+    const supabase = createAdminClient();
 
-  const cachedId = (cached?.metadata as { id?: string } | null)?.id;
-  if (cachedId) return cachedId;
+    const { data: cached } = await supabase
+      .from("spotify_review_sync_state")
+      .select("metadata")
+      .eq("scope", PLAYLIST_SCOPE)
+      .single();
 
-  // Not cached — reuse an existing playlist of that name if the owner already
-  // has one, otherwise create it fresh.
-  let playlistId = await findPlaylistByName(PLAYLIST_NAME);
+    const cachedId = (cached?.metadata as { id?: string } | null)?.id;
+    if (cachedId) return cachedId;
 
-  if (!playlistId) {
-    const me = await spotifyFetch<{ id: string }>("/me");
-    const created = await spotifyFetch<{ id: string }>(
-      `/users/${me.id}/playlists`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          name: PLAYLIST_NAME,
-          description: PLAYLIST_DESCRIPTION,
-          public: true,
-        }),
-      }
+    // Not cached — reuse an existing playlist of that name if the owner already
+    // has one, otherwise create it fresh. PUBLIC by intent: the point is a
+    // shareable, listenable wall of what visitors left, and it surfaces in the
+    // owner's /music playlists tab. Tradeoff: suggestions are anonymous and
+    // unmoderated, so the owner curates by removing anything unwanted.
+    let playlistId = await findPlaylistByName(PLAYLIST_NAME);
+
+    if (!playlistId) {
+      const me = await spotifyFetch<{ id: string }>("/me");
+      const created = await spotifyFetch<{ id: string }>(
+        `/users/${me.id}/playlists`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: PLAYLIST_NAME,
+            description: PLAYLIST_DESCRIPTION,
+            public: true,
+          }),
+        }
+      );
+      playlistId = created.id;
+    }
+
+    await supabase.from("spotify_review_sync_state").upsert(
+      { scope: PLAYLIST_SCOPE, metadata: { id: playlistId } },
+      { onConflict: "scope" }
     );
-    playlistId = created.id;
-  }
 
-  await supabase.from("spotify_review_sync_state").upsert(
-    { scope: PLAYLIST_SCOPE, metadata: { id: playlistId } },
-    { onConflict: "scope" }
-  );
+    return playlistId;
+  })().finally(() => {
+    ensureInFlight = null;
+  });
 
-  return playlistId;
+  return ensureInFlight;
 }
 
 /**
- * Drop a suggested track into the playlist. Dedupes on track_id via the
- * song_suggestions table's unique constraint; if that table is unavailable the
- * playlist add still happens (the wall is the cherry, the add is the product).
+ * Drop a suggested track into the playlist, then record it for the wall.
+ *
+ * Order matters: the playlist add is the actual product, so we do it FIRST and
+ * only record on success. That way a failed Spotify add records nothing and a
+ * retry is clean — no orphaned row that would wrongly 409 a legitimate retry.
+ * Dedupe is a best-effort pre-check (the unique(track_id) constraint is the
+ * backstop); if the table is unavailable the suggestion still goes through.
  */
 export async function addSuggestion(input: {
   trackId: string;
@@ -202,44 +223,38 @@ export async function addSuggestion(input: {
   const note = input.note?.trim() ? input.note.trim().slice(0, 140) : null;
   const supabase = createAdminClient();
 
-  // Record first so the unique(track_id) constraint gives us atomic dedupe.
-  let recorded = false;
+  // Dedupe pre-check — best-effort. On any read error (e.g. table absent) we
+  // treat it as "not a duplicate" and let the suggestion proceed.
+  const { data: existing } = await supabase
+    .from("song_suggestions")
+    .select("track_id")
+    .eq("track_id", track.id)
+    .maybeSingle();
+
+  if (existing) {
+    return { status: "duplicate", title: track.title, artist: track.artist };
+  }
+
+  // The product: add to the playlist. If this throws, we record nothing.
+  const playlistId = await ensureSuggestionsPlaylist();
+  await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+    method: "POST",
+    body: JSON.stringify({ uris: [track.uri] }),
+  });
+
+  // Record for the wall — never fails the suggestion. The unique constraint
+  // also collapses a rare concurrent double-add to a single row.
   const { error: insertError } = await supabase.from("song_suggestions").insert({
     track_id: track.id,
     title: track.title,
     artist: track.artist,
     note,
   });
-
-  if (insertError) {
-    if (insertError.code === "23505") {
-      return { status: "duplicate", title: track.title, artist: track.artist };
-    }
-    // Table missing / transient — degrade: skip the wall, still add to playlist.
-    console.error("[suggest] song_suggestions insert failed (non-fatal):", insertError);
-  } else {
-    recorded = true;
-  }
-
-  try {
-    const playlistId = await ensureSuggestionsPlaylist();
-    await spotifyFetch(`/playlists/${playlistId}/tracks`, {
-      method: "POST",
-      body: JSON.stringify({ uris: [track.uri] }),
-    });
-  } catch (error) {
-    // Compensate: drop the row we just wrote so a retry isn't blocked as a dup.
-    if (recorded) {
-      await supabase
-        .from("song_suggestions")
-        .delete()
-        .eq("track_id", track.id)
-        .then(
-          () => undefined,
-          () => undefined
-        );
-    }
-    throw error;
+  if (insertError && insertError.code !== "23505") {
+    console.error(
+      "[suggest] song_suggestions insert failed (non-fatal):",
+      insertError
+    );
   }
 
   return { status: "added", title: track.title, artist: track.artist };

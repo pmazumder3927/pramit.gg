@@ -29,7 +29,7 @@ const NOTE_MAX = 140;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export default function SideB() {
+export default function SideB({ onClose }: { onClose?: () => void } = {}) {
   const reduce = useReducedMotion();
 
   const [query, setQuery] = useState("");
@@ -46,18 +46,29 @@ export default function SideB() {
 
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // bumped on every preview action so a slow play() promise can't resurrect a
+  // toggle the user has already moved past.
+  const previewReqRef = useRef(0);
 
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const [dropDistance, setDropDistance] = useState(420);
+  // Guard async setState after the panel collapses / unmounts mid-flight.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const busy = phase !== "idle";
 
   // ── preview audio (single clip at a time) ──────────────────────────
   useEffect(() => {
     const audio = new Audio();
-    audio.addEventListener("ended", () => setPreviewingId(null));
+    const onEnded = () => setPreviewingId(null);
+    audio.addEventListener("ended", onEnded);
     audioRef.current = audio;
     return () => {
+      audio.removeEventListener("ended", onEnded);
       audio.pause();
       audio.src = "";
       audioRef.current = null;
@@ -65,6 +76,7 @@ export default function SideB() {
   }, []);
 
   const stopPreview = () => {
+    previewReqRef.current += 1;
     audioRef.current?.pause();
     setPreviewingId(null);
   };
@@ -73,14 +85,19 @@ export default function SideB() {
     const audio = audioRef.current;
     if (!audio || !track.previewUrl) return;
     if (previewingId === track.id) {
-      audio.pause();
-      setPreviewingId(null);
+      stopPreview();
       return;
     }
+    const req = (previewReqRef.current += 1);
     audio.src = track.previewUrl;
     void audio.play().then(
-      () => setPreviewingId(track.id),
-      () => setPreviewingId(null)
+      () => {
+        // ignore if a newer toggle/stop landed while play() was pending
+        if (previewReqRef.current === req) setPreviewingId(track.id);
+      },
+      () => {
+        if (previewReqRef.current === req) setPreviewingId(null);
+      }
     );
   };
 
@@ -166,7 +183,6 @@ export default function SideB() {
     stopPreview();
     setErrorMsg(null);
     setStampKind(null);
-    setDropDistance(cardRef.current?.offsetHeight ?? 420);
     setPhase("posting");
 
     const floor = sleep(MIN_POSTING_MS);
@@ -188,9 +204,10 @@ export default function SideB() {
     }
 
     await floor;
+    if (!isMountedRef.current) return;
 
     if (outcome === "error") {
-      setPhase("idle"); // card springs back up, track preserved
+      setPhase("idle"); // card settles back, track preserved
       setErrorMsg("the mailbox jammed — try once more?");
       return;
     }
@@ -202,8 +219,10 @@ export default function SideB() {
     }
 
     await sleep(FILED_HOLD_MS);
+    if (!isMountedRef.current) return;
     setPhase("received");
     await sleep(RECEIVED_HOLD_MS);
+    if (!isMountedRef.current) return;
     reset();
   };
 
@@ -214,27 +233,41 @@ export default function SideB() {
 
   return (
     <div className="relative">
-      {/* ── header (matches confessional / turtle headers) ── */}
+      {/* ── header — leads with the plain value prop, then the charm ── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-8"
+        transition={{ duration: 0.4 }}
+        className="mb-6"
       >
-        <div className="flex items-center gap-2">
-          <HandNote tone="purple" rotate={-3} className="text-2xl">
-            make me a one-track mixtape
-          </HandNote>
-          <Doodle name="arrow" tone="purple" className="h-5 w-10" strokeWidth={3} />
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <HandNote tone="purple" rotate={-3} className="text-xl">
+                your turn
+              </HandNote>
+              <Doodle name="arrow" tone="purple" className="h-4 w-9" strokeWidth={3} />
+            </div>
+            <h3 className="mt-0.5 font-serif text-2xl font-medium text-ink">
+              suggest me a song
+            </h3>
+            <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
+              search spotify, pick one, and watch it get written onto the tape —
+              it drops straight into my playlist &lsquo;beloved user
+              suggestions&rsquo;. make it count.
+            </p>
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="close"
+              className="shrink-0 font-hand text-base text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
+            >
+              close
+            </button>
+          )}
         </div>
-        <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
-          leave a song on side b
-        </h2>
-        <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          every visitor gets one song. search for it, watch it get written onto
-          the tape, and i&apos;ll find it in my playlist &lsquo;beloved user
-          suggestions&rsquo;. no skips, no takebacks.
-        </p>
       </motion.div>
 
       <motion.div
@@ -260,14 +293,14 @@ export default function SideB() {
               >
                 <Stamp tone="rust" rotate={-6}>
                   {stampKind === "duplicate"
-                    ? "already on side b"
+                    ? "already on the list"
                     : "filed · beloved user suggestions"}
                 </Stamp>
               </motion.div>
               <h3 className="font-serif text-lg font-medium text-ink">
                 {stampKind === "duplicate"
                   ? "great minds"
-                  : "side b is in my hands now"}
+                  : "it’s in my hands now"}
               </h3>
               <p className="mt-1 font-hand text-lg text-accent-rust">
                 {stampKind === "duplicate"
@@ -281,18 +314,22 @@ export default function SideB() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="relative overflow-hidden rounded-[3px]"
+              className="relative rounded-[3px]"
             >
-              {/* the cassette J-card */}
+              {/* the cassette J-card — on mail it dips & settles as the stamp
+                  thunks over it (no overflow mask, so the tapes never clip). */}
               <motion.div
-                ref={cardRef}
-                animate={{ y: cardDown ? dropDistance : 0 }}
+                animate={{
+                  y: cardDown ? 10 : 0,
+                  scale: cardDown ? 0.985 : 1,
+                  rotate: cardDown ? -1.4 : -0.6,
+                }}
                 transition={
                   cardDown
-                    ? { duration: MIN_POSTING_MS / 1000, ease: [0.4, 0, 0.6, 1] }
+                    ? { duration: MIN_POSTING_MS / 1000, ease: [0.34, 1.2, 0.64, 1] }
                     : { type: "spring", stiffness: 220, damping: 22 }
                 }
-                className="relative -rotate-[0.6deg] rounded-[3px] border border-line bg-card shadow-paper-lg"
+                className="relative rounded-[3px] border border-line bg-card shadow-paper-lg"
               >
                 <Tape tone="purple" rotate={-3} className="-top-3 left-10" width={90} />
                 <Tape tone="orange" rotate={4} className="-top-3 right-10" width={90} />
@@ -307,11 +344,11 @@ export default function SideB() {
                   {/* top strip — labels + reels */}
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <Stamp tone="ink" rotate={-3}>
-                      side b · for pramit
+                      a song for pramit
                     </Stamp>
                     <CassetteReels spinning={previewingId !== null} />
                     <Stamp tone="rust" rotate={3} className="hidden sm:inline-flex">
-                      c-60
+                      mixtape
                     </Stamp>
                   </div>
 
@@ -356,7 +393,7 @@ export default function SideB() {
                           onChange={(e) => setQuery(e.target.value)}
                           onKeyDown={handleSearchKeys}
                           disabled={busy}
-                          placeholder="hum it, name it, paste it — what's on side b?"
+                          placeholder="search a song — title, artist, lyric..."
                           autoComplete="off"
                           aria-label="search for a song to suggest"
                           className="min-w-0 flex-1 border-0 bg-transparent p-0 font-hand text-lg text-ink placeholder:text-ink-faint focus:outline-none focus:ring-0"
@@ -371,7 +408,7 @@ export default function SideB() {
                         <HandNote tone="rust" rotate={-1} className="text-base text-ink-faint">
                           {searching
                             ? "rummaging through the crate..."
-                            : "what should i put on side b?"}
+                            : "what should i add to the playlist?"}
                         </HandNote>
                       </div>
                     )}
@@ -486,7 +523,7 @@ export default function SideB() {
                   >
                     <Stamp tone="rust" rotate={-6} className="!text-xs">
                       {stampKind === "duplicate"
-                        ? "already on side b"
+                        ? "already on the list"
                         : "filed · beloved user suggestions"}
                     </Stamp>
                   </motion.div>
