@@ -5,3 +5,4 @@ export { ChaoticTrackCard } from "./ChaoticTrackCard";
 export { ChaoticPlaylistCard } from "./ChaoticPlaylistCard";
 export { ReviewDeck } from "./ReviewDeck";
 export { ReviewStatus } from "./ReviewStatus";
+export { default as SideB } from "./SideB";

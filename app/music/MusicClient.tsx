@@ -12,6 +12,7 @@ import {
   ChaoticNowPlaying,
   ChaoticTrackCard,
   ChaoticPlaylistCard,
+  SideB,
 } from "./components";
 import { Doodle, HandNote, Stamp } from "@/app/components/sketchbook";
 
@@ -362,6 +363,16 @@ export default function MusicClient() {
             </div>
           )}
         </div>
+
+        {/* Side B — leave me a song (drops into "beloved user suggestions") */}
+        <section className="max-w-3xl mx-auto px-4 md:px-8 pb-28 md:pb-24">
+          <div className="mb-10 flex items-center justify-center gap-3 md:mb-14">
+            <Doodle name="squiggle" tone="rust" className="h-4 w-20 md:w-28" strokeWidth={2.5} />
+            <Doodle name="star" tone="purple" className="h-4 w-4" strokeWidth={2} />
+            <Doodle name="squiggle" tone="rust" className="h-4 w-20 md:w-28" strokeWidth={2.5} />
+          </div>
+          <SideB />
+        </section>
       </main>
     </div>
   );
