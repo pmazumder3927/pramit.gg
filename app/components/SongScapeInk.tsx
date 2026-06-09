@@ -21,7 +21,7 @@ import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette
 import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { useLyrics } from "./useLyrics";
 import SongScapeLyrics from "./SongScapeLyrics";
-import { type Box, collectForeground, boxesOverlap } from "@/app/lib/scape-layout";
+import { type Box, collectForeground, boxesOverlap, visibleBox } from "@/app/lib/scape-layout";
 
 const W = 1600;
 const H = 900;
@@ -210,7 +210,7 @@ function buildSketchAt(
 // Doodles near the reading centre shrink + dim, and any that would land on the
 // page's content (foreground boxes, view-box space) are rejected so the sketches
 // sit in the gaps around the text rather than under it.
-function makeScape(sketches: DrawingStroke[][], seedStr: string, foreground: Box[]) {
+function makeScape(sketches: DrawingStroke[][], seedStr: string, foreground: Box[], vis: Box) {
   const seed = fnv(seedStr);
   if (!sketches.length) return { drops: [] as Stroke[], uid: seed.toString(36) };
   const rand = mkRand(seed);
@@ -220,15 +220,23 @@ function makeScape(sketches: DrawingStroke[][], seedStr: string, foreground: Box
     [order[i], order[j]] = [order[j], order[i]];
   }
 
+  // sample within the ON-SCREEN band (fractions of W/H), insetting a touch from
+  // its edges — on portrait this keeps every doodle inside the cropped frame
+  // instead of scattering them into the sliced-off sides (a blank backdrop).
+  const fx0 = vis.x0 / W, fxSpan = (vis.x1 - vis.x0) / W;
+  const fy0 = vis.y0 / H, fySpan = (vis.y1 - vis.y0) / H;
+  const cx0 = fx0 + fxSpan / 2; // visible-band centre (for centralness dimming)
+  const cy0 = fy0 + fySpan / 2;
+
   const n = 6 + Math.floor(rand() * 4); // 6..9 doodles
   const placed: { x: number; y: number; r: number }[] = [];
   const drops: Stroke[] = [];
   let tries = 0;
   while (drops.length < n && tries < n * 60) {
     tries++;
-    const x = 0.07 + rand() * 0.86;
-    const y = 0.1 + rand() * 0.8;
-    const centralness = clamp01(1 - Math.hypot(x - 0.5, (y - 0.5) * 1.1) / 0.5); // 0 edge → 1 dead-centre
+    const x = fx0 + (0.07 + rand() * 0.86) * fxSpan;
+    const y = fy0 + (0.1 + rand() * 0.8) * fySpan;
+    const centralness = clamp01(1 - Math.hypot(x - cx0, (y - cy0) * 1.1) / 0.5); // 0 edge → 1 dead-centre
     const sBase = (0.12 + rand() * 0.23) * (1 - 0.45 * centralness); // wide variance; smaller in the middle
     const rr = sBase * 0.58; // collision radius (allows some closeness → natural)
     let ok = true;
@@ -395,6 +403,7 @@ export default function SongScapeInk() {
   const [mounted, setMounted] = useState(false);
   const [dark, setDark] = useState(false);
   const [foreground, setForeground] = useState<Box[]>([]);
+  const [vis, setVis] = useState<Box>({ x0: 0, y0: 0, x1: W, y1: H });
 
   useEffect(() => {
     setMounted(true);
@@ -411,7 +420,10 @@ export default function SongScapeInk() {
   // doodles on every scroll would make them jump. (Sketches load over the network
   // after this runs, so the first doodles already see the foreground — no jump.)
   useEffect(() => {
-    const measure = () => setForeground(collectForeground());
+    const measure = () => {
+      setForeground(collectForeground());
+      setVis(visibleBox());
+    };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -420,8 +432,8 @@ export default function SongScapeInk() {
   const songKey = track ? track.trackId || `${track.title}${track.artist}${track.album}` : "—";
   const sketches = useSketches();
   const scape = useMemo(
-    () => makeScape(sketches, songKey, foreground),
-    [songKey, sketches, foreground]
+    () => makeScape(sketches, songKey, foreground, vis),
+    [songKey, sketches, foreground, vis]
   );
 
   // the song's words, inked into the scape (synced lines tracked live)
@@ -529,6 +541,7 @@ export default function SongScapeInk() {
             dark={dark}
             reduced={!!reduced}
             doodleBoxes={doodleBoxes}
+            vis={vis}
           />
         )}
       </svg>

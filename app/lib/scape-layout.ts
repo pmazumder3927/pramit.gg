@@ -17,6 +17,29 @@ export function boxesOverlap(a: Box, b: Box): boolean {
   return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 }
 
+// The slice of the 1600×900 view-box that's actually ON-SCREEN, inverting the
+// "slice" (cover) mapping. On a ~16:9 desktop this is essentially the whole box;
+// on a portrait phone the sides are cropped, so this is a tall CENTER BAND. The
+// art is authored full-width, so placement (doodles + lyrics) must stay inside
+// this rect — otherwise content lands in the cropped sides and the backdrop
+// looks blank with lyrics that "never appear".
+export function visibleBox(): Box {
+  const full: Box = { x0: 0, y0: 0, x1: VB_W, y1: VB_H };
+  if (typeof window === "undefined") return full;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (!vw || !vh) return full;
+  const scale = Math.max(vw / VB_W, vh / VB_H); // slice = cover
+  const offX = (vw - VB_W * scale) / 2;
+  const offY = (vh - VB_H * scale) / 2;
+  return {
+    x0: -offX / scale,
+    y0: -offY / scale,
+    x1: (vw - offX) / scale,
+    y1: (vh - offY) / scale,
+  };
+}
+
 // Measure the visible foreground content and map its screen rects into view-box
 // space, so the backdrop can steer clear of it. We walk TEXT NODES (not elements)
 // and measure each visible run with a Range — this captures text precisely no

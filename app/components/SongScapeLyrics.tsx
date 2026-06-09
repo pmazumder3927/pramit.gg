@@ -148,11 +148,13 @@ function overlapFrac(b: Box, obstacles: Box[]): number {
   return covered / area;
 }
 
-// fraction of a box that falls outside the canvas (0 = fully on-screen)
-function offCanvasFrac(b: Box): number {
+// fraction of a box that falls outside the VISIBLE band (0 = fully on-screen).
+// `vis` is the on-screen slice of the view-box — on portrait the sides are
+// cropped, so this gate keeps lines inside the band the visitor can actually see.
+function offCanvasFrac(b: Box, vis: Box): number {
   const area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
-  const ix = Math.min(b.x1, W) - Math.max(b.x0, 0);
-  const iy = Math.min(b.y1, H) - Math.max(b.y0, 0);
+  const ix = Math.min(b.x1, vis.x1) - Math.max(b.x0, vis.x0);
+  const iy = Math.min(b.y1, vis.y1) - Math.max(b.y0, vis.y0);
   const inside = ix > 0 && iy > 0 ? ix * iy : 0;
   return 1 - inside / area;
 }
@@ -183,13 +185,14 @@ function rayBoxEntry(px: number, py: number, dx: number, dy: number, o: Box): nu
   return tmin > 0 ? tmin : 0;
 }
 
-// free run of space from (px,py) along a unit dir before hitting obstacle/edge
-function rayDist(px: number, py: number, dx: number, dy: number, obstacles: Box[]): number {
+// free run of space from (px,py) along a unit dir before hitting obstacle/edge.
+// edges are the VISIBLE band, not the full view-box, so columns flow within view.
+function rayDist(px: number, py: number, dx: number, dy: number, obstacles: Box[], vis: Box): number {
   let best = Infinity;
-  if (dx > 0) best = Math.min(best, (W - px) / dx);
-  else if (dx < 0) best = Math.min(best, -px / dx);
-  if (dy > 0) best = Math.min(best, (H - py) / dy);
-  else if (dy < 0) best = Math.min(best, -py / dy);
+  if (dx > 0) best = Math.min(best, (vis.x1 - px) / dx);
+  else if (dx < 0) best = Math.min(best, (vis.x0 - px) / dx);
+  if (dy > 0) best = Math.min(best, (vis.y1 - py) / dy);
+  else if (dy < 0) best = Math.min(best, (vis.y0 - py) / dy);
   for (const o of obstacles) {
     const t = rayBoxEntry(px, py, dx, dy, o);
     if (t !== null && t < best) best = t;
@@ -286,15 +289,16 @@ function evalSeed(
   rot: number,
   text: string,
   obstacles: Box[],
+  vis: Box,
   rand: () => number
 ): { col: Column; clear: boolean; aesthetic: number; badness: number } {
   const th = (rot * Math.PI) / 180;
   const bx = Math.cos(th);
   const by = Math.sin(th);
-  const fwd = rayDist(px, py, bx, by, obstacles);
-  const bwd = rayDist(px, py, -bx, -by, obstacles);
-  const up = rayDist(px, py, Math.sin(th), -Math.cos(th), obstacles);
-  const down = rayDist(px, py, -Math.sin(th), Math.cos(th), obstacles);
+  const fwd = rayDist(px, py, bx, by, obstacles, vis);
+  const bwd = rayDist(px, py, -bx, -by, obstacles, vis);
+  const up = rayDist(px, py, Math.sin(th), -Math.cos(th), obstacles, vis);
+  const down = rayDist(px, py, -Math.sin(th), Math.cos(th), obstacles, vis);
 
   const lo = Math.min(fwd, bwd);
   const hi = Math.max(fwd, bwd);
@@ -309,8 +313,8 @@ function evalSeed(
   }
 
   // stack rows / future lines toward whichever perpendicular side is more open
-  const runA = rayDist(px, py, -by, bx, obstacles);
-  const runB = rayDist(px, py, by, -bx, obstacles);
+  const runA = rayDist(px, py, -by, bx, obstacles, vis);
+  const runB = rayDist(px, py, by, -bx, obstacles, vis);
   const towardA = runA >= runB;
   const advX = towardA ? -by : by;
   const advY = towardA ? bx : -bx;
@@ -342,7 +346,7 @@ function evalSeed(
   const w = maxRowWidth(rows, size);
   const box = blockBox(px, py, size, rot, anchor, w, rows.length);
   const ov = overlapFrac(box, obstacles);
-  const off = offCanvasFrac(box);
+  const off = offCanvasFrac(box, vis);
   const fill = clamp(w / Math.max(1, lenBudget), 0, 1);
   const sizeNorm = (size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
   const flowRoom = clamp(advRun / (gap * (rows.length + 2)), 0, 1);
@@ -369,12 +373,16 @@ function evalSeed(
 // Begin a fresh column: sample many seeds across the page. Prefer the nicest spot
 // that's genuinely CLEAR of content; fall back to the least-bad only if the page
 // leaves nowhere clean.
-function startColumn(rand: () => number, text: string, obstacles: Box[]): Column {
+function startColumn(rand: () => number, text: string, obstacles: Box[], vis: Box): Column {
+  const vw = vis.x1 - vis.x0;
+  const vh = vis.y1 - vis.y0;
   const seeds = [];
   for (let i = 0; i < 28; i++) {
-    const px = (0.05 + rand() * 0.9) * W;
-    const py = (0.09 + rand() * 0.82) * H;
-    seeds.push(evalSeed(px, py, pickRot(rand), text, obstacles, rand));
+    // sample WITHIN the on-screen band (inset from its edges) so seeds — and the
+    // columns grown from them — sit where the visitor can see them on portrait.
+    const px = vis.x0 + (0.05 + rand() * 0.9) * vw;
+    const py = vis.y0 + (0.09 + rand() * 0.82) * vh;
+    seeds.push(evalSeed(px, py, pickRot(rand), text, obstacles, vis, rand));
   }
   const clear = seeds.filter((s) => s.clear);
   if (clear.length) {
@@ -419,7 +427,8 @@ function place(
   prevCol: Column | null,
   seedNum: number,
   text: string,
-  obstacles: Box[]
+  obstacles: Box[],
+  vis: Box
 ): { insc: Inscription; col: Column } {
   const rand = mkRand(seedNum);
   const gseed = (seedNum ^ 0x9e3779b9) >>> 0;
@@ -433,11 +442,11 @@ function place(
     // continue only while the block stays essentially clear of content; a tiny
     // sliver is tolerated for the conservative AABB, but more ends the column so
     // it relocates instead of creeping onto the page.
-    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box) < 0.06) {
+    if (overlapFrac(box, obstacles) < 0.05 && offCanvasFrac(box, vis) < 0.06) {
       return layoutAt({ ...prevCol, size }, size, gseed, text);
     }
   }
-  const col = startColumn(rand, text, obstacles);
+  const col = startColumn(rand, text, obstacles, vis);
   return layoutAt(col, col.size, gseed, text);
 }
 
@@ -512,6 +521,7 @@ export default function SongScapeLyrics({
   dark,
   reduced,
   doodleBoxes,
+  vis,
 }: {
   track: SpotifyTrack | null;
   trackId: string;
@@ -520,6 +530,7 @@ export default function SongScapeLyrics({
   dark: boolean;
   reduced: boolean;
   doodleBoxes: Box[];
+  vis: Box; // the on-screen slice of the view-box (lines stay inside it)
 }) {
   const idx = useActiveLine(track, lines);
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
@@ -546,13 +557,13 @@ export default function SongScapeLyrics({
 
     const list = inscriptionsRef.current;
     const obstacles = collectForeground().concat(doodleBoxes, list.map(inscBox));
-    const { insc: base, col } = place(colRef.current, fnv(`${trackId}:${idx}`), text, obstacles);
+    const { insc: base, col } = place(colRef.current, fnv(`${trackId}:${idx}`), text, obstacles, vis);
     colRef.current = col;
 
     const next = [...list, { ...base, key: counter.current++ }].slice(-MAX_VISIBLE);
     inscriptionsRef.current = next;
     setInscriptions(next);
-  }, [idx, lines, trackId, doodleBoxes]);
+  }, [idx, lines, trackId, doodleBoxes, vis]);
 
   if (!inscriptions.length) return null;
 
