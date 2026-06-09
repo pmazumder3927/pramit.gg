@@ -1,31 +1,37 @@
 // ============================================================================
 // banner-art-director.ts — the "night curator" for the nightly doodle collage.
 // ----------------------------------------------------------------------------
-// gpt-image-2 exposes no seed/temperature, so ALL night-to-night variety is
+// IMPORTANT ARCHITECTURE NOTE (2026-06): the image model NEVER redraws the
+// doodles. It paints ONLY a warm paper-and-wash GROUND; the real contributor
+// strokes are stamped on top, pixel-for-pixel, by homepage-banner.ts. That
+// guarantees every drawing keeps its exact lines, colour and quirks (no
+// normalising, no dropping). So everything below authors the night's GROUND —
+// its medium, palette, atmosphere and mood — and explicitly forbids the model
+// from drawing any subject.
+//
+// gpt-image-2 exposes no seed/temperature, so all night-to-night variety is
 // authored here in text (plus the softened reference layout). The pipeline:
 //
 //   analyzeNight(sketches)  ->  read deterministic signals from the doodles
-//   pickLens(analysis,...)  ->  lock a curated MEDIUM x COMPOSITION x MOOD x
-//                               ABSTRACTION cell (seeded, signal-biased,
-//                               with a hard anti-repeat on the last 3 nights)
-//   directNight(...)        ->  optional gpt-4o-mini curator writes the night's
-//                               specific fusion prose WITHIN the locked lens
-//   renderDeterministicProse-> graceful, on-brand fallback if the LLM is off
-//                               or fails
+//   pickLens(analysis,...)  ->  lock a curated MEDIUM x ATMOSPHERE x MOOD cell
+//                               (seeded, signal-biased, anti-repeat on 3 nights)
+//   directNight(...)        ->  optional LLM curator writes the night's specific
+//                               wash-ground prose WITHIN the locked lens
+//   renderDeterministicProse-> graceful on-brand fallback if the LLM is off
 //
 // Taste is hand-locked in the enums below; the LLM may only describe how
-// tonight's subjects fuse within a lens it cannot change.
+// tonight's GROUND is washed within a lens it cannot change.
 // ============================================================================
 
 import type OpenAI from "openai";
 
 import type { SketchRecord } from "@/app/lib/homepage-banner";
 
-// --- 1. CURATED, TASTE-LOCKED MEDIA DECK -----------------------------------
-// Every medium is hand-made / analog (no digital escape hatch). Palettes span a
-// wide but cohesive, muted, paper-friendly gamut — some near-monochrome, some
-// earthy, some two-colour, some cool-field — so colour genuinely varies night
-// to night while still blending into the site's warm, intimate world.
+// --- 1. CURATED, TASTE-LOCKED GROUND-MEDIUM DECK ---------------------------
+// Each medium is a hand-made / analog WASH GROUND (paper + wash character +
+// palette) — never an instruction to render subjects. Palettes span a wide but
+// cohesive, muted, paper-friendly gamut so colour genuinely varies night to
+// night while staying in the site's warm, intimate world.
 
 export type Family =
   | "ink"
@@ -38,9 +44,9 @@ export type Family =
 export type Medium = {
   id: string;
   family: Family;
-  surface: string;
+  surface: string; // describes the GROUND wash, never any subject
   palette: string;
-  logic: string;
+  logic: string; // how the wash behaves
   warm?: boolean;
   affinities?: string[];
 };
@@ -51,11 +57,11 @@ export const MEDIA: Medium[] = [
     family: "ink",
     warm: true,
     surface:
-      "sumi-e ink on warm bone-white paper — confident wet brush, dry-brush flicker at the stroke ends, vast intentional emptiness, a few decisive marks carrying the whole image",
+      "a sheet of warm bone-white paper washed with sumi ink — translucent grey pools with soft feathered backruns and dry-brush edges, and vast intentional emptiness",
     palette:
-      "warm sumi black on bone paper, near-monochrome, with a single restrained seal of muted vermilion; no other hue",
+      "warm sumi greys on bone paper, near-monochrome, with at most a single restrained breath of muted vermilion; no other hue",
     logic:
-      "everything reduces to gesture — a handful of brushstrokes and breathing negative space",
+      "a few decisive translucent washes and breathing negative space; the wash pools and dries, it never depicts anything",
     affinities: ["abstract-field", "horizon", "single-scene"],
   },
   {
@@ -63,11 +69,11 @@ export const MEDIA: Medium[] = [
     family: "ink",
     warm: true,
     surface:
-      "loose ink-and-watercolor — translucent washes pooling into one another, ink lines drifting and bleeding at wet edges, granulation in the settled pigment",
+      "loose ink-and-watercolour washes on cream paper — translucent fields pooling and bleeding into one another, granulation settling in the low areas, soft tide-lines where washes meet",
     palette:
       "soft umber and slate-blue washes over cream, lit by pale amber, with one bruise of dusty plum settling in the shadows",
     logic:
-      "forms emerge and dissolve in overlapping washes, edges softening where colors meet",
+      "overlapping transparent washes that soften and bleed where they meet",
     affinities: ["single-scene", "horizon", "abstract-field"],
   },
   {
@@ -75,11 +81,11 @@ export const MEDIA: Medium[] = [
     family: "print",
     warm: true,
     surface:
-      "a two-color risograph print — visible halftone dots, gentle ink misregistration, the matte tooth of newsprint, a third muddied tone where the inks overlap",
+      "a two-colour risograph ground — soft overlapping flats of two inks with a third muddied tone where they overlap, gentle ink mis-registration, the matte tooth of newsprint",
     palette:
       "exactly two inks: burnt-orange and a dusty grape-purple, overprinting to a bruised brown; unprinted warm paper as the third value",
     logic:
-      "everything flattens to two overlapping flat-ink layers; edges glow where layers slip out of register",
+      "two soft overlapping flat-ink fields; edges glow where the layers slip out of register",
     affinities: ["tessellation", "cut-paper", "constellation"],
   },
   {
@@ -87,11 +93,10 @@ export const MEDIA: Medium[] = [
     family: "paint",
     warm: true,
     surface:
-      "matte gouache on toned paper — flat opaque shapes, chalky velvet finish, visible brush ridges where strokes overlap, no gloss",
+      "matte gouache washes on toned paper — soft chalky fields of flat hand-mixed colour meeting and abutting, a velvet finish, faint brush ridges, no gloss",
     palette:
       "terracotta, dusty sage green, dusty plum, warm ivory and slate; flat, hand-mixed and unblended",
-    logic:
-      "confident flat opaque shapes that overlap and abut, no rendering, no gloss",
+    logic: "soft flat opaque fields that meet and abut, no rendering, no gloss",
     affinities: ["cut-paper", "single-scene", "tessellation"],
   },
   {
@@ -99,11 +104,10 @@ export const MEDIA: Medium[] = [
     family: "drawing",
     warm: true,
     surface:
-      "vine and compressed charcoal on a kraft-toned ground — smudged passages, eraser-lifted highlights, fingerprint softness, velvety darks",
+      "a kraft-toned ground rubbed with vine-charcoal dust — soft smudged tonal clouds, eraser-lifted light, fingerprint softness, velvety darks low in the page",
     palette:
       "graphite blacks and warm greys on kraft, near-monochrome, the only warmth a smoldering ember-orange low in the values",
-    logic:
-      "soft tonal masses smudged and lifted, forms surfacing from and sinking into the grey",
+    logic: "soft tonal masses smudged and lifted, light surfacing from the grey",
     affinities: ["single-scene", "horizon", "abstract-field"],
   },
   {
@@ -111,10 +115,10 @@ export const MEDIA: Medium[] = [
     family: "print",
     warm: true,
     surface:
-      "a mokuhanga woodblock print — wood grain printed through the flats, a hand-carved key-line, slight baren mottling, registered flat color fields",
+      "a mokuhanga woodblock ground — soft registered flats of flat colour with woodgrain printed through and gentle baren mottling",
     palette:
-      "persimmon orange, faded wisteria-purple, a quiet indigo ground and aged-paper cream; flat with carved white key-lines",
-    logic: "bold carved flats and a single key-line; no fine detail survives the knife",
+      "persimmon orange, faded wisteria-purple, a quiet indigo ground and aged-paper cream; flat, soft-edged fields",
+    logic: "a few soft registered flats; the grain and mottling carry the texture",
     affinities: ["horizon", "single-scene", "tessellation"],
   },
   {
@@ -122,10 +126,10 @@ export const MEDIA: Medium[] = [
     family: "cameraless",
     warm: false,
     surface:
-      "a cyanotype photogram — forms registered as soft white ghosts where they blocked the light, fibrous cold-press grain, faint chemical tide-lines at the edges",
+      "a cyanotype ground — an uneven Prussian-blue wash with fibrous cold-press grain and faint chemical tide-lines at the edges",
     palette:
-      "Prussian-blue field, paper-white negatives, one hand-bled wash of muted aubergine and a single ember of rust at the edge",
-    logic: "every form becomes a luminous white silhouette in one uneven blue exposure",
+      "Prussian-blue field, paper-white reserves, one hand-bled wash of muted aubergine and a single ember of rust at the edge",
+    logic: "one uneven blue exposure, lighter where the chemistry was thin",
     affinities: ["abstract-field", "constellation", "horizon"],
   },
   {
@@ -133,11 +137,10 @@ export const MEDIA: Medium[] = [
     family: "mixed",
     warm: true,
     surface:
-      "torn and cut paper collage — layered matte stock with visible deckled tears, faint drop-shadows from lifted edges, the honesty of scissors and glue",
+      "a torn-and-layered paper ground — soft fields of matte stock with deckled tears and faint drop-shadows from lifted edges",
     palette:
-      "sun-faded papers: pumpkin, dusty lavender, oatmeal, soft moss and one slate; flat, with paper-fiber edges",
-    logic:
-      "each form is a single bold flat shape; shapes overlap, tuck behind, and share edges",
+      "sun-faded papers: pumpkin, dusty lavender, oatmeal, soft moss and one slate; flat, with paper-fibre edges",
+    logic: "a few flat matte fields overlapping and tucking behind one another",
     affinities: ["cut-paper", "tessellation", "single-scene"],
   },
   {
@@ -145,11 +148,10 @@ export const MEDIA: Medium[] = [
     family: "drawing",
     warm: false,
     surface:
-      "silverpoint on a warm prepared ground — impossibly fine metal-stylus hatching tarnished to grey-brown, no erasing, jeweller's patience",
+      "a blush-warmed prepared ground, near-monochrome — the faintest tarnished silver-grey half-tones drifting across the page, jeweller's restraint",
     palette:
-      "tarnished silver-grey line on a blush-warmed ground, near-monochrome, with the faintest breath of lilac in the half-tones and one coin-sized note of ochre",
-    logic:
-      "delicate, barely-there hatching; everything is suggestion, nothing is loud",
+      "tarnished silver-grey on a blush-warmed ground, near-monochrome, with the faintest breath of lilac in the half-tones and one coin-sized note of ochre",
+    logic: "barely-there tonal drift; everything is suggestion, nothing is loud",
     affinities: ["constellation", "single-scene", "abstract-field"],
   },
   {
@@ -157,21 +159,19 @@ export const MEDIA: Medium[] = [
     family: "print",
     warm: true,
     surface:
-      "a linocut block print — bold carved shapes and gouged negative space, visible ink texture and the carver's marks, no gradients",
+      "a warm chalk-white printed ground with one or two soft carved-colour flats and visible ink texture, no gradients",
     palette:
-      "oxblood-red and ink-black on warm chalk-white, with one muted olive over-block; graphic and flat",
-    logic:
-      "everything becomes carved positive/negative shape; detail is sacrificed for unity",
+      "oxblood-red and a muted olive over warm chalk-white; graphic and flat",
+    logic: "one or two soft flat fields and the carver's ink texture; no fine detail",
     affinities: ["horizon", "tessellation", "cut-paper"],
   },
 ];
 
-// --- 2. COMPOSITIONS — each carries its own dissolve clause + density gate ---
+// --- 2. ATMOSPHERES — how the GROUND wash is organised + density gate -------
 export type Density = "sparse" | "balanced" | "teeming";
 export type Composition = {
   id: string;
-  armature: string;
-  incorporation: string;
+  armature: string; // organises the GROUND wash only
   forDensity: Density[];
 };
 
@@ -179,49 +179,37 @@ export const COMPOSITIONS: Composition[] = [
   {
     id: "constellation",
     armature:
-      "an all-over star-chart: a quiet field threaded with the faintest hairline connections, forms reading as constellations rather than objects",
-    incorporation:
-      "let each doodle collapse into a cluster of points and a few connecting lines — half-remembered as a shape in the stars, never outlined as itself",
+      "an open, quiet field — washes kept light and drifting toward the edges, generous dark/empty breathing space, a few faint scattered tonal flecks like distant stars",
     forDensity: ["sparse", "teeming"],
   },
   {
     id: "single-scene",
     armature:
-      "one cohesive scene with a clear horizon and a single source of light, one atmosphere binding everything",
-    incorporation:
-      "dissolve the doodles INTO the scene as native elements — a sketched umbrella becomes a real silhouette catching the light, a teapot becomes a roofline; they belong to the world, not pasted onto it",
+      "one soft binding atmosphere with a faint low horizon-wash and a single gentle source of light, everything held in one quiet air",
     forDensity: ["sparse", "balanced"],
   },
   {
     id: "abstract-field",
     armature:
-      "a non-representational all-over field — rhythm, texture and value across the whole surface with no single focal point, closer to music than illustration",
-    incorporation:
-      "abstract every doodle down to GESTURE and RHYTHM only — a cat's tail becomes a recurring curved cadence, a star a burst of radiating marks; the subjects survive as movement, not as pictures",
+      "an all-over non-representational wash field — rhythm, texture and value spread across the whole surface with no single focal point, closer to music than illustration",
     forDensity: ["balanced", "teeming"],
   },
   {
     id: "tessellation",
     armature:
-      "a repeating pattern / loose tessellation, an all-over decorative field like a printed endpaper or textile",
-    incorporation:
-      "treat the doodles as a motif alphabet — repeat, rotate and interlock simplified versions into a rhythmic pattern so no single one dominates; wallpaper, not portrait",
+      "an all-over gently repeating wash rhythm, like a faded printed endpaper or textile, even across the page",
     forDensity: ["balanced", "teeming"],
   },
   {
     id: "horizon",
     armature:
-      "a low horizon with most of the frame given to sky, forms reading as a silhouetted skyline against a graded ground",
-    incorporation:
-      "flatten the doodles into a single connected silhouette along the horizon — shoulder to shoulder into one continuous profile, a skyline you read left to right",
+      "a low horizon-wash with most of the page given to a soft graded sky above and a settled ground below",
     forDensity: ["sparse", "balanced"],
   },
   {
     id: "cut-paper",
     armature:
-      "flat layered shapes overlapping in a shallow stage-like space, figure and ground swapping playfully",
-    incorporation:
-      "reduce each doodle to its single boldest flat silhouette and let the shapes overlap, tuck behind and share edges — a child's-scissors essence, never detailed",
+      "a few shallow layered fields of flat colour overlapping in a stage-like space, figure-ground reading playfully",
     forDensity: ["sparse", "balanced", "teeming"],
   },
 ];
@@ -235,25 +223,14 @@ export const MOODS = [
   "wistful and slightly surreal, a half-remembered dream",
 ] as const;
 
-// Abstraction rungs — NONE drop a doodle; they only set legible vs. dissolved.
-export type Rung = "motival" | "semi" | "rhythmic" | "dissolved";
-export const RUNGS: Rung[] = ["motival", "semi", "rhythmic", "dissolved"];
-export const RUNG_DIRECTIVE: Record<Rung, string> = {
-  motival:
-    "Subjects stay recognizable but stylized, woven into one field as repeating motifs",
-  semi: "Subjects are simplified to essential shapes — some legible, some merely suggested, but all present",
-  rhythmic:
-    "Subjects survive mostly as repeated rhythm, contour and color; legibility is secondary to unity, yet every mark is felt",
-  dissolved:
-    "Subjects survive as silhouette, overlap and gesture, fully absorbed into the medium's logic — present even when not spelled out",
-};
-
 // --- 3. FIXED ON-BRAND CLAUSES (taste floor) -------------------------------
-export const STANDING_RULE =
-  "These sketches are raw material, not a checklist. Weave every contributor's mark into ONE coherent composition — no doodle is traced verbatim and none is a pasted cut-out; every mark must survive somewhere in the image, even if only as gesture, contour or rhythm. They should feel discovered within the picture, not arranged on top of it. Honor the spirit and quirk of the drawings — a lopsided cat stays charmingly lopsided — while letting the chosen medium fully transform them.";
+// The single most important rule: the model paints ONLY the ground. The real
+// doodles are stamped on afterward, so the model must not draw them.
+export const GROUND_RULE =
+  "Paint ONLY this paper-and-wash GROUND. The faint grey shapes in the reference mark where small hand-drawn ink doodles will be stamped on later — do NOT draw, ink, outline, fill, trace or illustrate them, and invent no subjects, figures, animals, objects or scenery of your own. Treat each faint shape only as a soft reserved opening to leave gently clear so a drawing can nestle there. Output paper and wash only — no line art whatsoever.";
 
 export const CRAFT_TAIL =
-  "Restraint above all: hand-made, intimate, a little melancholy and a little playful, on warm paper, with generous negative space. Let the palette belong to the chosen medium and shift from night to night — but keep every colour muted and hand-mixed, cohesive with a warm, paper-toned world, never saturated digital colour. The site's burnt-orange and dusty-purple are a home base the palette can echo or quietly drift from, not a fixed rule. No generic digital-illustration gloss, no cluttered maximalism, no fantasy cliché, not cute, not children's-book, no text or signatures. Apple-restrained craft — the work of one careful hand in one sitting.";
+  "Restraint above all: hand-made, intimate, a little melancholy and a little playful, on warm paper, with generous breathing negative space. Let the palette belong to the chosen medium and shift from night to night — but keep every colour muted and hand-mixed, cohesive with a warm, paper-toned world, never saturated digital colour. The site's burnt-orange and dusty-purple are a home base the palette can echo or quietly drift from, not a fixed rule. Real ink/watercolour behaviour — feathered edges, gentle pooling and backruns — never a flat digital gradient or a soft photographic blur. No digital-illustration gloss, no painted photoreal scenery, no text or signatures.";
 
 export const KITSCH = [
   "neon",
@@ -274,6 +251,8 @@ export const KITSCH = [
 ];
 
 // --- 4. SIGNAL READER (deterministic) --------------------------------------
+// Still useful: the doodles' colour temperature and theme quietly flavour the
+// GROUND wash so it feels of-a-piece with what was drawn.
 export type Category =
   | "creature"
   | "celestial"
@@ -393,7 +372,6 @@ export type Lens = {
   medium: Medium;
   composition: Composition;
   mood: string;
-  rung: Rung;
   seedKey: string;
 };
 
@@ -412,13 +390,13 @@ export function pickLens(
     (reRollSalt ? "|r" + reRollSalt : "");
   const sub = (salt: number) => mulberry32(fnv1a(seedKey + "#" + salt));
 
-  // Composition: density gates eligibility; signals are strong multipliers.
+  // Atmosphere: density gates eligibility; signals are gentle multipliers.
   const compPool = COMPOSITIONS.filter((c) => c.forDensity.includes(a.density));
   const composition = weightedPick(
     compPool.length ? compPool : COMPOSITIONS,
     (c) => {
       let w = 1;
-      if (a.catRatio >= 0.35 && (c.id === "abstract-field" || c.id === "tessellation")) w *= 3;
+      if (a.catRatio >= 0.35 && (c.id === "abstract-field" || c.id === "tessellation")) w *= 2.5;
       if (a.count <= 4 && (c.id === "single-scene" || c.id === "horizon")) w *= 2.5;
       if (a.count >= 11 && (c.id === "constellation" || c.id === "tessellation")) w *= 2.5;
       return w;
@@ -427,7 +405,7 @@ export function pickLens(
   );
 
   // Medium: forbid the last 3 nights' families outright, then bias by affinity
-  // to the chosen composition and by the ink-temperature signal.
+  // to the chosen atmosphere and by the ink-temperature signal.
   const eligible = MEDIA.filter((m) => !recentFamilies.includes(m.family));
   const mediumPool = eligible.length >= 3 ? eligible : MEDIA;
   const medium = weightedPick(
@@ -444,15 +422,7 @@ export function pickLens(
 
   const mood = MOODS[Math.floor(sub(3)() * MOODS.length)];
 
-  // Abstraction rung: cat-heavy / teeming nights push MORE dissolved; sparse
-  // nights are capped for legibility so each of the few contributors can still
-  // find their mark (banners are attributed per-contributor).
-  let ri = Math.floor(sub(4)() * RUNGS.length);
-  if (a.catRatio >= 0.35 || a.density === "teeming") ri = Math.max(ri, 2);
-  if (a.density === "sparse") ri = Math.min(ri, 1);
-  const rung = RUNGS[ri];
-
-  return { medium, composition, mood, rung, seedKey };
+  return { medium, composition, mood, seedKey };
 }
 
 // --- 7. DETERMINISTIC FALLBACK PROSE (never throws; on-brand voice) --------
@@ -462,27 +432,19 @@ export function renderDeterministicProse(
   a: NightAnalysis,
   lens: Lens,
 ): DirectorOut {
-  const rand = mulberry32(fnv1a(lens.seedKey + "#subj"));
-  const pool = [...a.subjects];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  const subjectLine = pool.length
-    ? `The contributors drew, among them: ${pool.join("; ")}.`
-    : "";
-  const catLine =
-    a.catRatio >= 0.35
-      ? " Let one recurring feline gesture — a curled spine, an ear-triangle, a comma of a tail — thread the whole composition rather than many separate cats."
-      : "";
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const tempLine =
+    a.inkBias === "warm"
+      ? " Let the warmth of the contributors' own inks whisper through the wash."
+      : a.inkBias === "cool"
+        ? " Let a cool quiet drawn from the contributors' inks settle through the wash."
+        : "";
   return {
     fusionConcept:
-      "The drawn subjects rhyme through shared curve and weight, fused by the medium's own process.",
+      "A quiet washed world that holds the night's drawings without ever drawing them.",
     prose:
-      `${cap(lens.medium.surface)}. Composed as ${lens.composition.armature}, ${lens.mood}. ` +
-      `Palette: ${lens.medium.palette}. ${subjectLine} ` +
-      `${RUNG_DIRECTIVE[lens.rung]}.${catLine}`,
+      `${cap(lens.medium.surface)}, ${lens.mood}. ` +
+      `Palette: ${lens.medium.palette}.${tempLine}`,
   };
 }
 
@@ -507,25 +469,24 @@ export function stripLensTag(prompt: string): string {
 
 // --- 9. THE CONSTRAINED DIRECTOR -------------------------------------------
 // One orchestrator call (default gpt-5.5; override with OPENAI_DIRECTOR_MODEL).
-// The lens is ALREADY LOCKED; the model may ONLY describe how tonight's subjects
-// fuse within it. Validated + KITSCH-blocked. On any failure returns null and
-// the caller falls back to deterministic prose. Mirrors the classifyDrawing
-// pattern in confessional-captcha-server.ts.
+// The lens is ALREADY LOCKED; the model may ONLY describe how tonight's GROUND
+// is washed within it — never any subject. Validated + KITSCH-blocked. On any
+// failure returns null and the caller falls back to deterministic prose.
 
 const SYSTEM_RUBRIC = [
-  "You are the night curator for an intimate, hand-made personal website. Once a night, a batch of finger-drawn doodles becomes ONE painting; you write the final art-direction prose for it.",
+  "You are the night curator for an intimate, hand-made personal website. Once a night, a batch of finger-drawn doodles is collaged onto a hand-washed paper background; you write the art-direction prose for the BACKGROUND only.",
+  "CRUCIAL: the doodles themselves are stamped on later, pixel-for-pixel — you are NOT describing or placing them. You describe ONLY the paper-and-wash ground they will rest on. Never name, draw, or arrange any subject, figure, animal, object or scene.",
   "Voice: a discerning, restrained gallery curator — lowercase-leaning, unfussy, NOT a hype machine, NOT an AI-art prompt generator. The owner hates generic AI aesthetics, clutter, and kitsch.",
-  "A curated LENS is ALREADY CHOSEN and LOCKED. You MAY NOT change the medium, palette, composition, mood, or abstraction level — only describe how THESE specific subjects fuse within them.",
-  "The painting must NOT be a grid of labeled icons and must NOT trace each sketch literally. Invent ONE concrete cross-subject abstraction that unifies the motifs (e.g. 'the umbrella's ribs, the balloon's envelope and the teapot's belly are the same curved gesture at three scales', or 'one feline contour threads between every other form'). EVERY contributor's subject must be present somewhere, even if only as a gesture — do not silently drop any.",
-  "The palette is already chosen and varies by medium; keep to it faithfully and add no loud, saturated colour.",
+  "A curated LENS is ALREADY CHOSEN and LOCKED. You MAY NOT change the medium, palette, atmosphere, or mood — only describe, vividly and specifically, how tonight's wash settles on the paper within them (pooling, backruns, granulation, mis-registration, tide-lines, where it breathes empty, where it gathers).",
+  "The palette is already chosen and varies by medium; keep to it faithfully and add no loud, saturated colour. Real ink/watercolour behaviour, never a flat digital gradient.",
   "Forbidden words anywhere in your output: " + KITSCH.join(", ") + ".",
-  'Reply with STRICT JSON only: {"fusionConcept":"<one sentence>","prose":"<a 90-140 word painterly paragraph that names the locked medium, palette, composition and mood, states the fusion, and folds in the named subjects>"}.',
+  'Reply with STRICT JSON only: {"fusionConcept":"<one short sentence on the ground\'s feeling>","prose":"<a 70-110 word painterly paragraph that names the locked medium, palette, atmosphere and mood and describes ONLY how the wash ground settles — no subjects, no line art>"}.',
 ].join("\n");
 
 function validProse(p: unknown): p is DirectorOut {
   if (!p || typeof p !== "object") return false;
   const o = p as Record<string, unknown>;
-  if (typeof o.prose !== "string" || o.prose.trim().length < 60) return false;
+  if (typeof o.prose !== "string" || o.prose.trim().length < 50) return false;
   const low = (o.prose as string).toLowerCase();
   if (
     KITSCH.some((k) =>
@@ -545,42 +506,33 @@ export async function directNight(
   recentFamilies: string[],
 ): Promise<DirectorOut | null> {
   const model = process.env.OPENAI_DIRECTOR_MODEL?.trim() || DEFAULT_DIRECTOR_MODEL;
-  const catLine =
-    a.catRatio >= 0.35
-      ? "Many subjects are cats — make a single recurring feline gesture the connective rhythm, not many separate cats."
-      : "";
   const inkLine = a.inkBias
-    ? `Contributors leaned ${a.inkBias} in their chosen inks — let that temperature whisper through the accents.`
+    ? `The contributors leaned ${a.inkBias} in their own inks — let that temperature quietly tint the wash.`
     : "";
   const themeLine = a.centerOfGravity
-    ? `Tonight's drawings cluster around a ${a.centerOfGravity} theme — let that be the quiet spine of the concept.`
+    ? `Tonight's drawings lean ${a.centerOfGravity} — let that gently flavour the ground's feeling, without depicting anything.`
     : "";
   const avoidLine = recentFamilies.length
     ? `Recent nights already used these medium families: ${recentFamilies.join(", ")}. This lens deliberately differs — lean into how different it feels.`
     : "";
   const userMsg = [
     "LOCKED LENS (do not change):",
-    `Medium: ${lens.medium.surface}`,
-    `Unifying process: ${lens.medium.logic}`,
+    `Ground medium: ${lens.medium.surface}`,
+    `Wash behaviour: ${lens.medium.logic}`,
     `Palette: ${lens.medium.palette}`,
-    `Composition: ${lens.composition.armature}`,
     `Mood: ${lens.mood}`,
-    `Abstraction: ${RUNG_DIRECTIVE[lens.rung]}.`,
     "",
-    `SUBJECTS DRAWN TONIGHT: ${a.subjects.join("; ")}.`,
+    "The scene's spatial structure (horizon, sky, ground, water, weather) is decided separately and appended after your text — so describe ONLY the wash's texture, colour and feeling within this medium and mood, never any layout, composition, or subject.",
     themeLine,
-    catLine,
     inkLine,
     avoidLine,
-    "Write the fusionConcept and the final prose.",
+    "Write the fusionConcept and the final prose for the WASH itself — no subjects, no layout.",
   ]
     .filter(Boolean)
     .join("\n");
 
   // GPT-5 / o-series are reasoning models: they reject a custom temperature and
-  // take a reasoning_effort knob instead (a touch of reasoning helps it honor the
-  // locked-lens constraints; "low" keeps it ~5s). gpt-4o / gpt-4.1 are the
-  // reverse — temperature, no effort. Build the tuning params per family.
+  // take a reasoning_effort knob instead. gpt-4o / gpt-4.1 are the reverse.
   const isReasoning = /^(gpt-5|o\d)/.test(model);
   const tuning: Record<string, unknown> = isReasoning
     ? { reasoning_effort: process.env.OPENAI_DIRECTOR_EFFORT?.trim() || "low" }
@@ -615,17 +567,19 @@ export async function directNight(
 }
 
 // --- 10. ASSEMBLY ----------------------------------------------------------
-// Build the full tagged prompt for a locked lens + director output. The caller
+// Build the full tagged GROUND prompt for a locked lens + director output +
+// the scene's spatial structure (sentences from composeScene). The caller
 // strips the [lens:*] tag with stripLensTag before sending to the image model,
 // and stores the tagged string so tomorrow's anti-repeat can read it.
 export function assemblePrompt(
   out: DirectorOut,
   lens: Lens,
+  sceneBits: string[] = [],
 ): string {
   return [
     out.prose.trim(),
-    STANDING_RULE,
-    lens.composition.incorporation + ".",
+    ...sceneBits,
+    GROUND_RULE,
     CRAFT_TAIL,
     lensTag(lens.medium.family),
   ]

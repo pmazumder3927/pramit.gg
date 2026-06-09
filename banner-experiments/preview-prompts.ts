@@ -84,7 +84,7 @@ async function main() {
 
     const tagged = assemblePrompt(out, lens);
     console.log(
-      `\n=== night ${day + 1} :: ${lens.medium.id} × ${lens.composition.id} × ${lens.rung} ` +
+      `\n=== night ${day + 1} :: ${lens.medium.id} × ${lens.composition.id} ` +
         `(family: ${lens.medium.family}${families.length ? `, avoiding: ${families.join(", ")}` : ""}) ===`,
     );
     console.log(tagged);

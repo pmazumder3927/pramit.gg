@@ -85,7 +85,7 @@ async function main() {
     const date = new Date(Date.UTC(2026, 5, day + 1));
     const families = parseRecentFamilies(recentPrompts);
     const lens = pickLens(analysis, date, 0, families);
-    const tag = `night${day + 1}_${lens.medium.id}x${lens.composition.id}_${lens.rung}`;
+    const tag = `night${day + 1}_${lens.medium.id}x${lens.composition.id}`;
     console.log(`\n[${tag}] directing (avoiding: ${families.join(", ") || "none"})...`);
 
     let out: DirectorOut | null = await directNight(analysis, lens, client, families);
