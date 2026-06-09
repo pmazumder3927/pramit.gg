@@ -352,6 +352,13 @@ function inkColor(
     r = lerp(r, 255, 0.05);
     g = lerp(g, 255, 0.05);
     b = lerp(b, 255, 0.05);
+  } else {
+    // deepen the pigment so the multiply blend leaves real body on the cream
+    // paper — bright/pastel covers otherwise multiply to almost nothing.
+    // proportional scale keeps the hue and just lowers the value.
+    r *= 0.84;
+    g *= 0.84;
+    b *= 0.84;
   }
   return [clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)];
 }
