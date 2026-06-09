@@ -36,7 +36,11 @@ export function useLyrics(track: SpotifyTrack | null): LyricsPayload {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 1000 * 60 * 60,
-    keepPreviousData: false,
+    // When playback stops the now-playing route serves the recently-played track
+    // with no `duration`, so this SWR key changes (duration → 0) and refetches.
+    // The server caches lyrics by trackId, so the result is identical — keep the
+    // previous payload across the refetch so the song's lyrics don't blank out.
+    keepPreviousData: true,
   });
 
   return data ?? EMPTY;

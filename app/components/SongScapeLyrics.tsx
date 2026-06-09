@@ -493,7 +493,11 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
     };
 
     if (!playing) {
-      setIdx(findIdx(baseMs));
+      // Nothing currently playing (paused / stopped — the route then serves the
+      // recently-played track with no progress). FREEZE on whatever was last
+      // shown so the lyrics that went with the song stay on screen; only seek
+      // from a real position on a cold start (we've shown nothing yet).
+      setIdx((cur) => (cur >= 0 ? cur : progress > 0 ? findIdx(baseMs) : cur));
       return;
     }
     const lead = latency + LYRIC_LEAD_MS;
