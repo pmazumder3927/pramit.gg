@@ -8,7 +8,8 @@
 // doodles and then slowly DRIES away.
 //   · ground : sits BELOW SongScapeInk, pressed into the paper (multiply by day,
 //              screen at night), so the doodles ink ON TOP of the drying paint.
-//   · once   : one-shot per switch. Skipped on first load and under reduced-motion.
+//   · once   : one-shot per switch, and once on first load when the song
+//              resolves. Skipped only under reduced-motion.
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
@@ -53,14 +54,11 @@ export default function CoverReveal() {
   const songKey = track ? track.trackId || `${track.title}${track.artist}${track.album}` : "—";
   const albumUrl = track?.albumImageUrl || null;
 
-  // fire one repaint per genuine track change (skip first paint + no-cover)
+  // fire one repaint per genuine track change — including the very first song
+  // on page load, so the inkscape always plays once the now-playing resolves.
   useEffect(() => {
     if (reduced) return;
     if (!songKey || songKey === "—") return;
-    if (startedFor.current === null) {
-      startedFor.current = songKey; // adopt the first song silently — no intro flash
-      return;
-    }
     if (songKey === startedFor.current) return;
     startedFor.current = songKey;
     if (!albumUrl) {
