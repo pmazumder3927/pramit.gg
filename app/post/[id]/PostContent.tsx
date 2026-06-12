@@ -15,6 +15,7 @@ import Link from "next/link";
 import { formatDistanceToNow, format } from "date-fns";
 import { useViewCount, ViewCount } from "./ViewCountTracker";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
+import OwnerEditLink from "@/app/components/OwnerEditLink";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
@@ -40,6 +41,8 @@ interface PostContentProps {
   post: Post;
   prev?: PostNav | null; // a newer entry
   next?: PostNav | null; // an older entry
+  /** the writing room's proof: no view tracking, no owner edit link */
+  preview?: boolean;
 }
 
 // --- hast helpers (for code blocks) -----------------------------------------
@@ -64,10 +67,15 @@ const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ============================================================================
-export default function PostContent({ post, prev, next }: PostContentProps) {
+export default function PostContent({
+  post,
+  prev,
+  next,
+  preview = false,
+}: PostContentProps) {
   const tone: Tone = (POST_TYPE_META[post.type] ?? POST_TYPE_META.note).tone;
   const isAudio = !!post.media_url && /soundcloud\.com/.test(post.media_url);
-  const views = useViewCount(post.id, post.view_count || 0);
+  const views = useViewCount(post.id, post.view_count || 0, !preview);
   const { readingTime } = analyzeContent(post.content || "");
 
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -300,6 +308,11 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
                 <span className="xl:hidden">
                   <ViewCount count={views} />
                 </span>
+                {!preview && (
+                  <span className="xl:hidden">
+                    <OwnerEditLink postId={post.id} />
+                  </span>
+                )}
               </div>
 
               <span className="font-hand text-2xl -rotate-1 text-accent-purple">
@@ -640,6 +653,7 @@ export default function PostContent({ post, prev, next }: PostContentProps) {
             readingTime={readingTime}
             views={views}
             title={post.title}
+            editSlot={!preview ? <OwnerEditLink postId={post.id} /> : null}
           />
         </aside>
       </div>
@@ -866,11 +880,13 @@ function MarginMeta({
   readingTime,
   views,
   title,
+  editSlot,
 }: {
   tone: Tone;
   readingTime: number;
   views: number;
   title: string;
+  editSlot?: React.ReactNode;
 }) {
   const toTop = () =>
     window.scrollTo({
@@ -909,6 +925,7 @@ function MarginMeta({
       >
         ↑ back to the top
       </button>
+      {editSlot ? <div className="flex justify-end">{editSlot}</div> : null}
     </div>
   );
 }

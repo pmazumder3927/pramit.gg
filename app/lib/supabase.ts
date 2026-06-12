@@ -30,6 +30,9 @@ export type Post = {
   description?: string | null; // Custom preview text for cards and social embeds (Open Graph, Twitter)
   meta_image?: string | null; // Custom image URL for social embeds
   is_pinned?: boolean; // Pin post to top of front page
+  // Working copy for published posts (writing room autosave) — only present
+  // once the 20260611_writing_room migration has been applied.
+  draft?: Record<string, unknown> | null;
 };
 
 export type User = {

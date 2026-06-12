@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/utils/supabase/middleware";
 
 // Routes that need Supabase auth session management
-const AUTH_ROUTES = ["/dashboard", "/api/auth", "/api/dashboard", "/api/upload", "/music/manage"];
+const AUTH_ROUTES = ["/dashboard", "/write", "/api/auth", "/api/dashboard", "/api/upload", "/music/manage"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -398,10 +398,18 @@
   }
   @keyframes rotate-gradient { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-  /* ---------- markdown editor (admin) — adapt to theme ---------- */
-  .w-md-editor { background-color: rgb(var(--surface)) !important; color: rgb(var(--fg)) !important; }
-  .w-md-editor-toolbar { background-color: rgb(var(--surface-2)) !important; border-bottom: 1px solid rgb(var(--line)) !important; }
-  .w-md-editor-content, .w-md-editor-preview, .w-md-editor-text-container, .w-md-editor-text { background-color: transparent !important; color: rgb(var(--fg)) !important; }
+  /* ---------- writing room ---------- */
+  /* the gentle refusal: the sheet shakes its head (±2px) when asked to publish
+     without a title — a "no" in body language, not a red error box. */
+  @keyframes gentle-refuse {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
+  }
+  .gentle-refuse { animation: gentle-refuse 0.16s ease-in-out 2; }
+  @media (prefers-reduced-motion: reduce) {
+    .gentle-refuse { animation: none; }
+  }
 
   /* ---------- footnotes ---------- */
   .footnotes { margin-top: 4rem; padding-top: 2.5rem; border-top: 1px solid rgb(var(--line)); }

@@ -64,6 +64,8 @@ function NavLink({
 export default function SketchbookNav() {
   const pathname = usePathname();
   const isHome = pathname === "/";
+  // the writing room owns its screen — no site chrome
+  const inWritingRoom = pathname.startsWith("/write");
 
   // On the homepage the giant hero headline IS the name — so the nav wordmark
   // stays hidden until you scroll past the hero, then it slides in. Everywhere
@@ -81,6 +83,8 @@ export default function SketchbookNav() {
   }, [isHome]);
 
   const showWordmark = !isHome || scrolled;
+
+  if (inWritingRoom) return null;
 
   return (
     <header data-avoid-lyrics className="sticky top-0 z-50 border-b border-line/80 bg-paper/85 backdrop-blur-md">

@@ -226,6 +226,9 @@ export default function SketchbookTabBar() {
   const pathname = usePathname();
   const reduce = useReducedMotion();
 
+  // the writing room has its own bottom bar — the site's steps aside
+  if (pathname.startsWith("/write")) return null;
+
   return (
     <nav aria-label="Primary" data-avoid-lyrics className="fixed inset-x-0 bottom-0 z-50 md:hidden">
       <div
