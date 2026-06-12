@@ -1,4 +1,4 @@
-import { Post } from "@/app/lib/supabase";
+import { Post, stripWorkingCopy } from "@/app/lib/supabase";
 import SketchbookHome from "@/app/components/SketchbookHome";
 import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
 import { createPublicClient } from "@/utils/supabase/server";
@@ -20,7 +20,8 @@ async function fetchPosts(): Promise<Post[]> {
       throw error;
     }
 
-    return data || [];
+    // never let the writing room's working copies reach the public payload
+    return (data || []).map(stripWorkingCopy);
   } catch (error) {
     console.error("Error fetching posts server-side:", error);
     return [];

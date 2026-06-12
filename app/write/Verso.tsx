@@ -10,7 +10,7 @@ import {
   generateSlug,
 } from "@/app/lib/supabase";
 import { POST_TYPE_META } from "@/app/lib/postTypes";
-import { Stamp, HandNote, TornEdge } from "@/app/components/sketchbook";
+import { Stamp, HandNote } from "@/app/components/sketchbook";
 import { useUpload } from "@/app/lib/use-upload";
 import SealButton from "./SealButton";
 import { Caps, Working } from "./lib/types";
@@ -105,8 +105,6 @@ export default function Verso({
             onClick={(e) => e.stopPropagation()}
             className="relative max-h-[88vh] w-full overflow-y-auto rounded-t-lg border border-line bg-card px-5 py-6 shadow-paper-lg sm:max-w-2xl sm:rounded-md sm:px-8 sm:py-8"
           >
-            <TornEdge position="top" color="rgb(var(--surface))" />
-
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Stamp tone="ink" rotate={-3}>

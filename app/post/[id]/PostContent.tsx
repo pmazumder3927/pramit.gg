@@ -653,6 +653,7 @@ export default function PostContent({
             readingTime={readingTime}
             views={views}
             title={post.title}
+            showShare={!preview}
             editSlot={!preview ? <OwnerEditLink postId={post.id} /> : null}
           />
         </aside>
@@ -676,9 +677,12 @@ export default function PostContent({
             — pramit <span className="text-accent-purple">✦</span> mazumder
           </p>
 
-          <div className="mt-6">
-            <ShareControls title={post.title} />
-          </div>
+          {/* a proof's location is the writing room — nothing to share yet */}
+          {!preview && (
+            <div className="mt-6">
+              <ShareControls title={post.title} />
+            </div>
+          )}
         </div>
 
         {(prev || next) && (
@@ -880,12 +884,14 @@ function MarginMeta({
   readingTime,
   views,
   title,
+  showShare = true,
   editSlot,
 }: {
   tone: Tone;
   readingTime: number;
   views: number;
   title: string;
+  showShare?: boolean;
   editSlot?: React.ReactNode;
 }) {
   const toTop = () =>
@@ -909,7 +915,7 @@ function MarginMeta({
           strokeWidth={2.5}
         />
       </div>
-      <ShareControls title={title} variant="margin" />
+      {showShare && <ShareControls title={title} variant="margin" />}
       <div className="flex justify-end">
         <Doodle
           name="squiggle"

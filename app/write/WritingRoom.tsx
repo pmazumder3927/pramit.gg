@@ -42,6 +42,8 @@ import {
   insertFootnote,
   insertLink,
   insertText,
+  isInsideCode,
+  isPlatformMod,
   isSoundtrackUrl,
   isUrl,
   parseOutline,
@@ -110,7 +112,7 @@ export default function WritingRoom({
   const [tagInput, setTagInput] = useState("");
   const [tagFocus, setTagFocus] = useState(false);
   const [caretIndex, setCaretIndex] = useState(0);
-  const [titleShake, setTitleShake] = useState(0);
+  const [titleShaking, setTitleShaking] = useState(false);
   const [kbInset, setKbInset] = useState(0);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -126,6 +128,7 @@ export default function WritingRoom({
   const saveTimer = useRef<number | null>(null);
   const inFlight = useRef(false);
   const flushAgain = useRef(false);
+  const flushPromise = useRef<Promise<void> | null>(null);
   const hydrated = useRef(false);
   const noticeCounter = useRef(0);
   const uploadCounter = useRef(0);
@@ -160,7 +163,6 @@ export default function WritingRoom({
   }, []);
 
   const isPublished = !!post && !post.is_draft;
-  const publishedLocalOnly = isPublished && !caps.draft;
   const differs = useMemo(
     () => (isPublished && post ? !workingEqual(working, printedFrom(post)) : false),
     [isPublished, post, working]
@@ -185,10 +187,10 @@ export default function WritingRoom({
 
   // ---------------------------------------------------------------- saving
   const flush = useCallback(
-    async (keepalive = false) => {
+    async (keepalive = false): Promise<void> => {
       if (inFlight.current) {
         flushAgain.current = true;
-        return;
+        return flushPromise.current ?? undefined;
       }
       const current = postRef.current;
       const snapshot = workingRef.current;
@@ -198,23 +200,40 @@ export default function WritingRoom({
         setStatus("blank");
         return;
       }
+      // refuse no-op saves: a stale timer firing right after publish would
+      // otherwise write a ghost working-copy identical to the fresh print
+      if (current) {
+        const baseline = current.is_draft
+          ? workingFrom(current)
+          : printedFrom(current);
+        if (workingEqual(snapshot, baseline)) {
+          setStatus(!current.is_draft && current.draft ? "kept" : "dry");
+          return;
+        }
+      }
       inFlight.current = true;
+      const run = (async () => {
       try {
+        const patchBody = current
+          ? JSON.stringify({
+              fields: snapshot,
+              baseUpdatedAt: current.updated_at,
+            })
+          : JSON.stringify({ fields: snapshot });
         const res = current
           ? await fetch(`/api/dashboard/posts/${current.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              keepalive,
-              body: JSON.stringify({
-                fields: snapshot,
-                baseUpdatedAt: current.updated_at,
-              }),
+              // keepalive caps the body at ~64KiB — a long entry would reject
+              // outright, so only ask for it when the payload fits
+              keepalive: keepalive && patchBody.length < 60_000,
+              body: patchBody,
             })
           : await fetch(`/api/dashboard/posts`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              keepalive,
-              body: JSON.stringify({ fields: snapshot }),
+              keepalive: keepalive && patchBody.length < 60_000,
+              body: patchBody,
             });
 
         if (res.status === 401) {
@@ -261,8 +280,10 @@ export default function WritingRoom({
         }
         const saved: Post = data.post;
         if (!current) {
+          // mirror the FRESHEST state under the new id (keystrokes may have
+          // landed while the create was in flight), then retire the 'new' key
+          writeLocal(saved.id, workingRef.current);
           clearLocal(null);
-          writeLocal(saved.id, snapshot);
           window.history.replaceState(null, "", `/write/${saved.id}`);
         }
         adoptPost(saved);
@@ -278,6 +299,9 @@ export default function WritingRoom({
           void flush();
         }
       }
+      })();
+      flushPromise.current = run;
+      return run;
     },
     [flashNote, adoptPost]
   );
@@ -301,6 +325,10 @@ export default function WritingRoom({
   // flush when the room loses the owner's attention
   useEffect(() => {
     const maybeFlush = () => {
+      // never CREATE on the way out — a keepalive create the client can't
+      // hear back from orphans a row; the words are safe in localStorage
+      // and the next visit offers them back
+      if (!postRef.current) return;
       if (statusRef.current === "drying" || statusRef.current === "offline") {
         void flush(true);
       }
@@ -391,7 +419,9 @@ export default function WritingRoom({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
+      // ⌘ on mac, ctrl elsewhere — treating ctrl as ⌘ on mac would hijack
+      // native ctrl+e (end-of-line) mid-typing
+      const mod = isPlatformMod(e);
       const key = e.key.toLowerCase();
       if (mod && key === "e") {
         e.preventDefault();
@@ -443,14 +473,40 @@ export default function WritingRoom({
     };
   }, []);
 
-  // autogrow both writing surfaces
-  useLayoutEffect(() => {
+  // autogrow both writing surfaces. Collapsing to height:auto for the measure
+  // momentarily shrinks the document, and the browser clamps the window scroll
+  // — restore it before paint or every keystroke deep in a long entry yanks
+  // the viewport.
+  const measureGrowth = useCallback(() => {
+    const y = window.scrollY;
     for (const ta of [titleRef.current, bodyRef.current]) {
       if (!ta) continue;
       ta.style.height = "auto";
       ta.style.height = `${ta.scrollHeight}px`;
     }
-  }, [working.title, working.content, mode]);
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  }, []);
+
+  useLayoutEffect(() => {
+    measureGrowth();
+  }, [working.title, working.content, mode, measureGrowth]);
+
+  // wrapped line counts change with the viewport — re-measure on resize
+  useEffect(() => {
+    let raf = 0;
+    const onResize = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        measureGrowth();
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [measureGrowth]);
 
   // a fresh page invites the pen (desktop only — no surprise keyboards)
   useEffect(() => {
@@ -509,7 +565,7 @@ export default function WritingRoom({
   const onBodyKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
-      const mod = e.metaKey || e.ctrlKey;
+      const mod = isPlatformMod(e);
       if (mod && !e.shiftKey && !e.altKey) {
         const k = e.key.toLowerCase();
         if (k === "b") {
@@ -549,7 +605,7 @@ export default function WritingRoom({
       }
       if (e.key === "^" && !mod) {
         const { selectionStart: s, selectionEnd: end, value } = ta;
-        if (s === end && value[s - 1] === "[") {
+        if (s === end && value[s - 1] === "[" && !isInsideCode(value, s)) {
           e.preventDefault();
           ta.setSelectionRange(s - 1, s);
           insertText(ta, "");
@@ -623,6 +679,10 @@ export default function WritingRoom({
 
   // ------------------------------------------------------------- outline
   const outline = useMemo(() => parseOutline(working.content), [working.content]);
+  const outlineMinDepth = useMemo(
+    () => (outline.length ? Math.min(...outline.map((h) => h.depth)) : 1),
+    [outline]
+  );
   const activeOutline = useMemo(() => {
     let active = -1;
     outline.forEach((h, i) => {
@@ -664,6 +724,29 @@ export default function WritingRoom({
       action: "publish" | "set-page" | "unpublish" | "recut-slug",
       extra: Record<string, unknown> = {}
     ): Promise<Post | null> => {
+      // a half-inked upload would publish as a dangling placeholder
+      if (
+        (action === "publish" || action === "set-page") &&
+        /\[inking it in… \d+\]/.test(workingRef.current.content)
+      ) {
+        flashNote("still inking something in — let the upload finish first");
+        return null;
+      }
+      // the server trims the title at publish; trim here too so the working
+      // copy can't immediately read as "differs from print"
+      const trimmed = workingRef.current.title.trim();
+      if (trimmed !== workingRef.current.title) {
+        workingRef.current = { ...workingRef.current, title: trimmed };
+        setWorking(workingRef.current);
+      }
+      // the ceremony must not race the autosave engine: cancel the pending
+      // timer, then wait out any in-flight flush before pressing
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      flushAgain.current = false;
+      await flushPromise.current?.catch(() => {});
       if (!postRef.current) {
         await flush();
         if (!postRef.current) {
@@ -686,18 +769,35 @@ export default function WritingRoom({
           }
         );
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "the press jammed — try again");
+        if (!res.ok) {
+          throw new Error(
+            res.status === 401
+              ? "the shelf doesn't recognize you — sign in again"
+              : data.error || "the press jammed — try again"
+          );
+        }
         if (data.caps) {
           capsRef.current = data.caps;
           setCaps(data.caps);
         }
         adoptPost(data.post);
         setStatus("dry");
+        // the reconcile render above may have re-armed the autosave timer
+        // mid-await — the page is set, nothing is owed
+        if (saveTimer.current) {
+          window.clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+        }
         return data.post as Post;
       } catch (err) {
         flashNote(
           err instanceof Error ? err.message : "the press jammed — try again"
         );
+        // the timer was cancelled above — re-arm it so unpressed changes
+        // still reach the shelf
+        if (statusRef.current === "drying") {
+          saveTimer.current = window.setTimeout(() => void flush(), 1500);
+        }
         return null;
       } finally {
         setPublishing(false);
@@ -763,7 +863,7 @@ export default function WritingRoom({
 
   const refusePublish = useCallback(() => {
     setVersoOpen(false);
-    setTitleShake((n) => n + 1);
+    setTitleShaking(true);
     flashNote("give it a title first ✎");
     window.setTimeout(() => titleRef.current?.focus(), 350);
   }, [flashNote]);
@@ -1086,13 +1186,15 @@ export default function WritingRoom({
                   {outline.map((h, i) => (
                     <li
                       key={`${h.index}-${h.text}`}
-                      style={{ paddingLeft: `${(h.depth - 1) * 0.85}rem` }}
+                      style={{
+                        paddingLeft: `${Math.min(h.depth - outlineMinDepth, 2) * 0.85}rem`,
+                      }}
                     >
                       <button
                         type="button"
                         onClick={() => jumpToOutline(h.caret)}
                         className={`group/oi relative inline-block text-left font-hand leading-snug transition-colors ${
-                          h.depth === 1 ? "text-base" : "text-sm"
+                          h.depth === outlineMinDepth ? "text-base" : "text-sm"
                         } ${
                           i === activeOutline
                             ? "text-ink"
@@ -1185,8 +1287,9 @@ export default function WritingRoom({
                 )}
               </AnimatePresence>
 
-              {/* header — the page's own anatomy is the metadata */}
-              <header className="mb-8 md:mb-10">
+              {/* header — the page's own anatomy is the metadata; geometry
+                  mirrors the published sheet so write↔proof doesn't jump */}
+              <header className="mb-11 md:mb-12">
                 <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2.5">
                   {/* type stamp: tap to choose */}
                   <div className="relative inline-block">
@@ -1258,7 +1361,12 @@ export default function WritingRoom({
                 <span className="font-hand text-2xl -rotate-1 text-accent-purple">
                   from the journal —
                 </span>
-                <div key={titleShake} className={titleShake ? "gentle-refuse" : ""}>
+                {/* class-toggled (never keyed!) so the textarea is not
+                    remounted — a remount would wipe the title's undo stack */}
+                <div
+                  className={titleShaking ? "gentle-refuse" : ""}
+                  onAnimationEnd={() => setTitleShaking(false)}
+                >
                   <textarea
                     ref={titleRef}
                     rows={1}
@@ -1275,7 +1383,7 @@ export default function WritingRoom({
                     }}
                     placeholder="title this entry…"
                     aria-label="title"
-                    className="mt-1 w-full resize-none overflow-hidden bg-transparent font-serif text-3xl font-medium leading-[1.08] tracking-tight text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 sm:text-4xl md:text-5xl"
+                    className="mt-1 w-full resize-none overflow-hidden bg-transparent font-serif text-3xl font-medium leading-[1.08] tracking-tight text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 sm:text-4xl md:text-5xl lg:text-6xl"
                     style={{ caretColor: "rgb(var(--accent-rust))" }}
                   />
                 </div>
@@ -1579,8 +1687,13 @@ export default function WritingRoom({
           />
           {(
             [
-              ["marks", () => setMarksOpen((o) => !o)],
-              ["attach", () => fileInputRef.current?.click()],
+              // marks/attach write into the sheet — hidden while it's a proof
+              ...(mode === "write"
+                ? ([
+                    ["marks", () => setMarksOpen((o) => !o)],
+                    ["attach", () => fileInputRef.current?.click()],
+                  ] as [string, () => void][])
+                : []),
               [
                 mode === "proof" ? "pen" : "proof",
                 () => (mode === "proof" ? exitProof(null) : toggleProof()),
@@ -1616,7 +1729,7 @@ export default function WritingRoom({
         post={post}
         caps={caps}
         isPublished={isPublished}
-        differs={differs || status === "local" || publishedLocalOnly}
+        differs={differs || status === "local"}
         busy={publishing}
         onPublish={() => void publishEntry()}
         onSetPage={() => void setPage()}

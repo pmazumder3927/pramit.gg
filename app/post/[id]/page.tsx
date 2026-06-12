@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { Post } from "@/app/lib/supabase";
+import { Post, stripWorkingCopy } from "@/app/lib/supabase";
 import PostContent, { type PostNav } from "./PostContent";
 import { createPublicClient } from "@/utils/supabase/server";
 import { createMetadata, siteConfig } from "@/app/lib/metadata";
@@ -28,7 +28,8 @@ const fetchPost = cache(async (identifier: string): Promise<Post | null> => {
       .single();
 
     if (error) return null;
-    return data;
+    // never let the writing room's working copy reach the public payload
+    return stripWorkingCopy(data);
   } catch (error) {
     console.error("Error fetching post:", error);
     return null;

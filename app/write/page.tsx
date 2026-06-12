@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import { detectCaps, tagVocabularyFrom } from "@/app/lib/writing-server";
 import WritingRoom from "./WritingRoom";
 
@@ -7,6 +9,14 @@ import WritingRoom from "./WritingRoom";
 export const dynamic = "force-dynamic";
 
 export default async function WritePage() {
+  // the layout gates too, but this page touches the service-role client —
+  // it must verify the session itself, not trust its wrapper
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/api/auth/login");
+
   const admin = createAdminClient();
   const [caps, { data: tagRows }] = await Promise.all([
     detectCaps(admin),

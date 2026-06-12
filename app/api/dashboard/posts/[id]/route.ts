@@ -90,15 +90,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     );
   }
 
-  const { data: updated, error: updateError } = await admin
-    .from("posts")
-    .update(update)
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (updateError || !updated) {
+  // compare-and-swap: the UPDATE itself is conditional on updated_at, so two
+  // devices racing inside one round-trip can't silently clobber each other —
+  // the loser gets zero rows back and the 409 conflict payload.
+  let query = admin.from("posts").update(update).eq("id", id);
+  if (body.baseUpdatedAt) {
+    query = query.eq("updated_at", body.baseUpdatedAt);
+  }
+  const { data: updatedRows, error: updateError } = await query.select("*");
+  if (updateError) {
     console.error("Error saving post:", updateError);
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  }
+  const updated = updatedRows?.[0];
+  if (!updated) {
+    const { data: latest } = await admin
+      .from("posts")
+      .select("*")
+      .eq("id", id)
+      .single();
+    return NextResponse.json(
+      { error: "conflict", post: latest ?? post, caps },
+      { status: 409 }
+    );
   }
 
   // a quiet revision trail while writing (throttled to one per 10 minutes)

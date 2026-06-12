@@ -41,6 +41,18 @@ export type User = {
   created_at: string;
 };
 
+/**
+ * Strip the writing room's private working copy before a post row crosses a
+ * public boundary (it would otherwise serialize into the RSC payload that
+ * anonymous visitors receive).
+ */
+export function stripWorkingCopy<T extends { draft?: unknown }>(post: T): T {
+  if (post && "draft" in post) {
+    return { ...post, draft: null };
+  }
+  return post;
+}
+
 // Utility function to generate slug from title
 export function generateSlug(title: string): string {
   return title

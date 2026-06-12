@@ -6,20 +6,49 @@
 // history — never do it for routine edits. (execCommand is deprecated-but-
 // universal for this exact purpose; the fallback loses undo but never words.)
 
+/** True when the platform's primary modifier (⌘ on mac, ctrl elsewhere) is down. */
+export function isPlatformMod(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  const mac =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  return mac ? e.metaKey : e.ctrlKey;
+}
+
+// React tracks the textarea's value via an instance property descriptor; a
+// plain `ta.value = …` updates that tracker too, so the dispatched input event
+// gets deduped and onChange never fires (the controlled component then reverts
+// the edit on the next render). Writing through the PROTOTYPE setter bypasses
+// the tracker, making the synthetic input event React-visible.
+function setValueReactVisible(ta: HTMLTextAreaElement, next: string) {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value"
+  )?.set;
+  if (setter) setter.call(ta, next);
+  else ta.value = next;
+}
+
 export function insertText(ta: HTMLTextAreaElement, text: string) {
   ta.focus();
   let ok = false;
-  try {
-    ok =
-      text === ""
-        ? document.execCommand("delete", false)
-        : document.execCommand("insertText", false, text);
-  } catch {
-    ok = false;
+  // execCommand can't act on a hidden (display:none) textarea — focus() no-ops
+  // there, so go straight to the fallback in that case (proof-mode uploads).
+  if (document.activeElement === ta) {
+    try {
+      ok =
+        text === ""
+          ? document.execCommand("delete", false)
+          : document.execCommand("insertText", false, text);
+    } catch {
+      ok = false;
+    }
   }
   if (!ok) {
     const { selectionStart, selectionEnd, value } = ta;
-    ta.value = value.slice(0, selectionStart) + text + value.slice(selectionEnd);
+    setValueReactVisible(
+      ta,
+      value.slice(0, selectionStart) + text + value.slice(selectionEnd)
+    );
     const pos = selectionStart + text.length;
     ta.setSelectionRange(pos, pos);
     ta.dispatchEvent(new Event("input", { bubbles: true }));
@@ -35,15 +64,24 @@ export function replaceToken(
   const idx = ta.value.indexOf(token);
   if (idx === -1) return false;
   const { selectionStart, selectionEnd } = ta;
+  const prevActive = document.activeElement;
+  const hadFocus = prevActive === ta;
   ta.setSelectionRange(idx, idx + token.length);
   insertText(ta, replacement);
-  // put the caret back near where the writer was (or inside an empty alt)
-  const altSpot = replacement.startsWith("![](") ? idx + 2 : -1;
+  // put the caret back near where the writer was (or inside an empty alt,
+  // so the next keystrokes become the handwritten caption — but only when
+  // the pen was already on the sheet; never steal focus from elsewhere)
+  const altSpot = hadFocus && replacement.startsWith("![](") ? idx + 2 : -1;
   if (altSpot >= 0) {
     ta.setSelectionRange(altSpot, altSpot);
   } else if (selectionStart > idx + token.length) {
     const delta = replacement.length - token.length;
     ta.setSelectionRange(selectionStart + delta, selectionEnd + delta);
+  } else if (selectionStart <= idx) {
+    ta.setSelectionRange(selectionStart, selectionEnd);
+  }
+  if (!hadFocus && prevActive instanceof HTMLElement) {
+    prevActive.focus();
   }
   return true;
 }
@@ -99,16 +137,16 @@ export function handleEnter(ta: HTMLTextAreaElement): boolean {
   if (selectionStart !== selectionEnd) return false;
   const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
   const line = value.slice(lineStart, selectionStart);
+  const lineEndIdx = value.indexOf("\n", selectionStart);
+  const afterCaret = value.slice(
+    selectionStart,
+    lineEndIdx === -1 ? value.length : lineEndIdx
+  );
+  const insideFence = fenceIsOpenAbove(value, lineStart);
 
   // opening a code fence: drop a closing fence in and park the pen between
-  if (/^```[^`]*$/.test(line.trim()) && !fenceIsOpenAbove(value, lineStart)) {
-    const restOfLine = value.slice(
-      selectionStart,
-      value.indexOf("\n", selectionStart) === -1
-        ? value.length
-        : value.indexOf("\n", selectionStart)
-    );
-    if (!restOfLine.trim()) {
+  if (/^```[^`]*$/.test(line.trim()) && !insideFence) {
+    if (!afterCaret.trim()) {
       insertText(ta, "\n\n```");
       const mid = selectionStart + 1;
       ta.setSelectionRange(mid, mid);
@@ -116,10 +154,16 @@ export function handleEnter(ta: HTMLTextAreaElement): boolean {
     }
   }
 
+  // inside a code block, "- " is code, not a list — leave Enter alone
+  if (insideFence) return false;
+
   const m = line.match(LIST_RE);
   if (!m) return false;
   const [, indent, marker, num, numDelim, rest] = m;
   if (!rest.trim()) {
+    // marker with text still after the caret = a line being split, not an
+    // empty item — let the plain newline happen
+    if (afterCaret.trim()) return false;
     // empty item — end the list by un-writing the marker
     ta.setSelectionRange(lineStart, selectionStart);
     insertText(ta, "");
@@ -140,6 +184,19 @@ function fenceIsOpenAbove(value: string, lineStart: number): boolean {
     if (/^```/.test(l.trim())) open = !open;
   }
   return open;
+}
+
+/**
+ * True when `pos` sits inside code — a fenced block, or an odd number of
+ * backticks earlier on the same line (inline code). Used to keep the smart
+ * hands (footnote trigger, list continuation) off of code.
+ */
+export function isInsideCode(value: string, pos: number): boolean {
+  const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+  if (fenceIsOpenAbove(value, lineStart)) return true;
+  const before = value.slice(lineStart, pos);
+  const ticks = (before.match(/`/g) || []).length;
+  return ticks % 2 === 1;
 }
 
 /** Tab / shift-tab indents list items (single line only — keep it honest). */

@@ -222,9 +222,9 @@ function DashboardContent() {
                             {post.title}
                           </h3>
                           {post.is_pinned && (
-                            <span className="rounded-full border border-accent-orange/30 bg-accent-orange/15 px-2 py-0.5 text-xs text-accent-orange">
-                              📌 pinned
-                            </span>
+                            <Stamp tone="orange" rotate={-2}>
+                              pinned
+                            </Stamp>
                           )}
                           {!!post.draft && (
                             <span

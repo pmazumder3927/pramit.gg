@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import { detectCaps, tagVocabularyFrom } from "@/app/lib/writing-server";
 import { Post } from "@/app/lib/supabase";
 import WritingRoom from "../WritingRoom";
@@ -12,6 +13,14 @@ export default async function WriteEditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // the layout gates too, but this page touches the service-role client —
+  // it must verify the session itself, not trust its wrapper
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/api/auth/login");
+
   const { id } = await params;
   const admin = createAdminClient();
 

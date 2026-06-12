@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { POST_TYPES } from "@/app/lib/postTypes";
 
 // Server-side helpers for the writing room API routes.
 //
@@ -26,16 +27,68 @@ export const EDITABLE_FIELDS = [
 ] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
+const DISPLAY_SIZES = new Set([
+  "massive",
+  "hero",
+  "large",
+  "medium",
+  "small",
+  "tiny",
+  "micro",
+]);
+
+const strOrNull = (v: unknown) => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : null;
+};
+
+/**
+ * Pick + sanitize the editable fields so they always satisfy the posts table
+ * constraints: display_size and type have CHECK constraints ('' would 500),
+ * tags must be a text[] of strings, empty optionals become NULL.
+ */
 export function pickEditable(input: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const key of EDITABLE_FIELDS) {
     if (key in input) out[key] = input[key];
   }
+  if ("title" in out) out.title = typeof out.title === "string" ? out.title : "";
+  if ("content" in out) {
+    out.content = typeof out.content === "string" ? out.content : "";
+  }
+  if ("type" in out) {
+    out.type = (POST_TYPES as readonly string[]).includes(String(out.type))
+      ? out.type
+      : "note";
+  }
+  if ("tags" in out) {
+    out.tags = Array.isArray(out.tags)
+      ? out.tags.map((t) => String(t)).filter(Boolean)
+      : [];
+  }
+  if ("display_size" in out) {
+    out.display_size = DISPLAY_SIZES.has(String(out.display_size))
+      ? out.display_size
+      : null;
+  }
+  if ("description" in out) out.description = strOrNull(out.description);
+  if ("meta_image" in out) out.meta_image = strOrNull(out.meta_image);
+  if ("media_url" in out) out.media_url = strOrNull(out.media_url) ?? "";
+  if ("is_pinned" in out) out.is_pinned = Boolean(out.is_pinned);
   return out;
 }
 
 let capsCache: { value: WritingCaps; at: number } | null = null;
 const CAPS_TTL_MS = 5 * 60 * 1000; // re-probe so a later migration is picked up
+
+/** Distinguish "the schema really lacks this" from a transient query failure. */
+function schemaMissing(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  if (["42703", "42P01", "PGRST204", "PGRST205"].includes(error.code || "")) {
+    return true;
+  }
+  return /does not exist|could not find/i.test(error.message || "");
+}
 
 export async function detectCaps(admin: SupabaseClient): Promise<WritingCaps> {
   if (capsCache && Date.now() - capsCache.at < CAPS_TTL_MS) {
@@ -46,7 +99,14 @@ export async function detectCaps(admin: SupabaseClient): Promise<WritingCaps> {
     admin.from("post_revisions").select("id").limit(1),
   ]);
   const value = { draft: !draftProbe.error, revisions: !revProbe.error };
-  capsCache = { value, at: Date.now() };
+  // only cache definitive answers — a network/db flap must not get remembered
+  // as "the migration isn't applied" for five minutes
+  const transient =
+    (draftProbe.error && !schemaMissing(draftProbe.error)) ||
+    (revProbe.error && !schemaMissing(revProbe.error));
+  if (!transient) {
+    capsCache = { value, at: Date.now() };
+  }
   return value;
 }
 
@@ -108,6 +168,27 @@ export function buildSnapshot(post: SnapshotSource) {
 
 const AUTOSNAP_MIN_GAP_MS = 10 * 60 * 1000;
 
+const REVISIONS_KEPT = 60;
+
+/** Keep the trail bounded — only the newest REVISIONS_KEPT snapshots per post. */
+async function pruneRevisions(admin: SupabaseClient, postId: string) {
+  const { data } = await admin
+    .from("post_revisions")
+    .select("id")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .range(REVISIONS_KEPT, REVISIONS_KEPT + 200);
+  if (data?.length) {
+    await admin
+      .from("post_revisions")
+      .delete()
+      .in(
+        "id",
+        data.map((r: { id: string }) => r.id)
+      );
+  }
+}
+
 /** Snapshot at most once per 10 minutes of active writing. */
 export async function maybeAutosnap(
   admin: SupabaseClient,
@@ -130,6 +211,7 @@ export async function maybeAutosnap(
     kind: "autosnap",
     snapshot: buildSnapshot(post),
   });
+  await pruneRevisions(admin, post.id).catch(() => {});
 }
 
 /** All tags ever used, most-used first — the "ones you've used —" row. */
@@ -159,4 +241,5 @@ export async function snapshotPublish(
     kind: "publish",
     snapshot: buildSnapshot(post),
   });
+  await pruneRevisions(admin, post.id).catch(() => {});
 }
