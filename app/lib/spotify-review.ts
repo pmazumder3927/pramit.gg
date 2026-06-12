@@ -315,6 +315,33 @@ async function syncLibrary(forceSync = false) {
     ]);
     const playlists = await fetchOwnedPlaylists(currentUser.id);
 
+    // Spotify intermittently returns empty collections with a 200. Reconciling
+    // against an empty snapshot would deactivate every bucket/membership (or
+    // unlike every track), so abort instead when the DB says they should exist.
+    if (playlists.length === 0) {
+      const { count } = await supabase
+        .from("spotify_review_buckets")
+        .select("bucket_id", { count: "exact", head: true })
+        .eq("is_active", true);
+      if ((count ?? 0) > 0) {
+        throw new Error(
+          "Spotify returned zero owned playlists; aborting sync instead of deactivating existing buckets"
+        );
+      }
+    }
+
+    if (savedTracks.length === 0) {
+      const { count } = await supabase
+        .from("spotify_review_tracks")
+        .select("track_id", { count: "exact", head: true })
+        .eq("is_liked", true);
+      if ((count ?? 0) > 0) {
+        throw new Error(
+          "Spotify returned zero saved tracks; aborting sync instead of unliking existing tracks"
+        );
+      }
+    }
+
     const { data: existingTracks } = await supabase
       .from("spotify_review_tracks")
       .select("track_id, last_played_at, removed_from_liked_at");
