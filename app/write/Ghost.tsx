@@ -1,0 +1,493 @@
+"use client";
+
+// the ghost — the writing room's quiet companion.
+//
+// Two faces:
+//   useGhostCompletion + GhostOverlay — when the pen rests at the end of the
+//   text, a graphite continuation appears after the caret (tab takes it,
+//   esc waves it off, typing dispels it).
+//   GhostPalette — ⌘J summons a paper slip: draft / continue / rework the
+//   selection / math (words → katex, previewed) / titles. The ghost only ever
+//   OFFERS — nothing lands on the page without the owner's hand.
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AnimatePresence, motion } from "motion/react";
+import katex from "katex";
+import "katex/dist/katex.min.css";
+import { HandNote, Stamp, Tape } from "@/app/components/sketchbook";
+import { insertText } from "./lib/editor-core";
+import type { Working } from "./lib/types";
+
+// ---------------------------------------------------------------------------
+// inline completion
+// ---------------------------------------------------------------------------
+
+type GhostState = {
+  suggestion: string | null;
+  thinking: boolean;
+  /** accept the suggestion if one is showing — returns true if it did */
+  acceptIfAny: () => boolean;
+  dismissIfAny: () => boolean;
+};
+
+export function useGhostCompletion({
+  enabled,
+  bodyRef,
+  workingRef,
+  content,
+  caretIndex,
+  composingRef,
+}: {
+  enabled: boolean;
+  bodyRef: React.RefObject<HTMLTextAreaElement | null>;
+  workingRef: React.MutableRefObject<Working>;
+  content: string;
+  caretIndex: number;
+  composingRef: React.MutableRefObject<boolean>;
+}): GhostState {
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const suggestionRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const reqId = useRef(0);
+
+  useEffect(() => {
+    suggestionRef.current = suggestion;
+  }, [suggestion]);
+
+  useEffect(() => {
+    setSuggestion(null);
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setThinking(false);
+    if (!enabled || composingRef.current) return;
+    // the ghost only writes at the end of the text, where there's room
+    const trimmedEnd = content.replace(/\s+$/, "").length;
+    if (caretIndex < trimmedEnd) return;
+    if (content.trim().length < 80) return;
+
+    const timer = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const id = ++reqId.current;
+      setThinking(true);
+      try {
+        const w = workingRef.current;
+        const res = await fetch("/api/write/assist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            kind: "complete",
+            title: w.title,
+            type: w.type,
+            tags: w.tags,
+            before: content,
+          }),
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (controller.signal.aborted) return;
+        let text: string = (data?.text || "").replace(/\s+$/, "");
+        if (!text) return;
+        // seam: make sure exactly the right whitespace joins page and ghost
+        const last = content[content.length - 1];
+        const startsPunct = /^[,.;:!?)\]…—–]/.test(text.trimStart());
+        if (/\s/.test(last || "")) {
+          text = text.replace(/^\s+/, "");
+        } else if (startsPunct) {
+          text = text.trimStart();
+        } else if (!/^\s/.test(text)) {
+          text = ` ${text}`;
+        } else {
+          text = text.replace(/^\s+/, " ");
+        }
+        setSuggestion(text);
+      } catch {
+        /* aborted or offline — the ghost just stays quiet */
+      } finally {
+        // only the newest request gets to touch the lamp — an aborted
+        // straggler resolving late must not flicker or strand it
+        if (reqId.current === id) setThinking(false);
+      }
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timer);
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, caretIndex, enabled]);
+
+  const acceptIfAny = useCallback(() => {
+    const text = suggestionRef.current;
+    const ta = bodyRef.current;
+    if (!text || !ta) return false;
+    ta.focus();
+    const end = ta.value.length;
+    ta.setSelectionRange(end, end);
+    insertText(ta, text);
+    setSuggestion(null);
+    return true;
+  }, [bodyRef]);
+
+  const dismissIfAny = useCallback(() => {
+    if (!suggestionRef.current) return false;
+    setSuggestion(null);
+    return true;
+  }, []);
+
+  return { suggestion, thinking, acceptIfAny, dismissIfAny };
+}
+
+/**
+ * The graphite layer: an exact metric mirror of the body textarea with an
+ * invisible copy of the text and the suggestion rendered after it — so the
+ * ghost's words sit precisely where the pen would put them. Color/opacity
+ * only; the typed text itself stays the textarea's own.
+ */
+export function GhostOverlay({
+  content,
+  suggestion,
+}: {
+  content: string;
+  suggestion: string | null;
+}) {
+  if (!suggestion) return null;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute left-0 top-0 w-full whitespace-pre-wrap break-words font-serif text-base leading-[1.75] tracking-[0.01em] md:text-lg md:leading-[1.8]"
+    >
+      <span className="invisible">{content}</span>
+      <span className="text-ink-faint/90">{suggestion}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// the palette
+// ---------------------------------------------------------------------------
+
+type PaletteMode = "draft" | "continue" | "rework" | "math" | "titles";
+
+const MODE_HINTS: Record<PaletteMode, string> = {
+  draft: "what should it say?",
+  continue: "any direction? (optional)",
+  rework: "how should it change? — tighter, warmer, simpler…",
+  math: "describe the math — 'softmax with temperature', '∂L/∂w for mse'…",
+  titles: "any angle? (optional)",
+};
+
+function stripMathDelims(text: string): { latex: string; display: boolean } {
+  const t = text.trim();
+  const display = /^\$\$/.test(t) || /\\begin\{/.test(t);
+  const latex = t
+    .replace(/^\$\$?/, "")
+    .replace(/\$\$?$/, "")
+    .trim();
+  return { latex, display };
+}
+
+export function GhostPalette({
+  open,
+  onClose,
+  selectionText,
+  working,
+  onInsert,
+  onSetTitle,
+}: {
+  open: boolean;
+  onClose: () => void;
+  selectionText: string;
+  working: Working;
+  onInsert: (text: string, replaceSelection: boolean) => void;
+  onSetTitle: (title: string) => void;
+}) {
+  const hasSelection = selectionText.trim().length > 0;
+  const [mode, setMode] = useState<PaletteMode>("draft");
+  const [instruction, setInstruction] = useState("");
+  const [output, setOutput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // a fresh summons: sensible default mode, pen in the input
+  useEffect(() => {
+    if (!open) return;
+    setMode(hasSelection ? "rework" : "draft");
+    setOutput("");
+    setError(null);
+    setInstruction("");
+    window.setTimeout(() => inputRef.current?.focus(), 60);
+    return () => abortRef.current?.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const summon = useCallback(async () => {
+    if (streaming) return;
+    if (mode === "rework" && !hasSelection) {
+      setError("select the passage to rework first ✎");
+      return;
+    }
+    if ((mode === "draft" || mode === "math") && !instruction.trim() && !hasSelection) {
+      setError(
+        mode === "math" ? "tell the ghost what math you need ✎" : "tell the ghost what to draft ✎"
+      );
+      return;
+    }
+    setError(null);
+    setOutput("");
+    setStreaming(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const res = await fetch("/api/write/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          kind: "ask",
+          mode,
+          instruction,
+          selection: selectionText,
+          title: working.title,
+          type: working.type,
+          tags: working.tags,
+          before: working.content,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "the ghost lost its train of thought — try again");
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setOutput(acc);
+      }
+      setOutput(acc.trim());
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setError(
+          err instanceof Error ? err.message : "the ghost lost its train of thought — try again"
+        );
+      }
+    } finally {
+      setStreaming(false);
+    }
+  }, [mode, instruction, selectionText, hasSelection, working, streaming]);
+
+  const mathPreview = useMemo(() => {
+    if (mode !== "math" || !output.trim()) return null;
+    try {
+      const { latex, display } = stripMathDelims(output);
+      return katex.renderToString(latex, {
+        displayMode: display,
+        throwOnError: false,
+      });
+    } catch {
+      return null;
+    }
+  }, [mode, output]);
+
+  const titleOptions = useMemo(() => {
+    if (mode !== "titles" || !output.trim()) return [];
+    return output
+      .split("\n")
+      .map((l) => l.replace(/^[-*\d.)\s]+/, "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }, [mode, output]);
+
+  const take = useCallback(() => {
+    if (!output.trim()) return;
+    let text = output.trim();
+    if (mode === "math") {
+      const { latex, display } = stripMathDelims(text);
+      text = display ? `\n\n$$\n${latex}\n$$\n\n` : `$${latex}$`;
+    }
+    onInsert(text, mode === "rework");
+    onClose();
+  }, [output, mode, onInsert, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
+          className="fixed inset-x-0 bottom-16 z-[55] flex justify-center px-3 md:bottom-8"
+        >
+          <div className="sketch-card relative w-[min(42rem,100%)] p-4 sm:p-5">
+            <Tape tone="purple" rotate={-4} className="-top-3 left-8" width={64} />
+
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Stamp tone="purple" rotate={-3}>
+                  the ghost
+                </Stamp>
+                {hasSelection && (
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.15em] text-ink-faint">
+                    {selectionText.trim().split(/\s+/).length} words selected
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="font-hand text-lg text-ink-faint transition-colors hover:text-accent-rust"
+              >
+                rest ✦
+              </button>
+            </div>
+
+            {/* mode chips */}
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["draft", true],
+                  ["continue", true],
+                  ["rework", hasSelection],
+                  ["math", true],
+                  ["titles", true],
+                ] as [PaletteMode, boolean][]
+              ).map(([m, available]) => (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={!available}
+                  onClick={() => setMode(m)}
+                  className={`rounded-full border px-3 py-1 font-mono text-[0.65rem] lowercase tracking-[0.08em] transition-colors ${
+                    mode === m
+                      ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+                      : available
+                        ? "border-line text-ink-soft hover:border-accent-purple/40"
+                        : "border-line/50 text-ink-faint/50"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void summon();
+                  }
+                }}
+                placeholder={MODE_HINTS[mode]}
+                className="w-full rounded-md border border-line bg-paper-2/60 px-3 py-2 font-serif text-sm text-ink placeholder:italic placeholder:text-ink-faint focus:border-accent-purple focus:outline-none focus-visible:ring-0"
+              />
+              <button
+                type="button"
+                onClick={() => void summon()}
+                disabled={streaming}
+                className="shrink-0 rounded-md border-[1.5px] border-accent-purple px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-accent-purple transition-colors hover:bg-accent-purple/10 disabled:opacity-40"
+              >
+                {streaming ? "writing…" : "ask ✦"}
+              </button>
+            </div>
+
+            {error && (
+              <p className="mt-2 font-hand text-lg text-accent-rust">{error}</p>
+            )}
+
+            {/* the offering */}
+            {(output || streaming) && (
+              <div className="mt-3 rounded-md border border-dashed border-accent-purple/40 bg-accent-purple/[0.04] p-3">
+                <p className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
+                  the ghost offers —
+                </p>
+
+                {mode === "titles" && titleOptions.length > 0 && !streaming ? (
+                  <div className="flex flex-col items-start gap-1">
+                    {titleOptions.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          onSetTitle(t);
+                          onClose();
+                        }}
+                        className="text-left font-serif text-base font-medium text-ink transition-colors hover:text-accent-purple"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="max-h-56 overflow-y-auto whitespace-pre-wrap font-serif text-sm leading-relaxed text-ink-soft">
+                      {output}
+                      {streaming && <span className="animate-pulse">✎</span>}
+                    </div>
+                    {mathPreview && (
+                      <div
+                        className="mt-2 overflow-x-auto border-t border-dashed border-line pt-2 text-ink"
+                        dangerouslySetInnerHTML={{ __html: mathPreview }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {!streaming && output && mode !== "titles" && (
+                  <div className="mt-3 flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={take}
+                      className="font-hand text-lg text-accent-purple transition-colors hover:text-accent-orange"
+                    >
+                      {mode === "rework" ? "swap it in ✎" : "take it ✎"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void summon()}
+                      className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-purple"
+                    >
+                      another?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOutput("")}
+                      className="font-hand text-lg text-ink-faint transition-colors hover:text-accent-rust"
+                    >
+                      leave it
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-2.5 text-right">
+              <HandNote tone="purple" rotate={-1} className="text-sm opacity-70">
+                the ghost drafts; you decide. nothing lands without your hand.
+              </HandNote>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

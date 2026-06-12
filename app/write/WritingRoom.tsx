@@ -64,6 +64,7 @@ import {
   writeLocal,
 } from "./lib/types";
 import Verso from "./Verso";
+import { GhostOverlay, GhostPalette, useGhostCompletion } from "./Ghost";
 
 type NoticeAction = { label: string; onClick?: () => void; href?: string };
 type Notice = { id: number; text: string; actions?: NoticeAction[] };
@@ -114,6 +115,9 @@ export default function WritingRoom({
   const [caretIndex, setCaretIndex] = useState(0);
   const [titleShaking, setTitleShaking] = useState(false);
   const [kbInset, setKbInset] = useState(0);
+  const [ghostOn, setGhostOn] = useState(true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteSelection, setPaletteSelection] = useState("");
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -137,6 +141,8 @@ export default function WritingRoom({
   const preRestore = useRef<Working | null>(null);
   const caretRaf = useRef(0);
   const railH = useRef(0);
+  const composingRef = useRef(false);
+  const paletteSel = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
 
   useEffect(() => {
     workingRef.current = working;
@@ -161,6 +167,71 @@ export default function WritingRoom({
     setPost(p);
     setSavedAt(new Date(p.updated_at));
   }, []);
+
+  // ----------------------------------------------------------- the ghost
+  useEffect(() => {
+    try {
+      setGhostOn(localStorage.getItem("writing-room:ghost") !== "0");
+    } catch {
+      /* default stands */
+    }
+  }, []);
+  const toggleGhost = useCallback(() => {
+    setGhostOn((on) => {
+      try {
+        localStorage.setItem("writing-room:ghost", on ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+      return !on;
+    });
+  }, []);
+
+  const ghost = useGhostCompletion({
+    enabled: ghostOn && mode === "write" && !versoOpen && !paletteOpen,
+    bodyRef,
+    workingRef,
+    content: working.content,
+    caretIndex,
+    composingRef,
+  });
+
+  const openPalette = useCallback(() => {
+    const ta = bodyRef.current;
+    if (ta) {
+      paletteSel.current = { start: ta.selectionStart, end: ta.selectionEnd };
+      setPaletteSelection(ta.value.slice(ta.selectionStart, ta.selectionEnd));
+    } else {
+      setPaletteSelection("");
+    }
+    setPaletteOpen(true);
+  }, []);
+
+  const insertFromPalette = useCallback(
+    (text: string, replaceSelection: boolean) => {
+      const ta = bodyRef.current;
+      if (!ta) return;
+      ta.focus();
+      const { start, end } = paletteSel.current;
+      if (replaceSelection && end > start) {
+        ta.setSelectionRange(start, end);
+        insertText(ta, text);
+      } else {
+        const at = Math.min(end, ta.value.length);
+        ta.setSelectionRange(at, at);
+        let final = text;
+        // paragraphs land on their own lines, like a hand would place them
+        if (/\n/.test(text) || text.length > 120) {
+          if (at > 0 && ta.value[at - 1] !== "\n") final = `\n\n${final.replace(/^\n+/, "")}`;
+          if (at < ta.value.length && ta.value[at] !== "\n") final = `${final.replace(/\n+$/, "")}\n\n`;
+        }
+        insertText(ta, final);
+      }
+      setCaretIndex(ta.selectionStart);
+      keepCaretComfortable(ta);
+    },
+    []
+  );
 
   const isPublished = !!post && !post.is_draft;
   const differs = useMemo(
@@ -419,6 +490,7 @@ export default function WritingRoom({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return; // the sheet already answered this key
       // ⌘ on mac, ctrl elsewhere — treating ctrl as ⌘ on mac would hijack
       // native ctrl+e (end-of-line) mid-typing
       const mod = isPlatformMod(e);
@@ -427,6 +499,10 @@ export default function WritingRoom({
         e.preventDefault();
         if (mode === "proof") exitProof(null);
         else toggleProof();
+      } else if (mod && key === "j") {
+        e.preventDefault();
+        if (paletteOpen) setPaletteOpen(false);
+        else openPalette();
       } else if (mod && key === "s") {
         e.preventDefault();
         if (statusRef.current === "drying" || statusRef.current === "offline") {
@@ -440,7 +516,8 @@ export default function WritingRoom({
         e.preventDefault();
         setVersoOpen(true);
       } else if (e.key === "Escape") {
-        if (versoOpen) setVersoOpen(false);
+        if (paletteOpen) setPaletteOpen(false);
+        else if (versoOpen) setVersoOpen(false);
         else if (revisionsOpen) setRevisionsOpen(false);
         else if (typePickerOpen) setTypePickerOpen(false);
         else if (mode === "proof") exitProof(null);
@@ -453,6 +530,8 @@ export default function WritingRoom({
     versoOpen,
     revisionsOpen,
     typePickerOpen,
+    paletteOpen,
+    openPalette,
     exitProof,
     toggleProof,
     flush,
@@ -600,8 +679,19 @@ export default function WritingRoom({
         return;
       }
       if (e.key === "Tab" && !mod) {
+        // the ghost's line has first claim on tab
+        if (!e.shiftKey && ghost.acceptIfAny()) {
+          e.preventDefault();
+          return;
+        }
         if (handleTab(ta, e.shiftKey)) e.preventDefault();
         return;
+      }
+      if (e.key === "Escape") {
+        if (ghost.dismissIfAny()) {
+          e.preventDefault(); // consumed — the global Esc chain stands down
+          return;
+        }
       }
       if (e.key === "^" && !mod) {
         const { selectionStart: s, selectionEnd: end, value } = ta;
@@ -613,7 +703,7 @@ export default function WritingRoom({
         }
       }
     },
-    []
+    [ghost.acceptIfAny, ghost.dismissIfAny]
   );
 
   const onBodyPaste = useCallback(
@@ -1462,28 +1552,41 @@ export default function WritingRoom({
                 )}
               </header>
 
-              {/* the body — write in the reading face */}
-              <textarea
-                ref={bodyRef}
-                value={working.content}
-                onChange={(e) => {
-                  setField("content", e.target.value);
-                  setCaretIndex(e.target.selectionStart);
-                  scheduleCaretComfort();
-                }}
-                onSelect={(e) =>
-                  setCaretIndex(
-                    (e.target as HTMLTextAreaElement).selectionStart
-                  )
-                }
-                onKeyDown={onBodyKeyDown}
-                onPaste={onBodyPaste}
-                placeholder="start anywhere. you can fix it later ✎"
-                aria-label="entry body (markdown)"
-                spellCheck
-                className="block min-h-[50vh] w-full resize-none overflow-hidden bg-transparent font-serif text-base leading-[1.75] tracking-[0.01em] text-ink-soft placeholder:italic placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 md:text-lg md:leading-[1.8]"
-                style={{ caretColor: "rgb(var(--accent-rust))" }}
-              />
+              {/* the body — write in the reading face; the ghost's graphite
+                  continuation renders in a metric-mirror layer behind it */}
+              <div className="relative">
+                <textarea
+                  ref={bodyRef}
+                  value={working.content}
+                  onChange={(e) => {
+                    setField("content", e.target.value);
+                    setCaretIndex(e.target.selectionStart);
+                    scheduleCaretComfort();
+                  }}
+                  onSelect={(e) =>
+                    setCaretIndex(
+                      (e.target as HTMLTextAreaElement).selectionStart
+                    )
+                  }
+                  onCompositionStart={() => {
+                    composingRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    composingRef.current = false;
+                  }}
+                  onKeyDown={onBodyKeyDown}
+                  onPaste={onBodyPaste}
+                  placeholder="start anywhere. you can fix it later ✎"
+                  aria-label="entry body (markdown)"
+                  spellCheck
+                  className="relative block min-h-[50vh] w-full resize-none overflow-hidden bg-transparent font-serif text-base leading-[1.75] tracking-[0.01em] text-ink-soft placeholder:italic placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 md:text-lg md:leading-[1.8]"
+                  style={{ caretColor: "rgb(var(--accent-rust))" }}
+                />
+                <GhostOverlay
+                  content={working.content}
+                  suggestion={ghost.suggestion}
+                />
+              </div>
             </motion.div>
 
             {/* the it's-out-there line, after the quiet beat */}
@@ -1554,6 +1657,26 @@ export default function WritingRoom({
                 </button>
                 <button
                   type="button"
+                  onClick={openPalette}
+                  className="text-accent-purple/80 transition-colors hover:text-accent-purple"
+                >
+                  summon the ghost ✦
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleGhost}
+                  title="the ghost offers a line when your pen rests"
+                  className="transition-colors hover:text-accent-purple"
+                >
+                  ghost —{" "}
+                  {ghostOn
+                    ? ghost.thinking
+                      ? "thinking…"
+                      : "awake"
+                    : "resting"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setVersoOpen(true)}
                   className="transition-colors hover:text-accent-rust"
                 >
@@ -1618,7 +1741,8 @@ export default function WritingRoom({
 
               <div className="space-y-0.5 font-mono text-[0.6rem] tracking-[0.08em] text-ink-faint/80">
                 <p>⌘e proof · ⌘b bold · ⌘i italic</p>
-                <p>⌘k link · ⌘↵ publish</p>
+                <p>⌘k link · ⌘j ghost · ⌘↵ publish</p>
+                <p>tab takes the ghost&apos;s line · esc waves it off</p>
                 <p>⌘s — it&apos;s already saved</p>
               </div>
             </div>
@@ -1685,13 +1809,24 @@ export default function WritingRoom({
                     : "bg-ink/40"
             }`}
           />
+          {ghost.suggestion && mode === "write" && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => ghost.acceptIfAny()}
+              className="font-hand text-lg text-accent-purple"
+            >
+              take the ghost&apos;s line ✎
+            </button>
+          )}
           {(
             [
-              // marks/attach write into the sheet — hidden while it's a proof
+              // marks/attach/ghost write into the sheet — hidden in proof
               ...(mode === "write"
                 ? ([
                     ["marks", () => setMarksOpen((o) => !o)],
                     ["attach", () => fileInputRef.current?.click()],
+                    ["ghost", openPalette],
                   ] as [string, () => void][])
                 : []),
               [
@@ -1719,6 +1854,19 @@ export default function WritingRoom({
           ))}
         </div>
       </div>
+
+      {/* ---------- the ghost's slip ---------- */}
+      <GhostPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        selectionText={paletteSelection}
+        working={working}
+        onInsert={insertFromPalette}
+        onSetTitle={(t) => {
+          setField("title", t);
+          flashNote("titled ✎");
+        }}
+      />
 
       {/* ---------- the back of the page ---------- */}
       <Verso
