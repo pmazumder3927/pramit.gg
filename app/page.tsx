@@ -1,6 +1,7 @@
 import { Post, stripWorkingCopy } from "@/app/lib/supabase";
 import SketchbookHome from "@/app/components/SketchbookHome";
 import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
+import { rankPosts } from "@/app/lib/rankPosts";
 import { createPublicClient } from "@/utils/supabase/server";
 
 async function fetchPosts(): Promise<Post[]> {
@@ -12,7 +13,6 @@ async function fetchPosts(): Promise<Post[]> {
       .from("posts")
       .select("*")
       .eq("is_draft", false)
-      .order("is_pinned", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -21,7 +21,7 @@ async function fetchPosts(): Promise<Post[]> {
     }
 
     // never let the writing room's working copies reach the public payload
-    return (data || []).map(stripWorkingCopy);
+    return rankPosts((data || []).map(stripWorkingCopy));
   } catch (error) {
     console.error("Error fetching posts server-side:", error);
     return [];

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Post, analyzeContent } from "@/app/lib/supabase";
+import { isFreshPost } from "@/app/lib/rankPosts";
 import { POST_TYPE_META, POST_TYPE_FILTERS } from "@/app/lib/postTypes";
 import { useNowPlayingContext } from "@/app/components/NowPlayingContext";
 import { ChaosDecor, Tape, Stamp, Doodle } from "@/app/components/sketchbook";
@@ -305,6 +306,7 @@ export default function SketchbookHome({
               );
               const preview = post.description || previewText;
               const c = chaosFor(post.id);
+              const fresh = isFreshPost(post, Date.now());
               return (
                 <div
                   key={post.id}
@@ -323,8 +325,19 @@ export default function SketchbookHome({
                       >
                         {meta.label}
                       </span>
-                      <span className="font-hand text-lg text-ink-faint">
-                        {fmtDate(post.created_at)}
+                      <span className="flex items-center gap-2">
+                        {fresh ? (
+                          <Stamp tone="orange" rotate={4}>
+                            fresh ink
+                          </Stamp>
+                        ) : post.is_pinned ? (
+                          <Stamp tone="rust" rotate={-3}>
+                            pinned
+                          </Stamp>
+                        ) : null}
+                        <span className="font-hand text-lg text-ink-faint">
+                          {fmtDate(post.created_at)}
+                        </span>
                       </span>
                     </div>
                     <h3 className="relative inline font-serif text-[1.2rem] font-medium leading-snug text-ink">
