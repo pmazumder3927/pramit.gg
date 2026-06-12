@@ -1962,6 +1962,7 @@ export default function WritingRoom({
         isPublished={isPublished}
         differs={differs || status === "local"}
         busy={publishing}
+        tagVocabulary={tagVocabulary}
         onPublish={() => void publishEntry()}
         onSetPage={() => void setPage()}
         onUnpublish={() => void unpublish()}

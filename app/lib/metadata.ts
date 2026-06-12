@@ -56,7 +56,20 @@ export function createMetadata({
     keywords: siteConfig.keywords,
     authors: [{ name: siteConfig.author, url: siteConfig.url }],
     creator: siteConfig.creator,
-    ...(path ? { alternates: { canonical: path } } : {}),
+    // Pages that set a path replace the root `alternates` wholesale (Next
+    // merges metadata shallowly), so the feed link must ride along here too.
+    ...(path
+      ? {
+          alternates: {
+            canonical: path,
+            types: {
+              "application/atom+xml": [
+                { url: "/feed.xml", title: `${siteConfig.name} · atom feed` },
+              ],
+            },
+          },
+        }
+      : {}),
     openGraph: {
       type: "website",
       locale: "en_US",

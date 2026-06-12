@@ -3,9 +3,12 @@ import OpenAI from "openai";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
-// "the ghost" — the writing room's quiet companion. Two kinds of help:
+// "the ghost" — the writing room's quiet companion. Three kinds of help:
 //   complete — a short graphite continuation offered at the end of the text
 //   ask      — the summoned palette: draft / continue / rework / math / titles
+//   verso    — fill the back of the page: the blurb (meta description / link
+//              unfurls), tags, and a pick for the link-preview cover from the
+//              images already in the entry. structured json, one shot.
 //
 // Everything is seeded with the owner's own published writing (style sample,
 // cached) plus the current entry's vibe (type, tags, title, the draft so far),
@@ -121,6 +124,21 @@ const clip = (s: unknown, n: number) =>
 const clipHead = (s: unknown, n: number) =>
   typeof s === "string" ? s.slice(0, n) : "";
 
+// the images already inked into the entry — candidates for the link-preview
+// cover. markdown images only; videos/embeds make poor og:image material.
+function extractImages(content: string): { alt: string; url: string }[] {
+  const out: { alt: string; url: string }[] = [];
+  const re = /!\[([^\]]*)\]\(\s*(\S+?)(?:\s+"[^"]*")?\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) && out.length < 12) {
+    const url = m[2];
+    if (!/^(https?:\/\/|\/)/.test(url)) continue;
+    if (/\.(mp4|webm|mov|html?)(\?|$)/i.test(url)) continue;
+    out.push({ alt: m[1].trim(), url });
+  }
+  return out;
+}
+
 // gpt-5 / o-series take reasoning_effort and reject custom temperature
 function knobsFor(model: string, effort: string) {
   return /^(gpt-5|o\d)/.test(model)
@@ -212,7 +230,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) || {};
-  const kind = body.kind === "ask" ? "ask" : "complete";
+  const kind =
+    body.kind === "ask" ? "ask" : body.kind === "verso" ? "verso" : "complete";
   const sample = await getStyleSample();
   const persona = basePersona(sample, vibeBlock(body));
   const before = clip(body.before, 6000);
@@ -248,6 +267,85 @@ export async function POST(req: NextRequest) {
       )) as OpenAI.Chat.Completions.ChatCompletion;
       const text = completion.choices?.[0]?.message?.content ?? "";
       return NextResponse.json({ text });
+    }
+
+    // ---- verso: fill the back of the page --------------------------------
+    if (kind === "verso") {
+      const content = String(body.content || "");
+      if (content.trim().length < 80) {
+        return NextResponse.json(
+          { error: "write the entry first — the ghost can't blurb a blank page ✎" },
+          { status: 400 }
+        );
+      }
+      const images = extractImages(content);
+      const vocab = Array.isArray(body.tagVocabulary)
+        ? (body.tagVocabulary as unknown[])
+            .slice(0, 48)
+            .map((t) => String(t).slice(0, 40))
+        : [];
+      const userPrompt = [
+        `fill in the back of the page for this entry — the metadata readers never see on the sheet itself but the shelf cards, search engines and link unfurls do.`,
+        `the entry:\n<<<\n${clipHead(content, 12000)}\n>>>`,
+        images.length
+          ? `images already inked into the entry (candidates for the link-preview cover):\n${images
+              .map((im, i) => `${i}. ${im.url}${im.alt ? ` — "${im.alt}"` : ""}`)
+              .join("\n")}`
+          : "",
+        vocab.length ? `tags already in use across the site: ${vocab.join(", ")}` : "",
+        [
+          `return ONLY a json object with exactly these keys:`,
+          `- "description": the blurb — one or two short sentences, under ~160 characters total, in my voice. it sits under the title on the shelf card and becomes the meta description. concrete and specific to THIS entry; lowercase-leaning; no clickbait, no "in this post", no restating the title.`,
+          `- "tags": 2 to 5 lowercase tags. reuse the site's existing tags wherever they genuinely fit; coin a new one only when nothing existing does. single words or short hyphenated phrases.`,
+          `- "image": the NUMBER of the image that would make the best link-preview cover (a real figure or photo beats a screenshot of text), or null if there are no images or none would work.`,
+        ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const completion = (await createWithFallback(
+        client,
+        [process.env.OPENAI_ASSIST_MODEL?.trim() || "gpt-5.5"],
+        {
+          messages: [
+            { role: "system", content: persona },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 700,
+        },
+        false,
+        process.env.OPENAI_ASSIST_EFFORT?.trim() || "low",
+        req.signal
+      )) as OpenAI.Chat.Completions.ChatCompletion;
+
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+      } catch {
+        /* fall through to the empty shape — the client treats it as a miss */
+      }
+      const description = String(parsed.description || "")
+        .trim()
+        .slice(0, 300);
+      const tags = Array.isArray(parsed.tags)
+        ? (parsed.tags as unknown[])
+            .map((t) => String(t).trim().toLowerCase().replace(/^#/, ""))
+            .filter((t) => t && t.length <= 40)
+            .slice(0, 6)
+        : [];
+      const idx =
+        typeof parsed.image === "number" && Number.isInteger(parsed.image)
+          ? parsed.image
+          : -1;
+      const imageUrl = idx >= 0 && idx < images.length ? images[idx].url : null;
+      if (!description && !tags.length) {
+        return NextResponse.json(
+          { error: "the ghost lost its train of thought — try again" },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({ description, tags, imageUrl });
     }
 
     // ---- ask: the summoned palette --------------------------------------

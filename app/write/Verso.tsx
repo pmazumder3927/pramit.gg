@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { format } from "date-fns";
 import {
@@ -49,6 +49,7 @@ export default function Verso({
   isPublished,
   differs,
   busy,
+  tagVocabulary,
   onPublish,
   onSetPage,
   onUnpublish,
@@ -64,6 +65,7 @@ export default function Verso({
   isPublished: boolean;
   differs: boolean;
   busy: boolean;
+  tagVocabulary: string[];
   onPublish: () => void;
   onSetPage: () => void;
   onUnpublish: () => void;
@@ -74,6 +76,106 @@ export default function Verso({
   const metaFileRef = useRef<HTMLInputElement>(null);
   const [recutOpen, setRecutOpen] = useState(false);
   const [recutValue, setRecutValue] = useState("");
+
+  // ------------------------------------------------- the ghost fills the back
+  // One press: the ghost reads the entry and inks in the blurb, tags and a
+  // cover pick. Everything it touches is held for "put it back" — the press
+  // is the owner's hand, the undo keeps it honest.
+  const [ghostBusy, setGhostBusy] = useState(false);
+  const [ghostErr, setGhostErr] = useState<string | null>(null);
+  const [ghostFill, setGhostFill] = useState<{
+    prev: Pick<Working, "description" | "tags" | "meta_image">;
+    added: string[];
+  } | null>(null);
+  const ghostAbort = useRef<AbortController | null>(null);
+  // the fields stay editable while the ghost reads — the async closure must
+  // see the freshest ink, not the render it was born in
+  const workingNow = useRef(working);
+  useEffect(() => {
+    workingNow.current = working;
+  }, [working]);
+
+  // tuck the slip away → the offer stands as accepted; transient state rests
+  useEffect(() => {
+    if (!open) {
+      ghostAbort.current?.abort();
+      setGhostBusy(false);
+      setGhostErr(null);
+      setGhostFill(null);
+    }
+  }, [open]);
+
+  const summonVerso = async () => {
+    if (ghostBusy) return;
+    setGhostErr(null);
+    setGhostBusy(true);
+    const controller = new AbortController();
+    ghostAbort.current = controller;
+    try {
+      const res = await fetch("/api/write/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          kind: "verso",
+          title: working.title,
+          type: working.type,
+          tags: working.tags,
+          content: working.content,
+          tagVocabulary,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error || "the ghost lost its train of thought — try again"
+        );
+      }
+      const now = workingNow.current;
+      const prev = {
+        description: now.description,
+        tags: now.tags,
+        meta_image: now.meta_image,
+      };
+      if (typeof data.description === "string" && data.description.trim()) {
+        setField("description", data.description.trim());
+      }
+      // the owner's own tags stand; the ghost's only join the end
+      const incoming: string[] = Array.isArray(data.tags) ? data.tags : [];
+      const merged = [...now.tags];
+      const added: string[] = [];
+      for (const t of incoming) {
+        if (typeof t === "string" && t && !merged.includes(t)) {
+          merged.push(t);
+          added.push(t);
+        }
+      }
+      if (added.length) setField("tags", merged);
+      // never stomp a cover the owner chose — only fill an empty frame
+      if (!now.meta_image && typeof data.imageUrl === "string" && data.imageUrl) {
+        setField("meta_image", data.imageUrl);
+      }
+      setGhostFill({ prev, added });
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setGhostErr(
+          err instanceof Error
+            ? err.message
+            : "the ghost lost its train of thought — try again"
+        );
+      }
+    } finally {
+      setGhostBusy(false);
+    }
+  };
+
+  const putBack = () => {
+    if (!ghostFill) return;
+    setField("description", ghostFill.prev.description);
+    setField("tags", ghostFill.prev.tags);
+    setField("meta_image", ghostFill.prev.meta_image);
+    setGhostFill(null);
+  };
 
   const slugPreview = isPublished
     ? post?.slug
@@ -124,6 +226,45 @@ export default function Verso({
             </div>
 
             <div className="space-y-6">
+              {/* the ghost fills this side — blurb, tags, a cover pick */}
+              <div className="-mt-1">
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => void summonVerso()}
+                    disabled={ghostBusy}
+                    className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-orange disabled:opacity-60"
+                  >
+                    {ghostBusy
+                      ? "the ghost is reading the entry…"
+                      : "let the ghost fill this side ✦"}
+                  </button>
+                  {ghostFill && !ghostBusy && (
+                    <button
+                      type="button"
+                      onClick={putBack}
+                      className="font-hand text-lg text-ink-faint transition-colors hover:text-accent-rust"
+                    >
+                      put it back ↩
+                    </button>
+                  )}
+                </div>
+                {ghostErr && (
+                  <p className="mt-1 font-hand text-lg text-accent-rust">
+                    {ghostErr}
+                  </p>
+                )}
+                {ghostFill && !ghostBusy && ghostFill.added.length > 0 && (
+                  <p className="mt-1 font-hand text-base text-ink-faint">
+                    it also picked up{" "}
+                    <span className="text-accent-purple">
+                      {ghostFill.added.map((t) => `#${t}`).join(" ")}
+                    </span>{" "}
+                    for the entry&apos;s header
+                  </p>
+                )}
+              </div>
+
               {/* blurb + live shelf ghost */}
               <div>
                 <FieldLabel>the blurb — cards &amp; link previews</FieldLabel>

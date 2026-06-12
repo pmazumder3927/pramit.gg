@@ -117,6 +117,11 @@ export const metadata: Metadata = {
   creator: siteConfig.creator,
   alternates: {
     canonical: "/",
+    types: {
+      "application/atom+xml": [
+        { url: "/feed.xml", title: `${siteConfig.name} · atom feed` },
+      ],
+    },
   },
   openGraph: {
     type: "website",
