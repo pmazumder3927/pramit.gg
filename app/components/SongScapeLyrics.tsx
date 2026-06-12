@@ -14,13 +14,16 @@
 //     the foreground DOM text, the doodles (passed in) and the live lines.
 //
 // Timing rides the same interpolated playhead the doodles use, so lines land in
-// step with the vocal; see useActiveLine.
+// step with the vocal; see useActiveLine. When nothing is playing, the last
+// song ECHOES — it replays on a shared loop (app/lib/scape-playhead) in fainter
+// ink, the page clearing between passes.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { LyricLine } from "./useLyrics";
 import type { SpotifyTrack } from "./NowPlayingContext";
 import { type Box, collectForeground } from "@/app/lib/scape-layout";
+import { makePlayhead, type PlayheadMode } from "@/app/lib/scape-playhead";
 
 const W = 1600;
 const H = 900;
@@ -465,23 +468,44 @@ function fitRow(text: string, size: number, rot: number) {
     : {};
 }
 
-/* ----------------------------- live playhead ---------------------------- */
-function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
-  const [idx, setIdx] = useState(-1);
+/* ------------------------------ playhead -------------------------------- */
+// Where the pen is in the song (see app/lib/scape-playhead). Live playback
+// advances in real time; with nothing playing the last song ECHOES — it
+// replays on a loop anchored to when it was last played — and `loop` counts
+// the passes so the page can clear between them. With no echo anchor at all
+// (no recently-played data) we freeze on whatever was last shown.
+function useActiveLine(
+  track: SpotifyTrack | null,
+  lines: LyricLine[]
+): { idx: number; loop: number; mode: PlayheadMode } {
+  const [cur, setCur] = useState({ idx: -1, loop: 0 });
   const playing = !!track?.isPlaying;
   const duration = track?.duration ?? 0;
   const progress = track?.progress ?? 0;
   const serverNow = track?.serverNow ?? 0;
   const fetchedAt = track?.fetchedAt ?? 0;
   const latency = track?.clientLatency ?? 0;
+  const playedAtMs = track?.playedAtMs ?? 0;
+
+  const ph = useMemo(
+    () =>
+      makePlayhead({
+        isPlaying: playing,
+        duration,
+        progress,
+        serverNow,
+        fetchedAt,
+        clientLatency: latency,
+        playedAtMs,
+      }),
+    [playing, duration, progress, serverNow, fetchedAt, latency, playedAtMs]
+  );
 
   useEffect(() => {
     if (!lines.length) {
-      setIdx(-1);
+      setCur({ idx: -1, loop: 0 });
       return;
     }
-    const cacheAge = serverNow && fetchedAt ? serverNow - fetchedAt : 0;
-    const baseMs = progress + cacheAge;
     const findIdx = (ms: number) => {
       if (lines[0].t > ms) return -1;
       let lo = 0;
@@ -492,28 +516,31 @@ function useActiveLine(track: SpotifyTrack | null, lines: LyricLine[]): number {
       return lo;
     };
 
-    if (!playing) {
-      // Nothing currently playing (paused / stopped — the route then serves the
-      // recently-played track with no progress). FREEZE on whatever was last
-      // shown so the lyrics that went with the song stay on screen; only seek
-      // from a real position on a cold start (we've shown nothing yet).
-      setIdx((cur) => (cur >= 0 ? cur : progress > 0 ? findIdx(baseMs) : cur));
+    if (ph.mode === "still") {
+      // No clock to follow: FREEZE on whatever was last shown so the lyrics
+      // that went with the song stay on screen; only seek from a real position
+      // on a cold start (we've shown nothing yet).
+      const ms = ph.pos(0);
+      setCur((c) => (c.idx >= 0 ? c : ms > 0 ? { idx: findIdx(ms), loop: 0 } : c));
       return;
     }
-    const lead = latency + LYRIC_LEAD_MS;
     const recv = performance.now();
     let raf = 0;
     const tick = () => {
-      const ms = baseMs + lead + (performance.now() - recv);
+      const el = performance.now() - recv;
+      // nudge in slightly early so live lines read in-time with the vocal;
+      // harmless in echo mode (there's no vocal, only the phase).
+      const ms = ph.pos(el) + LYRIC_LEAD_MS;
       const next = findIdx(duration > 0 ? Math.min(ms, duration) : ms);
-      setIdx((cur) => (cur === next ? cur : next));
+      const loop = ph.loop(el);
+      setCur((c) => (c.idx === next && c.loop === loop ? c : { idx: next, loop }));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [lines, playing, duration, progress, serverNow, fetchedAt, latency]);
+  }, [lines, ph, duration]);
 
-  return idx;
+  return { ...cur, mode: ph.mode };
 }
 
 /* ------------------------------ component ------------------------------- */
@@ -536,20 +563,21 @@ export default function SongScapeLyrics({
   doodleBoxes: Box[];
   vis: Box; // the on-screen slice of the view-box (lines stay inside it)
 }) {
-  const idx = useActiveLine(track, lines);
+  const { idx, loop, mode } = useActiveLine(track, lines);
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const inscriptionsRef = useRef<Inscription[]>([]);
   const colRef = useRef<Column | null>(null);
   const counter = useRef(0);
   const lastIdx = useRef(-1);
 
-  // new song → clear the page and lift the pen
+  // new song — or the echo starting another pass — clears the page and lifts
+  // the pen, so each replay writes itself in fresh rather than piling on.
   useEffect(() => {
     inscriptionsRef.current = [];
     colRef.current = null;
     lastIdx.current = -1;
     setInscriptions([]);
-  }, [trackId]);
+  }, [trackId, loop]);
 
   // playhead crossed into a new (non-empty) line → write it
   useEffect(() => {
@@ -561,18 +589,24 @@ export default function SongScapeLyrics({
 
     const list = inscriptionsRef.current;
     const obstacles = collectForeground().concat(doodleBoxes, list.map(inscBox));
-    const { insc: base, col } = place(colRef.current, fnv(`${trackId}:${idx}`), text, obstacles, vis);
+    // seed varies per echo pass, so each replay writes the page a little
+    // differently — the echo retraces the song, not its own handwriting.
+    const { insc: base, col } = place(colRef.current, fnv(`${trackId}:${loop}:${idx}`), text, obstacles, vis);
     colRef.current = col;
 
     const next = [...list, { ...base, key: counter.current++ }].slice(-MAX_VISIBLE);
     inscriptionsRef.current = next;
     setInscriptions(next);
-  }, [idx, lines, trackId, doodleBoxes, vis]);
+  }, [idx, loop, lines, trackId, doodleBoxes, vis]);
 
   if (!inscriptions.length) return null;
 
-  // age 0 = freshest; older ghosts dim and float a touch higher
-  const ageOpacity = dark ? [0.58, 0.32, 0.16] : [0.48, 0.26, 0.13];
+  // age 0 = freshest; older ghosts dim and float a touch higher. The echo
+  // writes in fainter ink throughout — a memory of the song, not the song.
+  const echoFade = mode === "echo" ? 0.72 : 1;
+  const ageOpacity = (dark ? [0.58, 0.32, 0.16] : [0.48, 0.26, 0.13]).map(
+    (o) => o * echoFade
+  );
 
   return (
     <g className="songscape-lyrics ink-sway" style={{ pointerEvents: "none" }}>

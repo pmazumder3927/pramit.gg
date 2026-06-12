@@ -96,7 +96,11 @@ export async function GET() {
           songUrl: lastTrack.track.external_urls.spotify,
           trackId: lastTrack.track.id,
           uri: lastTrack.track.uri,
+          duration: lastTrack.track.duration_ms,
           playedAt: lastTrack.played_at,
+          // epoch anchor for the client-side "echo": when nothing is playing,
+          // the scape replays this track on a loop timed from this moment.
+          playedAtMs: Date.parse(lastTrack.played_at) || null,
         };
         payloadCache = { at: Date.now(), body };
         return respond({ ...body, fetchedAt: payloadCache.at });

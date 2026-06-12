@@ -70,6 +70,8 @@ interface NowPlayingTrack {
   songUrl: string | null;
   progress?: number;
   duration?: number;
+  /** epoch ms the track was last played — anchor of the echo replay loop */
+  playedAtMs?: number | null;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());

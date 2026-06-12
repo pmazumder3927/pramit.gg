@@ -27,6 +27,8 @@ function fmtDate(iso: string) {
 function NowSpinningCard() {
   const { track } = useNowPlayingContext();
   const playing = track?.isPlaying;
+  // not playing, but the last song is still replaying through the scape
+  const echoing = !playing && !!track?.playedAtMs && !!track?.duration;
 
   return (
     <Link
@@ -40,7 +42,7 @@ function NowSpinningCard() {
           className="font-hand text-xl"
           style={{ color: "rgb(var(--album-rgb))" }}
         >
-          {playing ? "now spinning" : "last tune"}
+          {playing ? "now spinning" : echoing ? "still echoing" : "last tune"}
         </span>
         <span className="eq-bars">
           <span

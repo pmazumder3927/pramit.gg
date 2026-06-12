@@ -22,6 +22,7 @@ import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { useLyrics } from "./useLyrics";
 import SongScapeLyrics from "./SongScapeLyrics";
 import { type Box, collectForeground, boxesOverlap, visibleBox } from "@/app/lib/scape-layout";
+import { makePlayhead } from "@/app/lib/scape-playhead";
 
 const W = 1600;
 const H = 900;
@@ -277,6 +278,8 @@ function useDiffuse(
   const progress = track?.progress ?? 0;
   const serverNow = track?.serverNow ?? 0;
   const fetchedAt = track?.fetchedAt ?? 0;
+  const latency = track?.clientLatency ?? 0;
+  const playedAtMs = track?.playedAtMs ?? 0;
 
   useEffect(() => {
     const el = root.current;
@@ -289,17 +292,26 @@ function useDiffuse(
       el.style.setProperty("--t", "0");
       return;
     }
-    const cacheAge = serverNow && fetchedAt ? serverNow - fetchedAt : 0;
-    const baseMs = progress + cacheAge;
-    if (!playing) {
-      el.style.setProperty("--t", clamp01(baseMs / duration).toFixed(4));
+    const ph = makePlayhead({
+      isPlaying: playing,
+      duration,
+      progress,
+      serverNow,
+      fetchedAt,
+      clientLatency: latency,
+      playedAtMs,
+    });
+    if (ph.mode === "still") {
+      el.style.setProperty("--t", clamp01(ph.pos(0) / duration).toFixed(4));
       return;
     }
+    // live playback and the echo replay both spread the ink; the echo wraps
+    // back to fresh ink at the top of each pass, in step with the lyric pen.
     const recv = performance.now();
     let raf = 0;
     let last = -1;
     const tick = () => {
-      const t = clamp01((baseMs + (performance.now() - recv)) / duration);
+      const t = clamp01(ph.pos(performance.now() - recv) / duration);
       if (Math.abs(t - last) > 0.0008) {
         el.style.setProperty("--t", t.toFixed(4));
         last = t;
@@ -308,7 +320,7 @@ function useDiffuse(
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [root, reduced, playing, duration, progress, serverNow, fetchedAt]);
+  }, [root, reduced, playing, duration, progress, serverNow, fetchedAt, latency, playedAtMs]);
 }
 
 /* ------------------------------ scroll --------------------------------- */

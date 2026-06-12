@@ -23,6 +23,11 @@ export interface SpotifyTrack {
   /** Estimated one-way network latency (ms) for this response, ~half the
    *  measured round-trip — the transit gap serverNow/fetchedAt can't see. */
   clientLatency?: number;
+  /** ISO time the track was last played (recently-played fallback only). */
+  playedAt?: string | null;
+  /** Epoch ms of playedAt — the anchor the echo replay loops from when
+   *  nothing is currently playing (see app/lib/scape-playhead.ts). */
+  playedAtMs?: number | null;
 }
 
 type VisualVariant = "neon" | "glassy" | "minimal" | "accent";

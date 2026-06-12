@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import Image from "next/image";
 import { hexToRgb, adjustBrightness } from "../lib/chaotic-styles";
@@ -14,6 +15,8 @@ interface NowPlayingTrack {
   songUrl: string | null;
   progress?: number;
   duration?: number;
+  /** epoch ms the track was last played — anchor of the echo replay loop */
+  playedAtMs?: number | null;
 }
 
 interface ChaoticNowPlayingProps {
@@ -52,9 +55,27 @@ export function ChaoticNowPlaying({
   const lighterColor = adjustBrightness(accentColor, 22);
   const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
   const onAlbum = brightness > 145 ? "#1a1410" : "#fffaf2";
-  const pct =
-    nowPlaying.progress && nowPlaying.duration
-      ? (nowPlaying.progress / nowPlaying.duration) * 100
+
+  // nothing spinning, but the song is still ECHOING — replaying on a loop in
+  // the scape, anchored to when it was last played. Keep time with it here.
+  const dur = nowPlaying.duration ?? 0;
+  const echoing = !nowPlaying.isPlaying && !!nowPlaying.playedAtMs && dur > 0;
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!echoing) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [echoing]);
+  const echoProgress =
+    echoing && now ? (((now - (nowPlaying.playedAtMs ?? 0)) % dur) + dur) % dur : 0;
+
+  const pct = nowPlaying.isPlaying
+    ? nowPlaying.progress && dur
+      ? (nowPlaying.progress / dur) * 100
+      : 0
+    : echoing && dur
+      ? (echoProgress / dur) * 100
       : 0;
 
   return (
@@ -77,7 +98,7 @@ export function ChaoticNowPlaying({
             className="block w-[56%] -rotate-3 text-center font-mono text-[0.58rem] font-extrabold uppercase leading-[1.05] tracking-tight md:text-[0.72rem]"
             style={{ color: onAlbum }}
           >
-            {nowPlaying.isPlaying ? "now playing" : "last played"}
+            {nowPlaying.isPlaying ? "now playing" : echoing ? "echoing" : "last played"}
           </span>
         </span>
       </div>
@@ -173,21 +194,29 @@ export function ChaoticNowPlaying({
               {nowPlaying.album}
             </motion.p>
 
-            {/* Progress */}
-            {nowPlaying.isPlaying && nowPlaying.progress != null && nowPlaying.duration != null ? (
+            {/* Progress — live playback, or the echo keeping time on its loop */}
+            {(nowPlaying.isPlaying && nowPlaying.progress != null && dur > 0) || echoing ? (
               <div className="mt-5 space-y-1.5">
                 <div className="relative h-2.5 overflow-hidden rounded-full border-2 border-ink bg-paper-2">
                   <motion.div
                     className="absolute left-0 top-0 h-full"
-                    style={{ background: `linear-gradient(90deg, ${accentColor}, ${lighterColor})` }}
+                    style={{
+                      background: `linear-gradient(90deg, ${accentColor}, ${lighterColor})`,
+                      opacity: echoing ? 0.55 : 1,
+                    }}
                     initial={{ width: "0%" }}
                     animate={{ width: `${pct}%` }}
                     transition={{ duration: 0.5 }}
                   />
                 </div>
                 <div className="flex justify-between font-mono text-xs text-ink-faint">
-                  <span>{formatTime(nowPlaying.progress)}</span>
-                  <span>{formatTime(nowPlaying.duration)}</span>
+                  <span>{formatTime(echoing ? echoProgress : nowPlaying.progress ?? 0)}</span>
+                  {echoing && (
+                    <span className="font-serif normal-case italic tracking-normal">
+                      still echoing through the page
+                    </span>
+                  )}
+                  <span>{formatTime(dur)}</span>
                 </div>
               </div>
             ) : null}

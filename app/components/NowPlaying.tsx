@@ -39,11 +39,15 @@ export default function NowPlaying() {
     baseRef.current = { progress: seed ?? 0, at: Date.now() };
     setTick(Date.now());
   }, [seed, trackKey]);
+  // the echo: nothing is playing, but the last song is replaying on a loop in
+  // the scape (anchored to playedAtMs) — the pill keeps time with it.
+  const echoing =
+    !!track && !track.isPlaying && !!track.playedAtMs && !!track.duration;
   useEffect(() => {
-    if (!track?.isPlaying) return;
+    if (!track?.isPlaying && !echoing) return;
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [track?.isPlaying]);
+  }, [track?.isPlaying, echoing]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -59,10 +63,17 @@ export default function NowPlaying() {
 
   const onAlbum = onColor(albumColor);
   const elapsed = track.isPlaying ? tick - baseRef.current.at : 0;
-  const liveProgress = track.duration
-    ? Math.min(track.duration, baseRef.current.progress + Math.max(0, elapsed))
-    : track.progress ?? 0;
-  const pct = track.duration ? (liveProgress / track.duration) * 100 : 0;
+  const dur = track.duration ?? 0;
+  // echo progress loops on the client clock — second-granularity is plenty
+  // here; only the lyric pen needs the carefully skew-corrected playhead.
+  const liveProgress = track.isPlaying
+    ? dur
+      ? Math.min(dur, baseRef.current.progress + Math.max(0, elapsed))
+      : track.progress ?? 0
+    : echoing
+      ? (((tick - (track.playedAtMs ?? 0)) % dur) + dur) % dur
+      : track.progress ?? 0;
+  const pct = dur ? (liveProgress / dur) * 100 : 0;
   // When listen-along is the primary CTA, the spotify link steps back to a
   // quiet secondary so two filled accent pills don't fight each other.
   const showListenAlong = track.isPlaying && !!track.uri;
@@ -106,7 +117,7 @@ export default function NowPlaying() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="mb-0.5 font-hand text-base leading-none" style={{ color: albumColor }}>
-                  {track.isPlaying ? "now spinning" : "last spun"}
+                  {track.isPlaying ? "now spinning" : echoing ? "still echoing" : "last spun"}
                 </div>
                 <div className="truncate font-serif text-base font-medium leading-tight text-ink">{track.title}</div>
                 <div className="truncate text-sm text-ink-soft">{track.artist}</div>
@@ -114,14 +125,18 @@ export default function NowPlaying() {
               </div>
             </div>
 
-            {track.isPlaying && track.progress != null && track.duration != null ? (
+            {(track.isPlaying && track.progress != null && dur > 0) || echoing ? (
               <div className="px-4 pb-2">
                 <div className="relative h-1.5 overflow-hidden rounded-full bg-paper-2">
-                  <div className="absolute left-0 top-0 h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: albumColor }} />
+                  {/* the echo's bar runs fainter — it's a memory keeping time */}
+                  <div
+                    className="absolute left-0 top-0 h-full rounded-full transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${pct}%`, background: albumColor, opacity: echoing ? 0.5 : 1 }}
+                  />
                 </div>
                 <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-faint">
                   <span>{formatTime(liveProgress)}</span>
-                  <span>{formatTime(track.duration)}</span>
+                  <span>{formatTime(dur)}</span>
                 </div>
               </div>
             ) : null}
@@ -240,11 +255,24 @@ export default function NowPlaying() {
                 <span className="h-2.5" style={{ background: albumColor, animationDelay: ".18s" }} />
                 <span className="h-2" style={{ background: albumColor, animationDelay: ".36s" }} />
               </span>
+            ) : echoing ? (
+              // a soft ripple instead of the eq bars — the song still sounding,
+              // faintly, from the next room
+              <span className="relative flex h-1.5 w-1.5">
+                <span
+                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-50"
+                  style={{ background: albumColor }}
+                />
+                <span
+                  className="relative inline-flex h-1.5 w-1.5 rounded-full opacity-70"
+                  style={{ background: albumColor }}
+                />
+              </span>
             ) : (
               <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
             )}
             <span className="font-hand text-sm leading-none" style={{ color: albumColor }}>
-              {track.isPlaying ? "now spinning" : "last spun"}
+              {track.isPlaying ? "now spinning" : echoing ? "echoing" : "last spun"}
             </span>
           </div>
           <div className="mt-0.5 truncate font-serif text-sm font-medium leading-tight text-ink">{track.title}</div>
