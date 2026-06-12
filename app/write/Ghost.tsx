@@ -604,8 +604,8 @@ export function GhostPalette({
               </div>
             )}
 
-            {/* the offering */}
-            {(output || streaming) && (
+            {/* the offering (proofread renders its own marks block above) */}
+            {mode !== "proofread" && (output || streaming) && (
               <div className="mt-3 rounded-md border border-dashed border-ink/30 bg-ink/[0.03] p-3">
                 <p className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
                   the ghost offers —
