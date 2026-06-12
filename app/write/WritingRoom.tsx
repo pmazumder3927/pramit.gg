@@ -282,6 +282,21 @@ export default function WritingRoom({
     [flashNote]
   );
 
+  // a proofreader's mark lands as a surgical find→replace through the
+  // textarea itself, so the undo stack keeps every correction reversible.
+  // false = the page moved since the ghost read it (the owner edits on).
+  const applyFix = useCallback((find: string, replace: string): boolean => {
+    const ta = bodyRef.current;
+    if (!ta) return false;
+    const idx = ta.value.indexOf(find);
+    if (idx === -1) return false;
+    ta.focus();
+    ta.setSelectionRange(idx, idx + find.length);
+    insertText(ta, replace);
+    setCaretIndex(ta.selectionStart);
+    return true;
+  }, []);
+
   const isPublished = !!post && !post.is_draft;
   const differs = useMemo(
     () => (isPublished && post ? !workingEqual(working, printedFrom(post)) : false),
@@ -1944,6 +1959,7 @@ export default function WritingRoom({
         selectionText={paletteSelection}
         working={working}
         onInsert={insertFromPalette}
+        onApplyFix={applyFix}
         onSetTitle={(t) => {
           setField("title", t);
           flashNote("titled ✎");

@@ -188,7 +188,7 @@ export function GhostOverlay({
 // the palette
 // ---------------------------------------------------------------------------
 
-type PaletteMode = "draft" | "continue" | "rework" | "math" | "titles";
+type PaletteMode = "draft" | "continue" | "rework" | "math" | "titles" | "proofread";
 
 const MODE_HINTS: Record<PaletteMode, string> = {
   draft: "what should it say?",
@@ -196,6 +196,15 @@ const MODE_HINTS: Record<PaletteMode, string> = {
   rework: "how should it change? — tighter, warmer, simpler…",
   math: "describe the math — 'softmax with temperature', '∂L/∂w for mse'…",
   titles: "any angle? (optional)",
+  proofread: "anything to watch for? (optional)",
+};
+
+// one proofreader's mark — an exact find→replace the owner takes by hand
+type Mark = {
+  find: string;
+  replace: string;
+  note: string;
+  state: "offered" | "taken" | "stale";
 };
 
 function stripMathDelims(text: string): { latex: string; display: boolean } {
@@ -214,6 +223,7 @@ export function GhostPalette({
   selectionText,
   working,
   onInsert,
+  onApplyFix,
   onSetTitle,
   keyboardInset = 0,
 }: {
@@ -222,6 +232,8 @@ export function GhostPalette({
   selectionText: string;
   working: Working;
   onInsert: (text: string, replaceSelection: boolean) => void;
+  /** land one proofreader's mark on the page — false if the page moved */
+  onApplyFix: (find: string, replace: string) => boolean;
   onSetTitle: (title: string) => void;
   /** mobile: ride above the software keyboard + the room's bottom bar */
   keyboardInset?: number;
@@ -230,6 +242,7 @@ export function GhostPalette({
   const [mode, setMode] = useState<PaletteMode>("draft");
   const [instruction, setInstruction] = useState("");
   const [output, setOutput] = useState("");
+  const [marks, setMarks] = useState<Mark[] | null>(null); // null = no pass yet
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -240,6 +253,7 @@ export function GhostPalette({
     if (!open) return;
     setMode(hasSelection ? "rework" : "draft");
     setOutput("");
+    setMarks(null);
     setError(null);
     setInstruction("");
     window.setTimeout(() => inputRef.current?.focus(), 60);
@@ -261,9 +275,51 @@ export function GhostPalette({
     }
     setError(null);
     setOutput("");
+    setMarks(null);
     setStreaming(true);
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // ---- proofread: one structured pass, marks instead of prose ----------
+    if (mode === "proofread") {
+      try {
+        const res = await fetch("/api/write/assist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            kind: "proofread",
+            selection: selectionText,
+            instruction,
+            title: working.title,
+            type: working.type,
+            tags: working.tags,
+            content: working.content,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "the ghost lost its train of thought — try again");
+        }
+        const offered: Mark[] = (Array.isArray(data.marks) ? data.marks : []).map(
+          (m: { find: string; replace: string; note: string }) => ({
+            ...m,
+            state: "offered" as const,
+          })
+        );
+        setMarks(offered);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(
+            err instanceof Error ? err.message : "the ghost lost its train of thought — try again"
+          );
+        }
+      } finally {
+        setStreaming(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch("/api/write/assist", {
         method: "POST",
@@ -340,6 +396,35 @@ export function GhostPalette({
     onClose();
   }, [output, mode, onInsert, onClose]);
 
+  // land one mark; "stale" means the page moved out from under it.
+  // the apply happens OUTSIDE the state updater — updaters must stay pure
+  // (strict mode double-invokes them, which would double-apply the fix).
+  const takeMark = useCallback(
+    (i: number) => {
+      if (!marks || marks[i]?.state !== "offered") return;
+      const ok = onApplyFix(marks[i].find, marks[i].replace);
+      setMarks((ms) => {
+        if (!ms || !ms[i]) return ms;
+        const next = [...ms];
+        next[i] = { ...next[i], state: ok ? "taken" : "stale" };
+        return next;
+      });
+    },
+    [marks, onApplyFix]
+  );
+
+  const takeAllMarks = useCallback(() => {
+    if (!marks) return;
+    const states = marks.map((m) =>
+      m.state === "offered"
+        ? onApplyFix(m.find, m.replace)
+          ? ("taken" as const)
+          : ("stale" as const)
+        : m.state
+    );
+    setMarks((ms) => ms && ms.map((m, i) => ({ ...m, state: states[i] })));
+  }, [marks, onApplyFix]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -388,6 +473,7 @@ export function GhostPalette({
                   ["rework", hasSelection],
                   ["math", true],
                   ["titles", true],
+                  ["proofread", true],
                 ] as [PaletteMode, boolean][]
               ).map(([m, available]) => (
                 <button
@@ -435,6 +521,87 @@ export function GhostPalette({
 
             {error && (
               <p className="mt-2 font-hand text-lg text-accent-rust">{error}</p>
+            )}
+
+            {/* the proofreader's marks */}
+            {mode === "proofread" && (streaming || marks !== null) && (
+              <div className="mt-3 rounded-md border border-dashed border-ink/30 bg-ink/[0.03] p-3">
+                {streaming ? (
+                  <p className="font-hand text-lg text-ink-soft">
+                    reading every line… <span className="animate-pulse">✎</span>
+                  </p>
+                ) : marks && marks.length === 0 ? (
+                  <p className="font-hand text-lg text-ink-soft">
+                    clean copy — the ghost found nothing to fix ✓
+                  </p>
+                ) : (
+                  marks && (
+                    <>
+                      <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
+                        the proofreader&apos;s marks — {marks.length}
+                      </p>
+                      <div className="max-h-64 space-y-2.5 overflow-y-auto pr-1">
+                        {marks.map((m, i) => (
+                          <div
+                            key={`${i}-${m.find.slice(0, 24)}`}
+                            className={`border-b border-dashed border-line/70 pb-2 last:border-b-0 ${
+                              m.state === "taken" ? "opacity-50" : ""
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap break-words font-serif text-sm leading-relaxed">
+                              <span className="text-ink-faint line-through decoration-accent-rust/60">
+                                {m.find}
+                              </span>{" "}
+                              <span className="text-ink-faint">→</span>{" "}
+                              <span className="text-ink">{m.replace}</span>
+                            </p>
+                            <div className="mt-0.5 flex items-baseline gap-3">
+                              <span className="font-mono text-[0.6rem] lowercase tracking-[0.08em] text-ink-faint">
+                                {m.note}
+                              </span>
+                              {m.state === "offered" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => takeMark(i)}
+                                  className="font-hand text-base text-accent-orange transition-colors hover:text-accent-rust"
+                                >
+                                  take ✎
+                                </button>
+                              ) : m.state === "taken" ? (
+                                <span className="font-hand text-base text-ink-faint">
+                                  taken ✓
+                                </span>
+                              ) : (
+                                <span className="font-hand text-base text-accent-rust">
+                                  the page moved — find it by hand
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex items-center gap-4">
+                        {marks.some((m) => m.state === "offered") && (
+                          <button
+                            type="button"
+                            onClick={takeAllMarks}
+                            className="font-hand text-lg text-accent-orange transition-colors hover:text-accent-rust"
+                          >
+                            take them all ✎
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void summon()}
+                          className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-orange"
+                        >
+                          look again?
+                        </button>
+                      </div>
+                    </>
+                  )
+                )}
+              </div>
             )}
 
             {/* the offering */}

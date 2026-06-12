@@ -3,12 +3,14 @@ import OpenAI from "openai";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
-// "the ghost" — the writing room's quiet companion. Three kinds of help:
-//   complete — a short graphite continuation offered at the end of the text
-//   ask      — the summoned palette: draft / continue / rework / math / titles
-//   verso    — fill the back of the page: the blurb (meta description / link
-//              unfurls), tags, and a pick for the link-preview cover from the
-//              images already in the entry. structured json, one shot.
+// "the ghost" — the writing room's quiet companion. Four kinds of help:
+//   complete  — a short graphite continuation offered at the end of the text
+//   ask       — the summoned palette: draft / continue / rework / math / titles
+//   verso     — fill the back of the page: the blurb (meta description / link
+//               unfurls), tags, and a pick for the link-preview cover from the
+//               images already in the entry. structured json, one shot.
+//   proofread — a copy editor's pass: structured MARKS (find → replace, with a
+//               reason), never a rewrite — each lands only by the owner's hand.
 //
 // Everything is seeded with the owner's own published writing (style sample,
 // cached) plus the current entry's vibe (type, tags, title, the draft so far),
@@ -230,8 +232,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) || {};
-  const kind =
-    body.kind === "ask" ? "ask" : body.kind === "verso" ? "verso" : "complete";
+  const kind = ["ask", "verso", "proofread"].includes(body.kind)
+    ? (body.kind as "ask" | "verso" | "proofread")
+    : "complete";
   const sample = await getStyleSample();
   const persona = basePersona(sample, vibeBlock(body));
   const before = clip(body.before, 6000);
@@ -346,6 +349,80 @@ export async function POST(req: NextRequest) {
         );
       }
       return NextResponse.json({ description, tags, imageUrl });
+    }
+
+    // ---- proofread: the copy editor's marks -------------------------------
+    if (kind === "proofread") {
+      // a selection narrows the pass; otherwise the whole entry goes under
+      // the loupe. marks are exact find→replace pairs the client applies one
+      // by one — the ghost never hands back a rewritten page.
+      const text = String(
+        typeof body.selection === "string" && body.selection.trim()
+          ? body.selection
+          : body.content || ""
+      ).slice(0, 24000);
+      if (text.trim().length < 40) {
+        return NextResponse.json(
+          { error: "barely any ink to proof yet — write a little more ✎" },
+          { status: 400 }
+        );
+      }
+      const userPrompt = [
+        `proofread this entry like a careful copy editor who loves the author's voice and touches NOTHING but genuine slips.`,
+        instruction ? `the author also asks: ${instruction}` : "",
+        `the text:\n<<<\n${text}\n>>>`,
+        [
+          `fix ONLY: typos and misspellings, doubled or missing words, wrong homophones (their/there, its/it's), subject–verb disagreements, stray or missing punctuation that changes the reading, broken markdown (unclosed ** or backticks, malformed links/footnotes), and a word spelled two ways in the same entry.`,
+          `NEVER touch the voice: the lowercase style is intentional — do not capitalize sentence starts or "i". fragments, em-dash asides, run-ons that breathe, slang and profanity all stay. when in doubt, leave it alone.`,
+          `return ONLY a json object: {"marks": [{"find": "...", "replace": "...", "note": "..."}]}`,
+          `- "find": the exact text from the entry, character for character, with a few surrounding words so it occurs exactly once.`,
+          `- "replace": the same span corrected (keep the surrounding words identical).`,
+          `- "note": the reason, 2–6 words, lowercase.`,
+          `at most 20 marks, the most important first. an empty "marks" array means the page is clean.`,
+        ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const completion = (await createWithFallback(
+        client,
+        [process.env.OPENAI_ASSIST_MODEL?.trim() || "gpt-5.5"],
+        {
+          messages: [
+            { role: "system", content: persona },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 2500,
+        },
+        false,
+        process.env.OPENAI_ASSIST_EFFORT?.trim() || "low",
+        req.signal
+      )) as OpenAI.Chat.Completions.ChatCompletion;
+
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+      } catch {
+        return NextResponse.json(
+          { error: "the ghost lost its train of thought — try again" },
+          { status: 502 }
+        );
+      }
+      // only marks that genuinely point at the page survive — a "fix" for
+      // text that isn't there would strand the client's apply step
+      const marks = (Array.isArray(parsed.marks) ? parsed.marks : [])
+        .map((m) => {
+          const r = m as Record<string, unknown>;
+          return {
+            find: String(r?.find ?? ""),
+            replace: String(r?.replace ?? ""),
+            note: String(r?.note ?? "").slice(0, 80),
+          };
+        })
+        .filter((m) => m.find && m.find !== m.replace && text.includes(m.find))
+        .slice(0, 20);
+      return NextResponse.json({ marks });
     }
 
     // ---- ask: the summoned palette --------------------------------------
