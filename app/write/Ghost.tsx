@@ -196,7 +196,7 @@ const MODE_HINTS: Record<PaletteMode, string> = {
   rework: "how should it change? — tighter, warmer, simpler…",
   math: "describe the math — 'softmax with temperature', '∂L/∂w for mse'…",
   titles: "any angle? (optional)",
-  proofread: "anything to watch for? (optional)",
+  proofread: "anything to watch for? — 'be strict about transitions'… (optional)",
 };
 
 // one proofreader's mark — an exact find→replace the owner takes by hand
@@ -205,6 +205,14 @@ type Mark = {
   replace: string;
   note: string;
   state: "offered" | "taken" | "stale";
+};
+
+// a margin note — a flow observation (abrupt transition, discontinuity)
+// anchored to an exact quote; the owner stitches it in their own words
+type MarginNote = {
+  near: string;
+  note: string;
+  state: "offered" | "stale";
 };
 
 function stripMathDelims(text: string): { latex: string; display: boolean } {
@@ -224,6 +232,7 @@ export function GhostPalette({
   working,
   onInsert,
   onApplyFix,
+  onJumpTo,
   onSetTitle,
   keyboardInset = 0,
 }: {
@@ -234,6 +243,8 @@ export function GhostPalette({
   onInsert: (text: string, replaceSelection: boolean) => void;
   /** land one proofreader's mark on the page — false if the page moved */
   onApplyFix: (find: string, replace: string) => boolean;
+  /** put the pen on a margin note's anchor — false if the page moved */
+  onJumpTo: (find: string) => boolean;
   onSetTitle: (title: string) => void;
   /** mobile: ride above the software keyboard + the room's bottom bar */
   keyboardInset?: number;
@@ -243,6 +254,7 @@ export function GhostPalette({
   const [instruction, setInstruction] = useState("");
   const [output, setOutput] = useState("");
   const [marks, setMarks] = useState<Mark[] | null>(null); // null = no pass yet
+  const [notes, setNotes] = useState<MarginNote[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -254,6 +266,7 @@ export function GhostPalette({
     setMode(hasSelection ? "rework" : "draft");
     setOutput("");
     setMarks(null);
+    setNotes([]);
     setError(null);
     setInstruction("");
     window.setTimeout(() => inputRef.current?.focus(), 60);
@@ -276,6 +289,7 @@ export function GhostPalette({
     setError(null);
     setOutput("");
     setMarks(null);
+    setNotes([]);
     setStreaming(true);
     const controller = new AbortController();
     abortRef.current = controller;
@@ -308,6 +322,14 @@ export function GhostPalette({
           })
         );
         setMarks(offered);
+        setNotes(
+          (Array.isArray(data.notes) ? data.notes : []).map(
+            (n: { near: string; note: string }) => ({
+              ...n,
+              state: "offered" as const,
+            })
+          )
+        );
       } catch (err) {
         if (!controller.signal.aborted) {
           setError(
@@ -425,6 +447,21 @@ export function GhostPalette({
     setMarks((ms) => ms && ms.map((m, i) => ({ ...m, state: states[i] })));
   }, [marks, onApplyFix]);
 
+  // put the pen on a margin note's anchor; a miss marks it stale (the jump
+  // itself is a side effect — kept outside the state updater, same as marks)
+  const visitNote = useCallback(
+    (i: number) => {
+      if (notes[i]?.state !== "offered") return;
+      if (onJumpTo(notes[i].near)) return; // landed — the note stays offered
+      setNotes((ns) => {
+        const next = [...ns];
+        if (next[i]) next[i] = { ...next[i], state: "stale" };
+        return next;
+      });
+    },
+    [notes, onJumpTo]
+  );
+
   return (
     <AnimatePresence>
       {open && (
@@ -530,13 +567,15 @@ export function GhostPalette({
                   <p className="font-hand text-lg text-ink-soft">
                     reading every line… <span className="animate-pulse">✎</span>
                   </p>
-                ) : marks && marks.length === 0 ? (
+                ) : marks && marks.length === 0 && notes.length === 0 ? (
                   <p className="font-hand text-lg text-ink-soft">
                     clean copy — the ghost found nothing to fix ✓
                   </p>
                 ) : (
                   marks && (
                     <>
+                      {marks.length > 0 && (
+                        <>
                       <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
                         the proofreader&apos;s marks — {marks.length}
                       </p>
@@ -580,6 +619,48 @@ export function GhostPalette({
                           </div>
                         ))}
                       </div>
+                        </>
+                      )}
+
+                      {/* the margins — flow trouble the author stitches by hand */}
+                      {notes.length > 0 && (
+                        <div className={marks.length > 0 ? "mt-4" : ""}>
+                          <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
+                            in the margins — {notes.length}
+                          </p>
+                          <div className="max-h-48 space-y-2.5 overflow-y-auto pr-1">
+                            {notes.map((n, i) => (
+                              <div
+                                key={`${i}-${n.near.slice(0, 24)}`}
+                                className="border-b border-dashed border-line/70 pb-2 last:border-b-0"
+                              >
+                                <p className="font-serif text-sm italic leading-relaxed text-ink-soft">
+                                  {n.note}
+                                </p>
+                                <div className="mt-0.5 flex items-baseline gap-3">
+                                  <span className="min-w-0 flex-shrink truncate font-mono text-[0.6rem] text-ink-faint">
+                                    near: &ldquo;{n.near}&rdquo;
+                                  </span>
+                                  {n.state === "offered" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => visitNote(i)}
+                                      className="shrink-0 font-hand text-base text-accent-orange transition-colors hover:text-accent-rust"
+                                    >
+                                      take me there ✎
+                                    </button>
+                                  ) : (
+                                    <span className="shrink-0 font-hand text-base text-accent-rust">
+                                      the page moved
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-3 flex items-center gap-4">
                         {marks.some((m) => m.state === "offered") && (
                           <button

@@ -297,6 +297,20 @@ export default function WritingRoom({
     return true;
   }, []);
 
+  // a margin note's "take me there" — select the troubled span and bring it
+  // into view, so the owner stitches the seam in their own words
+  const jumpToText = useCallback((find: string): boolean => {
+    const ta = bodyRef.current;
+    if (!ta) return false;
+    const idx = ta.value.indexOf(find);
+    if (idx === -1) return false;
+    ta.focus();
+    ta.setSelectionRange(idx, idx + find.length);
+    setCaretIndex(idx);
+    keepCaretComfortable(ta);
+    return true;
+  }, []);
+
   const isPublished = !!post && !post.is_draft;
   const differs = useMemo(
     () => (isPublished && post ? !workingEqual(working, printedFrom(post)) : false),
@@ -1960,6 +1974,7 @@ export default function WritingRoom({
         working={working}
         onInsert={insertFromPalette}
         onApplyFix={applyFix}
+        onJumpTo={jumpToText}
         onSetTitle={(t) => {
           setField("title", t);
           flashNote("titled ✎");

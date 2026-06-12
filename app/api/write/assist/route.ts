@@ -10,7 +10,10 @@ import { createClient } from "@/utils/supabase/server";
 //               unfurls), tags, and a pick for the link-preview cover from the
 //               images already in the entry. structured json, one shot.
 //   proofread — a copy editor's pass: structured MARKS (find → replace, with a
-//               reason), never a rewrite — each lands only by the owner's hand.
+//               reason) for mechanical slips and small seam-rewrites, plus
+//               margin NOTES (anchored observations) for semantic
+//               discontinuities and abrupt transitions that need the author.
+//               never a rewrite — everything lands only by the owner's hand.
 //
 // Everything is seeded with the owner's own published writing (style sample,
 // cached) plus the current entry's vibe (type, tags, title, the draft so far),
@@ -372,13 +375,18 @@ export async function POST(req: NextRequest) {
         instruction ? `the author also asks: ${instruction}` : "",
         `the text:\n<<<\n${text}\n>>>`,
         [
-          `fix ONLY: typos and misspellings, doubled or missing words, wrong homophones (their/there, its/it's), subject–verb disagreements, stray or missing punctuation that changes the reading, broken markdown (unclosed ** or backticks, malformed links/footnotes), and a word spelled two ways in the same entry.`,
-          `NEVER touch the voice: the lowercase style is intentional — do not capitalize sentence starts or "i". fragments, em-dash asides, run-ons that breathe, slang and profanity all stay. when in doubt, leave it alone.`,
-          `return ONLY a json object: {"marks": [{"find": "...", "replace": "...", "note": "..."}]}`,
-          `- "find": the exact text from the entry, character for character, with a few surrounding words so it occurs exactly once.`,
-          `- "replace": the same span corrected (keep the surrounding words identical).`,
-          `- "note": the reason, 2–6 words, lowercase.`,
-          `at most 20 marks, the most important first. an empty "marks" array means the page is clean.`,
+          `two registers of attention:`,
+          ``,
+          `1. MARKS — fixes you can land exactly. fix ONLY: typos and misspellings, doubled or missing words, wrong homophones (their/there, its/it's), subject–verb disagreements, stray or missing punctuation that changes the reading, broken markdown (unclosed ** or backticks, malformed links/footnotes), and a word spelled two ways in the same entry. ALSO as a mark: when a seam between two ideas is abrupt and a small local rewrite — a sentence or two at most — genuinely smooths it, offer that rewrite as a find→replace on the seam.`,
+          ``,
+          `2. NOTES — the margins. read for FLOW: semantic discontinuities (a claim that contradicts or ignores what came before), abrupt transitions (a jump between ideas or paragraphs with no bridge), references that arrive before their referent, threads opened and never closed, and sudden register shifts that read as accident rather than voice. these need the author's own hand — describe them, don't rewrite them.`,
+          ``,
+          `NEVER touch the voice: the lowercase style is intentional — do not capitalize sentence starts or "i". fragments, em-dash asides, run-ons that breathe, slang and profanity all stay. deliberate hard cuts that land as voice are not discontinuities. when in doubt, leave it alone.`,
+          ``,
+          `return ONLY a json object: {"marks": [{"find": "...", "replace": "...", "note": "..."}], "notes": [{"near": "...", "note": "..."}]}`,
+          `- marks · "find": the exact text from the entry, character for character, with a few surrounding words so it occurs exactly once. "replace": the same span corrected (keep the surrounding words identical). "note": the reason, 2–6 words, lowercase.`,
+          `- notes · "near": a short exact quote from where the trouble starts (character for character). "note": what reads as discontinuous and why, one or two lowercase sentences.`,
+          `at most 20 marks and 8 notes, the most important first. empty arrays mean the page is clean.`,
         ].join("\n"),
       ]
         .filter(Boolean)
@@ -409,8 +417,8 @@ export async function POST(req: NextRequest) {
           { status: 502 }
         );
       }
-      // only marks that genuinely point at the page survive — a "fix" for
-      // text that isn't there would strand the client's apply step
+      // only marks/notes that genuinely point at the page survive — a "fix"
+      // or anchor for text that isn't there would strand the client
       const marks = (Array.isArray(parsed.marks) ? parsed.marks : [])
         .map((m) => {
           const r = m as Record<string, unknown>;
@@ -422,7 +430,17 @@ export async function POST(req: NextRequest) {
         })
         .filter((m) => m.find && m.find !== m.replace && text.includes(m.find))
         .slice(0, 20);
-      return NextResponse.json({ marks });
+      const notes = (Array.isArray(parsed.notes) ? parsed.notes : [])
+        .map((n) => {
+          const r = n as Record<string, unknown>;
+          return {
+            near: String(r?.near ?? ""),
+            note: String(r?.note ?? "").slice(0, 400),
+          };
+        })
+        .filter((n) => n.near && n.note && text.includes(n.near))
+        .slice(0, 8);
+      return NextResponse.json({ marks, notes });
     }
 
     // ---- ask: the summoned palette --------------------------------------
