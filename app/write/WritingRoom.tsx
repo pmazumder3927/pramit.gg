@@ -143,6 +143,8 @@ export default function WritingRoom({
   const railH = useRef(0);
   const composingRef = useRef(false);
   const paletteSel = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const paletteSelectionRef = useRef("");
+  const paletteOpenRef = useRef(false);
 
   useEffect(() => {
     workingRef.current = working;
@@ -156,6 +158,9 @@ export default function WritingRoom({
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+  useEffect(() => {
+    paletteOpenRef.current = paletteOpen;
+  }, [paletteOpen]);
 
   const { upload, uploading, progress } = useUpload();
 
@@ -166,6 +171,16 @@ export default function WritingRoom({
     postRef.current = p;
     setPost(p);
     setSavedAt(new Date(p.updated_at));
+  }, []);
+
+  const flashNote = useCallback((text: string, actions?: NoticeAction[]) => {
+    const id = ++noticeCounter.current;
+    setNotice({ id, text, actions });
+    if (!actions) {
+      window.setTimeout(() => {
+        setNotice((n) => (n && n.id === id ? null : n));
+      }, 3600);
+    }
   }, []);
 
   // ----------------------------------------------------------- the ghost
@@ -196,12 +211,34 @@ export default function WritingRoom({
     composingRef,
   });
 
+  // first appearance: one-time introduction, in the house nudge pattern
+  useEffect(() => {
+    if (!ghost.suggestion) return;
+    try {
+      if (!localStorage.getItem("writing-room:ghost-intro")) {
+        localStorage.setItem("writing-room:ghost-intro", "1");
+        flashNote(
+          "the ghost is awake — tab takes its line, esc waves it off · you can rest it anytime"
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [ghost.suggestion, flashNote]);
+
   const openPalette = useCallback(() => {
     const ta = bodyRef.current;
     if (ta) {
-      paletteSel.current = { start: ta.selectionStart, end: ta.selectionEnd };
-      setPaletteSelection(ta.value.slice(ta.selectionStart, ta.selectionEnd));
+      let { selectionStart: start, selectionEnd: end } = ta;
+      // a never-focused textarea reports 0,0 — the pen is really at the end
+      if (start === end && start === 0 && document.activeElement !== ta) {
+        start = end = ta.value.length;
+      }
+      paletteSel.current = { start, end };
+      paletteSelectionRef.current = ta.value.slice(start, end);
+      setPaletteSelection(paletteSelectionRef.current);
     } else {
+      paletteSelectionRef.current = "";
       setPaletteSelection("");
     }
     setPaletteOpen(true);
@@ -212,8 +249,20 @@ export default function WritingRoom({
       const ta = bodyRef.current;
       if (!ta) return;
       ta.focus();
-      const { start, end } = paletteSel.current;
+      let { start, end } = paletteSel.current;
       if (replaceSelection && end > start) {
+        // the page may have moved while the slip was open — verify the
+        // captured range still holds the captured text before replacing
+        const expected = paletteSelectionRef.current;
+        if (ta.value.slice(start, end) !== expected) {
+          const idx = ta.value.indexOf(expected);
+          if (idx === -1) {
+            flashNote("the page moved — reselect the passage ✎");
+            return;
+          }
+          start = idx;
+          end = idx + expected.length;
+        }
         ta.setSelectionRange(start, end);
         insertText(ta, text);
       } else {
@@ -230,7 +279,7 @@ export default function WritingRoom({
       setCaretIndex(ta.selectionStart);
       keepCaretComfortable(ta);
     },
-    []
+    [flashNote]
   );
 
   const isPublished = !!post && !post.is_draft;
@@ -245,16 +294,6 @@ export default function WritingRoom({
     },
     []
   );
-
-  const flashNote = useCallback((text: string, actions?: NoticeAction[]) => {
-    const id = ++noticeCounter.current;
-    setNotice({ id, text, actions });
-    if (!actions) {
-      window.setTimeout(() => {
-        setNotice((n) => (n && n.id === id ? null : n));
-      }, 3600);
-    }
-  }, []);
 
   // ---------------------------------------------------------------- saving
   const flush = useCallback(
@@ -501,8 +540,9 @@ export default function WritingRoom({
         else toggleProof();
       } else if (mod && key === "j") {
         e.preventDefault();
+        // the palette writes into the sheet — proof mode is for reading
         if (paletteOpen) setPaletteOpen(false);
-        else openPalette();
+        else if (mode === "write") openPalette();
       } else if (mod && key === "s") {
         e.preventDefault();
         if (statusRef.current === "drying" || statusRef.current === "offline") {
@@ -569,6 +609,24 @@ export default function WritingRoom({
   useLayoutEffect(() => {
     measureGrowth();
   }, [working.title, working.content, mode, measureGrowth]);
+
+  // the ghost's words must never paint past the sheet's bottom edge: while a
+  // suggestion shows, the textarea grows to hold it (the accepted text will
+  // occupy that space anyway, so Tab causes no reflow jump)
+  useLayoutEffect(() => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    if (!ghost.suggestion) {
+      measureGrowth();
+      return;
+    }
+    const overlay = ta.parentElement?.querySelector<HTMLElement>(
+      "[data-ghost-overlay]"
+    );
+    if (!overlay) return;
+    const target = Math.max(ta.scrollHeight, overlay.scrollHeight);
+    if (target > ta.clientHeight) ta.style.height = `${target}px`;
+  }, [ghost.suggestion, measureGrowth]);
 
   // wrapped line counts change with the viewport — re-measure on resize
   useEffect(() => {
@@ -1563,11 +1621,22 @@ export default function WritingRoom({
                     setCaretIndex(e.target.selectionStart);
                     scheduleCaretComfort();
                   }}
-                  onSelect={(e) =>
-                    setCaretIndex(
-                      (e.target as HTMLTextAreaElement).selectionStart
-                    )
-                  }
+                  onSelect={(e) => {
+                    const el = e.target as HTMLTextAreaElement;
+                    setCaretIndex(el.selectionStart);
+                    // selection adjusted while the slip is open? keep it live
+                    if (paletteOpenRef.current) {
+                      paletteSel.current = {
+                        start: el.selectionStart,
+                        end: el.selectionEnd,
+                      };
+                      paletteSelectionRef.current = el.value.slice(
+                        el.selectionStart,
+                        el.selectionEnd
+                      );
+                      setPaletteSelection(paletteSelectionRef.current);
+                    }
+                  }}
                   onCompositionStart={() => {
                     composingRef.current = true;
                   }}
@@ -1658,7 +1727,7 @@ export default function WritingRoom({
                 <button
                   type="button"
                   onClick={openPalette}
-                  className="text-accent-purple/80 transition-colors hover:text-accent-purple"
+                  className="transition-colors hover:text-accent-rust"
                 >
                   summon the ghost ✦
                 </button>
@@ -1666,7 +1735,7 @@ export default function WritingRoom({
                   type="button"
                   onClick={toggleGhost}
                   title="the ghost offers a line when your pen rests"
-                  className="transition-colors hover:text-accent-purple"
+                  className="transition-colors hover:text-accent-rust"
                 >
                   ghost —{" "}
                   {ghostOn
@@ -1755,6 +1824,28 @@ export default function WritingRoom({
         className="fixed inset-x-0 z-40 md:hidden"
         style={{ bottom: kbInset }}
       >
+        {/* the ghost's line gets its own slip ABOVE the bar — the bar's tap
+            targets must never shuffle under the thumb */}
+        <AnimatePresence>
+          {ghost.suggestion && mode === "write" && (
+            <motion.div
+              initial={{ y: 8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 8, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex justify-center border-t border-line bg-card/95 px-4 py-1.5 backdrop-blur-md"
+            >
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => ghost.acceptIfAny()}
+                className="font-hand text-lg text-ink-soft"
+              >
+                take the ghost&apos;s line ✎
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {marksOpen && mode === "write" && (
             <motion.div
@@ -1773,6 +1864,7 @@ export default function WritingRoom({
                   ["`code`", () => bodyRef.current && wrapSelection(bodyRef.current, "`", "`", "code")],
                   ["# h", () => bodyRef.current && insertText(bodyRef.current, "\n## ")],
                   ["[^1]", () => bodyRef.current && insertFootnote(bodyRef.current)],
+                  [ghostOn ? "ghost✦on" : "ghost✦off", toggleGhost],
                 ] as [string, () => void][]
               ).map(([label, action]) => (
                 <button
@@ -1809,16 +1901,6 @@ export default function WritingRoom({
                     : "bg-ink/40"
             }`}
           />
-          {ghost.suggestion && mode === "write" && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => ghost.acceptIfAny()}
-              className="font-hand text-lg text-accent-purple"
-            >
-              take the ghost&apos;s line ✎
-            </button>
-          )}
           {(
             [
               // marks/attach/ghost write into the sheet — hidden in proof
@@ -1866,6 +1948,7 @@ export default function WritingRoom({
           setField("title", t);
           flashNote("titled ✎");
         }}
+        keyboardInset={kbInset}
       />
 
       {/* ---------- the back of the page ---------- */}
