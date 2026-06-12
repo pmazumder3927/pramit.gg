@@ -92,9 +92,14 @@ function basePersona(sample: string, vibe: string): string {
 
 function vibeBlock(body: Record<string, unknown>): string {
   const title = String(body.title || "").slice(0, 200);
-  const type = String(body.type || "note");
+  const known = ["musing", "journey", "note"];
+  const rawType = String(body.type || "note");
+  const type = known.includes(rawType) ? rawType : "note";
   const tags = Array.isArray(body.tags)
-    ? (body.tags as unknown[]).map(String).slice(0, 12).join(", ")
+    ? (body.tags as unknown[])
+        .slice(0, 12)
+        .map((t) => String(t).slice(0, 40))
+        .join(", ")
     : "";
   const blurbs: Record<string, string> = {
     musing: "reflective, opinion & whimsical writing",
@@ -123,7 +128,16 @@ function knobsFor(model: string, effort: string) {
     : { temperature: 0.8 };
 }
 
-/** Try each model in turn — the mini tier may not exist on this account. */
+function isModelMissing(error: unknown): boolean {
+  const e = error as { status?: number; message?: string } | null;
+  if (!e) return false;
+  if (e.status === 404) return true;
+  return /model|does not exist|not found|unsupported/i.test(e.message || "");
+}
+
+/** Try each model in turn — but only fall through when the MODEL is the
+ * problem; real failures (auth, rate limit, network) surface immediately
+ * instead of being retried at full prompt cost. */
 async function createWithFallback(
   client: OpenAI,
   candidates: string[],
@@ -132,19 +146,31 @@ async function createWithFallback(
     "model" | "stream"
   >,
   stream: boolean,
-  effort: string
+  effort: string,
+  signal: AbortSignal | undefined
 ) {
   let lastError: unknown;
-  for (const model of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const model = candidates[i];
     try {
-      return await client.chat.completions.create({
-        ...params,
-        ...knobsFor(model, effort),
-        model,
-        stream,
-      } as OpenAI.Chat.Completions.ChatCompletionCreateParams);
+      return await client.chat.completions.create(
+        {
+          ...params,
+          ...knobsFor(model, effort),
+          model,
+          stream,
+        } as OpenAI.Chat.Completions.ChatCompletionCreateParams,
+        // the client's abort (typing resumed, tab closed) must reach OpenAI —
+        // otherwise every abandoned request is generated and billed in full
+        { signal }
+      );
     } catch (error) {
       lastError = error;
+      if (i < candidates.length - 1 && isModelMissing(error)) {
+        console.warn(`ghost: model ${model} unavailable, falling back`);
+        continue;
+      }
+      throw error;
     }
   }
   throw lastError;
@@ -156,7 +182,25 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    return NextResponse.json(
+      { error: "the shelf doesn't recognize you — sign in again" },
+      { status: 401 }
+    );
+  }
+  // this route burns tokens, so it can be locked tighter than the rest of the
+  // admin: set WRITE_OWNER_EMAILS (comma-separated) to allowlist.
+  const allow = process.env.WRITE_OWNER_EMAILS?.trim();
+  if (
+    allow &&
+    !allow
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .includes((user.email || "").toLowerCase())
+  ) {
+    return NextResponse.json(
+      { error: "the ghost only writes for the owner" },
+      { status: 403 }
+    );
   }
 
   const client = getOpenAI();
@@ -167,7 +211,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => ({}))) || {};
   const kind = body.kind === "ask" ? "ask" : "complete";
   const sample = await getStyleSample();
   const persona = basePersona(sample, vibeBlock(body));
@@ -192,14 +236,15 @@ export async function POST(req: NextRequest) {
               content: [
                 `the entry so far ends exactly like this (continue from the final character):`,
                 `<<<\n${before}\n>>>`,
-                `continue the writing naturally. if a sentence is unfinished, finish it. offer at MOST two short sentences — a small step forward, not a paragraph. output only the continuation.`,
+                `continue the writing naturally. if a sentence is unfinished, finish it — but never continue mid-word; start at the next word. offer at MOST two short sentences — a small step forward, not a paragraph. output only the continuation.`,
               ].join("\n\n"),
             },
           ],
           max_completion_tokens: 700,
         },
         false,
-        process.env.OPENAI_GHOST_EFFORT?.trim() || "low"
+        process.env.OPENAI_GHOST_EFFORT?.trim() || "low",
+        req.signal
       )) as OpenAI.Chat.Completions.ChatCompletion;
       const text = completion.choices?.[0]?.message?.content ?? "";
       return NextResponse.json({ text });
@@ -207,6 +252,14 @@ export async function POST(req: NextRequest) {
 
     // ---- ask: the summoned palette --------------------------------------
     const mode: AskMode = ASK_MODES.includes(body.mode) ? body.mode : "draft";
+    // the client swaps the ENTIRE selection for the reply — never rework a
+    // silently-truncated version of it
+    if (mode === "rework" && typeof body.selection === "string" && body.selection.length > 4000) {
+      return NextResponse.json(
+        { error: "that's a lot to rework at once — select a smaller passage ✎" },
+        { status: 400 }
+      );
+    }
     let userPrompt: string;
     const context = `the entry so far (text before the pen):\n<<<\n${before}\n>>>${
       after ? `\n\n(text after the pen):\n<<<\n${after}\n>>>` : ""
@@ -266,8 +319,11 @@ export async function POST(req: NextRequest) {
         max_completion_tokens: mode === "titles" ? 600 : 2000,
       },
       true,
-      process.env.OPENAI_ASSIST_EFFORT?.trim() || "low"
-    )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+      process.env.OPENAI_ASSIST_EFFORT?.trim() || "low",
+      req.signal
+    )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk> & {
+      controller?: AbortController;
+    };
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
@@ -278,9 +334,24 @@ export async function POST(req: NextRequest) {
             if (delta) controller.enqueue(encoder.encode(delta));
           }
         } catch (error) {
+          // surface the break — a clean close would present half a passage
+          // as a finished offering, and "swap it in" would take it
           console.error("ghost stream error:", error);
-        } finally {
-          controller.close();
+          try {
+            controller.error(error);
+          } catch {
+            /* already errored/closed */
+          }
+          return;
+        }
+        controller.close();
+      },
+      cancel() {
+        // reader walked away — stop paying for the rest of the generation
+        try {
+          stream.controller?.abort();
+        } catch {
+          /* already done */
         }
       },
     });

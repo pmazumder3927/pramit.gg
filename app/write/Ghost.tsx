@@ -56,6 +56,9 @@ export function useGhostCompletion({
   const suggestionRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const reqId = useRef(0);
+  // after an accept, stay quiet until the owner writes something themselves —
+  // otherwise every Tab chains straight into another paid request
+  const restUntilChanged = useRef<string | null>(null);
 
   useEffect(() => {
     suggestionRef.current = suggestion;
@@ -67,10 +70,11 @@ export function useGhostCompletion({
     abortRef.current = null;
     setThinking(false);
     if (!enabled || composingRef.current) return;
-    // the ghost only writes at the end of the text, where there's room
-    const trimmedEnd = content.replace(/\s+$/, "").length;
-    if (caretIndex < trimmedEnd) return;
+    // the ghost only writes at the very end of the text, where there's room
+    if (caretIndex !== content.length) return;
     if (content.trim().length < 80) return;
+    if (restUntilChanged.current === content) return;
+    restUntilChanged.current = null;
 
     const timer = window.setTimeout(async () => {
       const controller = new AbortController();
@@ -96,17 +100,23 @@ export function useGhostCompletion({
         if (controller.signal.aborted) return;
         let text: string = (data?.text || "").replace(/\s+$/, "");
         if (!text) return;
-        // seam: make sure exactly the right whitespace joins page and ghost
+        // seam: make sure exactly the right whitespace joins page and ghost —
+        // but an intended paragraph break (leading newlines) is kept, not
+        // collapsed into a space
         const last = content[content.length - 1];
+        const leadNewlines = text.match(/^\n+/)?.[0].length ?? 0;
         const startsPunct = /^[,.;:!?)\]…—–]/.test(text.trimStart());
-        if (/\s/.test(last || "")) {
-          text = text.replace(/^\s+/, "");
+        if (leadNewlines > 0) {
+          const keep = /\n$/.test(content) ? "" : "\n".repeat(Math.min(2, leadNewlines));
+          text = keep + text.replace(/^\n+/, "").replace(/^[ \t]+/, "");
+        } else if (/\s/.test(last || "")) {
+          text = text.replace(/^[ \t]+/, "");
         } else if (startsPunct) {
           text = text.trimStart();
         } else if (!/^\s/.test(text)) {
           text = ` ${text}`;
         } else {
-          text = text.replace(/^\s+/, " ");
+          text = text.replace(/^[ \t]+/, " ");
         }
         setSuggestion(text);
       } catch {
@@ -134,6 +144,7 @@ export function useGhostCompletion({
     const end = ta.value.length;
     ta.setSelectionRange(end, end);
     insertText(ta, text);
+    restUntilChanged.current = ta.value; // rest until the owner's own ink
     setSuggestion(null);
     return true;
   }, [bodyRef]);
@@ -164,6 +175,7 @@ export function GhostOverlay({
   return (
     <div
       aria-hidden
+      data-ghost-overlay
       className="pointer-events-none absolute left-0 top-0 w-full whitespace-pre-wrap break-words font-serif text-base leading-[1.75] tracking-[0.01em] md:text-lg md:leading-[1.8]"
     >
       <span className="invisible">{content}</span>
@@ -203,6 +215,7 @@ export function GhostPalette({
   working,
   onInsert,
   onSetTitle,
+  keyboardInset = 0,
 }: {
   open: boolean;
   onClose: () => void;
@@ -210,6 +223,8 @@ export function GhostPalette({
   working: Working;
   onInsert: (text: string, replaceSelection: boolean) => void;
   onSetTitle: (title: string) => void;
+  /** mobile: ride above the software keyboard + the room's bottom bar */
+  keyboardInset?: number;
 }) {
   const hasSelection = selectionText.trim().length > 0;
   const [mode, setMode] = useState<PaletteMode>("draft");
@@ -281,6 +296,8 @@ export function GhostPalette({
       setOutput(acc.trim());
     } catch (err) {
       if (!controller.signal.aborted) {
+        // a broken stream must not leave half an offering looking finished
+        setOutput("");
         setError(
           err instanceof Error ? err.message : "the ghost lost its train of thought — try again"
         );
@@ -331,14 +348,20 @@ export function GhostPalette({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
-          className="fixed inset-x-0 bottom-16 z-[55] flex justify-center px-3 md:bottom-8"
+          className="fixed inset-x-0 z-[55] flex justify-center px-3 bottom-[max(calc(env(safe-area-inset-bottom)+5.75rem),5.75rem)] md:bottom-8"
+          // when the software keyboard is up, ride above it + the mobile bar
+          style={
+            keyboardInset > 0 ? { bottom: keyboardInset + 64 } : undefined
+          }
         >
-          <div className="sketch-card relative w-[min(42rem,100%)] p-4 sm:p-5">
-            <Tape tone="purple" rotate={-4} className="-top-3 left-8" width={64} />
+          {/* a still slip of paper — deliberately NOT .sketch-card: this is an
+              input surface, it must not twitch or glow on hover */}
+          <div className="relative w-[min(42rem,100%)] rounded-lg border-[1.5px] border-line/90 bg-card p-4 shadow-paper-lg sm:p-5">
+            <Tape tone="ink" rotate={-4} className="-top-3 left-8" width={64} />
 
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <Stamp tone="purple" rotate={-3}>
+                <Stamp tone="ink" rotate={-3}>
                   the ghost
                 </Stamp>
                 {hasSelection && (
@@ -374,9 +397,9 @@ export function GhostPalette({
                   onClick={() => setMode(m)}
                   className={`rounded-full border px-3 py-1 font-mono text-[0.65rem] lowercase tracking-[0.08em] transition-colors ${
                     mode === m
-                      ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+                      ? "border-ink bg-ink/10 text-ink"
                       : available
-                        ? "border-line text-ink-soft hover:border-accent-purple/40"
+                        ? "border-line text-ink-soft hover:border-ink/40"
                         : "border-line/50 text-ink-faint/50"
                   }`}
                 >
@@ -398,13 +421,13 @@ export function GhostPalette({
                   }
                 }}
                 placeholder={MODE_HINTS[mode]}
-                className="w-full rounded-md border border-line bg-paper-2/60 px-3 py-2 font-serif text-sm text-ink placeholder:italic placeholder:text-ink-faint focus:border-accent-purple focus:outline-none focus-visible:ring-0"
+                className="w-full rounded-md border border-line bg-paper-2/60 px-3 py-2 font-serif text-sm text-ink placeholder:italic placeholder:text-ink-faint focus:border-ink/50 focus:outline-none focus-visible:ring-0"
               />
               <button
                 type="button"
                 onClick={() => void summon()}
                 disabled={streaming}
-                className="shrink-0 rounded-md border-[1.5px] border-accent-purple px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-accent-purple transition-colors hover:bg-accent-purple/10 disabled:opacity-40"
+                className="shrink-0 rounded-md border-[1.5px] border-ink px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-ink transition-colors hover:bg-ink/10 disabled:opacity-40"
               >
                 {streaming ? "writing…" : "ask ✦"}
               </button>
@@ -416,7 +439,7 @@ export function GhostPalette({
 
             {/* the offering */}
             {(output || streaming) && (
-              <div className="mt-3 rounded-md border border-dashed border-accent-purple/40 bg-accent-purple/[0.04] p-3">
+              <div className="mt-3 rounded-md border border-dashed border-ink/30 bg-ink/[0.03] p-3">
                 <p className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-ink-faint">
                   the ghost offers —
                 </p>
@@ -431,7 +454,7 @@ export function GhostPalette({
                           onSetTitle(t);
                           onClose();
                         }}
-                        className="text-left font-serif text-base font-medium text-ink transition-colors hover:text-accent-purple"
+                        className="text-left font-serif text-base font-medium text-ink transition-colors hover:text-accent-orange"
                       >
                         {t}
                       </button>
@@ -457,14 +480,14 @@ export function GhostPalette({
                     <button
                       type="button"
                       onClick={take}
-                      className="font-hand text-lg text-accent-purple transition-colors hover:text-accent-orange"
+                      className="font-hand text-lg text-accent-orange transition-colors hover:text-accent-rust"
                     >
                       {mode === "rework" ? "swap it in ✎" : "take it ✎"}
                     </button>
                     <button
                       type="button"
                       onClick={() => void summon()}
-                      className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-purple"
+                      className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-orange"
                     >
                       another?
                     </button>
@@ -481,7 +504,7 @@ export function GhostPalette({
             )}
 
             <div className="mt-2.5 text-right">
-              <HandNote tone="purple" rotate={-1} className="text-sm opacity-70">
+              <HandNote tone="ink" rotate={-1} className="text-sm opacity-70">
                 the ghost drafts; you decide. nothing lands without your hand.
               </HandNote>
             </div>
