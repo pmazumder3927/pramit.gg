@@ -98,7 +98,9 @@ export function ChaoticNowPlaying({
             className="block w-[56%] -rotate-3 text-center font-mono text-[0.58rem] font-extrabold uppercase leading-[1.05] tracking-tight md:text-[0.72rem]"
             style={{ color: onAlbum }}
           >
-            {nowPlaying.isPlaying ? "now playing" : echoing ? "echoing" : "last played"}
+            {/* the echo keeps the honest "last played" label — the caption under
+                the progress bar is what explains the still-moving playhead */}
+            {nowPlaying.isPlaying ? "now playing" : "last played"}
           </span>
         </span>
       </div>

@@ -116,6 +116,10 @@ function Equalizer({ color, playing }: { color: string; playing: boolean }) {
 function NowPlayingBanner() {
   const pathname = usePathname();
   const { track, albumColor } = useNowPlayingContext();
+  // nothing playing, but the last song is still ECHOING — replaying on a loop
+  // through the scape — so the ticket keeps its time too.
+  const echoing =
+    !!track && !track.isPlaying && !!track.playedAtMs && !!track.duration;
 
   // Advance the playhead locally between polls so the bar ticks each second.
   const [tick, setTick] = useState(0);
@@ -127,18 +131,25 @@ function NowPlayingBanner() {
     setTick(Date.now());
   }, [seed, trackKey]);
   useEffect(() => {
-    if (!track?.isPlaying) return;
+    if (!track?.isPlaying && !echoing) return;
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [track?.isPlaying]);
+  }, [track?.isPlaying, echoing]);
 
   if (pathname === "/" || pathname.startsWith("/music") || !track) return null;
 
   const elapsed = track.isPlaying ? tick - baseRef.current.at : 0;
-  const live = track.duration
-    ? Math.min(track.duration, baseRef.current.progress + Math.max(0, elapsed))
-    : track.progress ?? 0;
-  const pct = track.duration ? (live / track.duration) * 100 : 0;
+  const dur = track.duration ?? 0;
+  // echo progress loops on the client clock — see app/lib/scape-playhead for
+  // the carefully anchored version the lyric pen uses.
+  const live = track.isPlaying
+    ? dur
+      ? Math.min(dur, baseRef.current.progress + Math.max(0, elapsed))
+      : track.progress ?? 0
+    : echoing
+      ? (((tick - (track.playedAtMs ?? 0)) % dur) + dur) % dur
+      : track.progress ?? 0;
+  const pct = dur ? (live / dur) * 100 : 0;
 
   const Body = (
     <div className="relative flex items-center gap-3 px-4 pb-2 pt-2">
@@ -169,7 +180,7 @@ function NowPlayingBanner() {
         <span className="flex items-center gap-1.5">
           <Equalizer color={albumColor} playing={track.isPlaying} />
           <span className="font-hand text-[15px] leading-none" style={{ color: albumColor }}>
-            {track.isPlaying ? "now spinning" : "last spun"}
+            {track.isPlaying ? "now spinning" : echoing ? "last spun · echoing" : "last spun"}
           </span>
         </span>
         <span className="mt-0.5 block truncate font-serif text-sm font-medium leading-tight text-ink">
@@ -181,12 +192,12 @@ function NowPlayingBanner() {
       {/* tap affordance — a hand-drawn play caret nudged in its album color */}
       <Doodle name="arrow" tone="purple" className="h-4 w-7 flex-none opacity-50" strokeWidth={3} />
 
-      {/* inked progress line riding the bottom hairline */}
-      {track.isPlaying && track.duration != null && (
+      {/* inked progress line riding the bottom hairline — fainter for the echo */}
+      {(track.isPlaying || echoing) && dur > 0 && (
         <span
           aria-hidden
           className="absolute bottom-0 left-0 h-[2px] rounded-full transition-[width] duration-1000 ease-linear"
-          style={{ width: `${pct}%`, background: albumColor }}
+          style={{ width: `${pct}%`, background: albumColor, opacity: echoing ? 0.5 : 1 }}
         />
       )}
     </div>

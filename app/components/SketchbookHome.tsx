@@ -42,7 +42,7 @@ function NowSpinningCard() {
           className="font-hand text-xl"
           style={{ color: "rgb(var(--album-rgb))" }}
         >
-          {playing ? "now spinning" : echoing ? "still echoing" : "last tune"}
+          {playing ? "now spinning" : echoing ? "last tune · echoing" : "last tune"}
         </span>
         <span className="eq-bars">
           <span

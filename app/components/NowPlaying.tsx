@@ -117,7 +117,7 @@ export default function NowPlaying() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="mb-0.5 font-hand text-base leading-none" style={{ color: albumColor }}>
-                  {track.isPlaying ? "now spinning" : echoing ? "still echoing" : "last spun"}
+                  {track.isPlaying ? "now spinning" : echoing ? "last spun — still echoing" : "last spun"}
                 </div>
                 <div className="truncate font-serif text-base font-medium leading-tight text-ink">{track.title}</div>
                 <div className="truncate text-sm text-ink-soft">{track.artist}</div>
@@ -272,7 +272,7 @@ export default function NowPlaying() {
               <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
             )}
             <span className="font-hand text-sm leading-none" style={{ color: albumColor }}>
-              {track.isPlaying ? "now spinning" : echoing ? "echoing" : "last spun"}
+              {track.isPlaying ? "now spinning" : echoing ? "last spun · echoing" : "last spun"}
             </span>
           </div>
           <div className="mt-0.5 truncate font-serif text-sm font-medium leading-tight text-ink">{track.title}</div>
