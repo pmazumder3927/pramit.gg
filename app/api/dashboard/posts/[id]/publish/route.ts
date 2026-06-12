@@ -61,6 +61,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     };
     if (isUnmintedSlug(post.slug)) {
       update.slug = await mintSlug(admin, title, id);
+      // First publish: the entry's date is the day it went to print, not the
+      // day the draft row was opened (created_at drives sort + display).
+      update.created_at = now;
     }
   } else if (action === "set-page") {
     update = {
