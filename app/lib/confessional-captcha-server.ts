@@ -181,7 +181,7 @@ const PROMPT_TIERS: PromptTier[] = [
   },
 ];
 
-const DEFAULT_VISION_MODEL = "gpt-5.5-mini";
+const DEFAULT_VISION_MODEL = "gpt-5.4-mini";
 
 type CaptchaVerificationResult =
   | { ok: true; challenge: ConfessionalCaptchaChallenge; matchReason: string }
