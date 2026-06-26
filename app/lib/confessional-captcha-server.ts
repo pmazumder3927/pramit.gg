@@ -181,7 +181,7 @@ const PROMPT_TIERS: PromptTier[] = [
   },
 ];
 
-const DEFAULT_VISION_MODEL = "gpt-4o-mini";
+const DEFAULT_VISION_MODEL = "gpt-5.5-mini";
 
 type CaptchaVerificationResult =
   | { ok: true; challenge: ConfessionalCaptchaChallenge; matchReason: string }
@@ -332,7 +332,7 @@ export async function verifyConfessionalCaptchaSubmission(
   if (!verdict.matches) {
     const unconvinced =
       challenge.kind === "glyph" && challenge.glyph
-        ? `The council squints. that does not read as ${challenge.glyph.glyph} (${challenge.glyph.meaning}).`
+        ? `The council wanted a real attempt at ${challenge.glyph.glyph} (${challenge.glyph.meaning}). botch it however you like — just try.`
         : `The council is unconvinced. this ${challenge.drawingPrompt} sucks`;
     return { ok: false, error: unconvinced };
   }
@@ -433,25 +433,31 @@ function buildFreeformGrading(prompt: string, level: number): Grading {
 }
 
 function buildGlyphGrading(glyph: ChallengeGlyph): Grading {
-  // The user was shown the reference glyph and asked to reproduce/trace it. We
-  // hand the model the character, its meaning, and an explicit shape rubric so
-  // it can grade the form even when it cannot read an exotic script (e.g. a
-  // hieroglyph). Strict about which character was drawn, lenient about skill.
+  // The user was shown an intentionally DIFFICULT character (an intricate hanzi,
+  // kanji, or hieroglyph) for a moment and asked to reproduce it freehand with a
+  // finger. They are EXPECTED to botch it — the charmingly-wrong results are the
+  // whole point of the gallery. So we grade the *sincerity of the attempt*, not
+  // legibility: a person who clearly tried to copy a dense, many-stroked form
+  // passes even if the result is illegible and "wrong". We only reject people
+  // who plainly did not engage with the character at all. When in doubt, accept.
   const systemPrompt =
-    "You verify a captcha where the user was shown a single writing-system character (a Chinese hanzi, a Japanese kana/kanji, or an Egyptian hieroglyph) and asked to reproduce it by hand on a canvas. Decide whether the drawing recognizably reproduces THAT specific character.\n\n" +
-    "Be generous about penmanship — these are rough finger drawings, so wobbly strokes, uneven proportions, and shaky lines are fine. Judge the overall structure and the major strokes/parts against the expected form, not the neatness.\n\n" +
-    "Reject (matches: false) when ANY of these apply:\n" +
+    "You verify a captcha where the user was shown a single, intentionally intricate writing-system character (an ornate Chinese hanzi, a Japanese kanji, or an Egyptian hieroglyph) for a moment and asked to copy it freehand with their finger.\n\n" +
+    "These characters are deliberately too hard to reproduce accurately, and the whole point is that people BOTCH them. Your job is to judge whether the person made a sincere attempt to copy the character — NOT whether the result is legible or 'correct'. An illegible, wonky, wrong-but-earnest scribble that gestures at the character's complexity should PASS. Default to accepting; only reject someone who clearly did not engage with the character.\n\n" +
+    "Accept (matches: true) generously, including when:\n" +
+    "- The marks are a tangled, messy, or unrecognizable attempt that nonetheless has roughly the busy, multi-stroke density of the target character.\n" +
+    "- The proportions, stroke count, or arrangement are clearly off — this is expected.\n" +
+    "- You cannot read it as the character but it is plausibly a finger trying to copy a hard glyph.\n\n" +
+    "Reject (matches: false) ONLY when ANY of these apply:\n" +
     "- The canvas is blank or near-blank (a single dot, a tiny mark, almost nothing).\n" +
-    "- The marks are random scribbles or noise with no resemblance to the character.\n" +
-    "- The drawing is clearly a different character, a Latin letter/word, or an unrelated picture.\n" +
-    "- The overall structure is plainly wrong (e.g. the wrong number of major strokes/components, or the wrong arrangement).\n\n" +
+    "- The marks are far too sparse/simple for the character (e.g. one straight line or a lone circle when the target is a dense multi-component glyph) — i.e. no real attempt was made.\n" +
+    "- The drawing is clearly a Latin letter or word, or recognizable everyday picture (a heart, a smiley, a cat, a star) instead of an attempt at the character.\n\n" +
     'Reply with strict JSON: {"matches": boolean, "reason": "<one short sentence explaining your decision>"}.';
 
   const romanization = glyph.romanization ? ` (${glyph.romanization})` : "";
   const targetLine =
     `Target character: ${glyph.glyph}${romanization} — ${glyph.scriptLabel}, meaning "${glyph.meaning}".\n` +
-    `Expected form: ${glyph.shapeHint}\n` +
-    `Does this drawing recognizably reproduce that character's shape?`;
+    `Rough form / complexity: ${glyph.shapeHint}\n` +
+    `Did this person make a sincere finger-attempt to copy that character (even a botched, illegible one)? Accept unless they clearly drew something else or barely marked the canvas.`;
 
   // Character matching benefits from finer stroke detail than a freeform blob.
   return { systemPrompt, targetLine, imageDetail: "auto" };
@@ -485,11 +491,18 @@ async function classifyDrawing({
       ? buildGlyphGrading(glyph)
       : buildFreeformGrading(prompt, level);
 
+  // gpt-5 / o-series are reasoning models: they reject a custom temperature and
+  // take a reasoning_effort knob instead. gpt-4o / gpt-4.1 are the reverse.
+  const isReasoning = /^(gpt-5|o\d)/.test(model);
+  const tuning: Record<string, unknown> = isReasoning
+    ? { reasoning_effort: process.env.OPENAI_VISION_EFFORT?.trim() || "low" }
+    : { temperature: 0 };
+
   try {
     const response = await client.chat.completions.create(
       {
         model,
-        temperature: 0,
+        ...tuning,
         response_format: { type: "json_object" },
         messages: [
           {
@@ -510,8 +523,8 @@ async function classifyDrawing({
             ],
           },
         ],
-      },
-      { timeout: 15_000 },
+      } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+      { timeout: 30_000 },
     );
 
     const raw = response.choices[0]?.message?.content?.trim();
