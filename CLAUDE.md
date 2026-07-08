@@ -34,6 +34,9 @@ npm run lint     # Run Next.js linter
 npm run start    # Start production server
 ```
 
+## Side-project subdomains
+Any project in ~/Github can be deployed to `<name>.pramit.gg` by running `ship` from its directory (script: `scripts/ship.sh`, symlinked to `~/.local/bin/ship`). See `docs/subdomain-deploys.md`.
+
 ## Environment Variables
 The project uses Supabase and likely requires:
 - Supabase URL and keys
