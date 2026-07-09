@@ -16,11 +16,9 @@ import { formatDistanceToNow, format } from "date-fns";
 import { useViewCount, ViewCount } from "./ViewCountTracker";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
 import OwnerEditLink from "@/app/components/OwnerEditLink";
-import SignalNoiseLab from "@/app/components/openaim/SignalNoiseLab";
-import NoiseFrontier from "@/app/components/openaim/NoiseFrontier";
-import ChallengePoint from "@/app/components/openaim/ChallengePoint";
-import CapabilityRadar from "@/app/components/openaim/CapabilityRadar";
-import SensSpectrum from "@/app/components/openaim/SensSpectrum";
+// Generic per-post custom-tag widgets (each post's pack is code-split; see
+// app/components/post-widgets.tsx). Keeps post-specific visuals out of here.
+import { postWidgetComponents, postWidgetTags } from "@/app/components/post-widgets";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
@@ -445,11 +443,7 @@ export default function PostContent({
                       "ol",
                       "blockquote",
                       "plotly-graph",
-                      "submovement-lab",
-                      "noise-frontier",
-                      "challenge-point",
-                      "capability-radar",
-                      "sens-spectrum",
+                      ...postWidgetTags,
                     ];
                     if (node?.children) {
                       const hasBlockElement = node.children.some((child: any) =>
@@ -648,12 +642,8 @@ export default function PostContent({
                       </div>
                     );
                   },
-                  // OpenAim essay widgets — self-contained, theme-aware, no props
-                  "submovement-lab": () => <SignalNoiseLab />,
-                  "noise-frontier": () => <NoiseFrontier />,
-                  "challenge-point": () => <ChallengePoint />,
-                  "capability-radar": () => <CapabilityRadar />,
-                  "sens-spectrum": () => <SensSpectrum />,
+                  // Per-post custom-tag widgets, registered generically.
+                  ...postWidgetComponents,
                 }}
               >
                 {post.content}
