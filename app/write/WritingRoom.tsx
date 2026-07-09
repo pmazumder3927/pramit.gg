@@ -39,6 +39,7 @@ import {
   countWords,
   handleEnter,
   handleTab,
+  insertFigure,
   insertFootnote,
   insertLink,
   insertText,
@@ -46,6 +47,8 @@ import {
   isPlatformMod,
   isSoundtrackUrl,
   isUrl,
+  lineBoundsAt,
+  parseFigures,
   parseOutline,
   replaceToken,
   wrapSelection,
@@ -65,6 +68,8 @@ import {
 } from "./lib/types";
 import Verso from "./Verso";
 import { GhostOverlay, GhostPalette, useGhostCompletion } from "./Ghost";
+import { PlateOverlay, PlatePicker } from "./Figures";
+import { postWidgetByTag, postWidgetTags } from "@/app/components/post-widgets";
 
 type NoticeAction = { label: string; onClick?: () => void; href?: string };
 type Notice = { id: number; text: string; actions?: NoticeAction[] };
@@ -118,6 +123,8 @@ export default function WritingRoom({
   const [ghostOn, setGhostOn] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteSelection, setPaletteSelection] = useState("");
+  const [plateOpen, setPlateOpen] = useState(false);
+  const [bodyFocused, setBodyFocused] = useState(false);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -203,7 +210,7 @@ export default function WritingRoom({
   }, []);
 
   const ghost = useGhostCompletion({
-    enabled: ghostOn && mode === "write" && !versoOpen && !paletteOpen,
+    enabled: ghostOn && mode === "write" && !versoOpen && !paletteOpen && !plateOpen,
     bodyRef,
     workingRef,
     content: working.content,
@@ -242,6 +249,21 @@ export default function WritingRoom({
       setPaletteSelection("");
     }
     setPaletteOpen(true);
+  }, []);
+
+  // the press — figures are objects you reach for, not markup you memorize
+  const openPlates = useCallback(() => {
+    setPaletteOpen(false);
+    setPlateOpen(true);
+  }, []);
+
+  const insertFigureAt = useCallback((tag: string) => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    insertFigure(ta, tag);
+    setCaretIndex(ta.selectionStart);
+    setPlateOpen(false);
+    keepCaretComfortable(ta);
   }, []);
 
   const insertFromPalette = useCallback(
@@ -572,6 +594,11 @@ export default function WritingRoom({
         // the palette writes into the sheet — proof mode is for reading
         if (paletteOpen) setPaletteOpen(false);
         else if (mode === "write") openPalette();
+      } else if (mod && key === "/") {
+        // the press — slash for "insert a figure"
+        e.preventDefault();
+        if (plateOpen) setPlateOpen(false);
+        else if (mode === "write") openPlates();
       } else if (mod && key === "s") {
         e.preventDefault();
         if (statusRef.current === "drying" || statusRef.current === "offline") {
@@ -585,7 +612,8 @@ export default function WritingRoom({
         e.preventDefault();
         setVersoOpen(true);
       } else if (e.key === "Escape") {
-        if (paletteOpen) setPaletteOpen(false);
+        if (plateOpen) setPlateOpen(false);
+        else if (paletteOpen) setPaletteOpen(false);
         else if (versoOpen) setVersoOpen(false);
         else if (revisionsOpen) setRevisionsOpen(false);
         else if (typePickerOpen) setTypePickerOpen(false);
@@ -600,7 +628,9 @@ export default function WritingRoom({
     revisionsOpen,
     typePickerOpen,
     paletteOpen,
+    plateOpen,
     openPalette,
+    openPlates,
     exitProof,
     toggleProof,
     flush,
@@ -867,6 +897,62 @@ export default function WritingRoom({
     });
     return active;
   }, [outline, caretIndex]);
+
+  // figures are objects in the document too — interleave them with the
+  // headings so the writer's outline shows exactly where each one sits.
+  const figureTagSet = useMemo(() => new Set(postWidgetTags), []);
+  const figures = useMemo(
+    () => parseFigures(working.content, figureTagSet),
+    [working.content, figureTagSet]
+  );
+  type OutlineItem =
+    | {
+        kind: "heading";
+        text: string;
+        depth: number;
+        caret: number;
+        index: number;
+        hi: number;
+      }
+    | {
+        kind: "figure";
+        label: string;
+        caret: number;
+        index: number;
+        interactive: boolean;
+      };
+  const outlineItems = useMemo<OutlineItem[]>(() => {
+    const items: OutlineItem[] = outline.map((h, i) => ({
+      kind: "heading",
+      text: h.text,
+      depth: h.depth,
+      caret: h.caret,
+      index: h.index,
+      hi: i,
+    }));
+    for (const f of figures) {
+      const def = postWidgetByTag[f.tag];
+      items.push({
+        kind: "figure",
+        label: def?.label ?? f.tag,
+        caret: f.caret,
+        index: f.index,
+        interactive: def?.kind === "interactive",
+      });
+    }
+    items.sort((a, b) => a.index - b.index);
+    return items;
+  }, [outline, figures]);
+
+  // the plate overlay dresses every figure line — except the one the pen is
+  // resting on, which stays raw so it's always directly editable.
+  const revealLineStart = useMemo(
+    () =>
+      bodyFocused && mode === "write"
+        ? lineBoundsAt(working.content, caretIndex).start
+        : -1,
+    [bodyFocused, mode, working.content, caretIndex]
+  );
 
   const jumpToOutline = useCallback((caret: number) => {
     const ta = bodyRef.current;
@@ -1347,7 +1433,7 @@ export default function WritingRoom({
         <div className="mx-auto w-full max-w-[40rem] px-4 pb-32 pt-8 sm:max-w-[44rem] sm:px-6 md:pt-12 xl:grid xl:max-w-[84rem] xl:grid-cols-[minmax(0,1fr)_minmax(0,46rem)_minmax(0,1fr)] xl:items-start xl:gap-x-12 xl:px-8 2xl:max-w-[92rem] 2xl:gap-x-16">
           {/* ---------- left margin: the outline being born ---------- */}
           <aside className="hidden self-start xl:sticky xl:top-20 xl:block">
-            {outline.length > 0 && (
+            {outlineItems.length > 0 && (
               <nav
                 aria-label="Outline"
                 className="rise d1 relative mt-8 max-h-[calc(100vh-7rem)] overflow-y-auto pl-4 scrollbar-hide"
@@ -1360,38 +1446,57 @@ export default function WritingRoom({
                   in this entry —
                 </p>
                 <ul className="space-y-1.5">
-                  {outline.map((h, i) => (
-                    <li
-                      key={`${h.index}-${h.text}`}
-                      style={{
-                        paddingLeft: `${Math.min(h.depth - outlineMinDepth, 2) * 0.85}rem`,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => jumpToOutline(h.caret)}
-                        className={`group/oi relative inline-block text-left font-hand leading-snug transition-colors ${
-                          h.depth === outlineMinDepth ? "text-base" : "text-sm"
-                        } ${
-                          i === activeOutline
-                            ? "text-ink"
-                            : "text-ink-soft hover:text-ink"
-                        }`}
+                  {outlineItems.map((it) =>
+                    it.kind === "heading" ? (
+                      <li
+                        key={`h-${it.index}-${it.text}`}
+                        style={{
+                          paddingLeft: `${Math.min(it.depth - outlineMinDepth, 2) * 0.85}rem`,
+                        }}
                       >
-                        {h.text}
-                        <Doodle
-                          name="underline"
-                          tone="rust"
-                          className={`block h-1.5 w-full transition-opacity duration-200 ${
-                            i === activeOutline
-                              ? "opacity-100"
-                              : "opacity-0 group-hover/oi:opacity-40"
+                        <button
+                          type="button"
+                          onClick={() => jumpToOutline(it.caret)}
+                          className={`group/oi relative inline-block text-left font-hand leading-snug transition-colors ${
+                            it.depth === outlineMinDepth ? "text-base" : "text-sm"
+                          } ${
+                            it.hi === activeOutline
+                              ? "text-ink"
+                              : "text-ink-soft hover:text-ink"
                           }`}
-                          strokeWidth={3}
-                        />
-                      </button>
-                    </li>
-                  ))}
+                        >
+                          {it.text}
+                          <Doodle
+                            name="underline"
+                            tone="rust"
+                            className={`block h-1.5 w-full transition-opacity duration-200 ${
+                              it.hi === activeOutline
+                                ? "opacity-100"
+                                : "opacity-0 group-hover/oi:opacity-40"
+                            }`}
+                            strokeWidth={3}
+                          />
+                        </button>
+                      </li>
+                    ) : (
+                      <li key={`f-${it.index}`}>
+                        <button
+                          type="button"
+                          onClick={() => jumpToOutline(it.caret)}
+                          title="a figure — jump to it"
+                          className="group/oi inline-flex items-center gap-1.5 text-left font-hand text-sm leading-snug text-accent-purple/70 transition-colors hover:text-accent-purple"
+                        >
+                          <span
+                            aria-hidden
+                            className="text-[0.7em] leading-none"
+                          >
+                            {it.interactive ? "◆" : "◇"}
+                          </span>
+                          <span className="truncate">{it.label}</span>
+                        </button>
+                      </li>
+                    )
+                  )}
                 </ul>
               </nav>
             )}
@@ -1672,6 +1777,8 @@ export default function WritingRoom({
                   onCompositionEnd={() => {
                     composingRef.current = false;
                   }}
+                  onFocus={() => setBodyFocused(true)}
+                  onBlur={() => setBodyFocused(false)}
                   onKeyDown={onBodyKeyDown}
                   onPaste={onBodyPaste}
                   placeholder="start anywhere. you can fix it later ✎"
@@ -1679,6 +1786,11 @@ export default function WritingRoom({
                   spellCheck
                   className="relative block min-h-[50vh] w-full resize-none overflow-hidden bg-transparent font-serif text-base leading-[1.75] tracking-[0.01em] text-ink-soft placeholder:italic placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 md:text-lg md:leading-[1.8]"
                   style={{ caretColor: "rgb(var(--accent-rust))" }}
+                />
+                {/* figure lines, dressed as inked plates (the pen's line stays raw) */}
+                <PlateOverlay
+                  content={working.content}
+                  revealLineStart={revealLineStart}
                 />
                 <GhostOverlay
                   content={working.content}
@@ -1762,6 +1874,14 @@ export default function WritingRoom({
                 </button>
                 <button
                   type="button"
+                  onClick={openPlates}
+                  title="drop an interactive figure or diagram into the page — ⌘/"
+                  className="transition-colors hover:text-accent-purple"
+                >
+                  press a figure ✦
+                </button>
+                <button
+                  type="button"
                   onClick={toggleGhost}
                   title="the ghost offers a line when your pen rests"
                   className="transition-colors hover:text-accent-rust"
@@ -1839,8 +1959,8 @@ export default function WritingRoom({
 
               <div className="space-y-0.5 font-mono text-[0.6rem] tracking-[0.08em] text-ink-faint/80">
                 <p>⌘e proof · ⌘b bold · ⌘i italic</p>
-                <p>⌘k link · ⌘j ghost · ⌘↵ publish</p>
-                <p>tab takes the ghost&apos;s line · esc waves it off</p>
+                <p>⌘k link · ⌘j ghost · ⌘/ figure</p>
+                <p>⌘↵ publish · tab takes the ghost&apos;s line</p>
                 <p>⌘s — it&apos;s already saved</p>
               </div>
             </div>
@@ -1937,6 +2057,7 @@ export default function WritingRoom({
                 ? ([
                     ["marks", () => setMarksOpen((o) => !o)],
                     ["attach", () => fileInputRef.current?.click()],
+                    ["figure", openPlates],
                     ["ghost", openPalette],
                   ] as [string, () => void][])
                 : []),
@@ -1965,6 +2086,14 @@ export default function WritingRoom({
           ))}
         </div>
       </div>
+
+      {/* ---------- the press: pick a figure ---------- */}
+      <PlatePicker
+        open={plateOpen}
+        onClose={() => setPlateOpen(false)}
+        onInsert={insertFigureAt}
+        keyboardInset={kbInset}
+      />
 
       {/* ---------- the ghost's slip ---------- */}
       <GhostPalette

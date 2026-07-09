@@ -284,3 +284,87 @@ export function parseOutline(content: string): OutlineEntry[] {
 export function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
+
+// ---------------------------------------------------------------------------
+// Figures: embedded post-widgets live in the source as a single custom tag on
+// its own line — <noise-frontier></noise-frontier>. The writing room treats
+// those lines as first-class objects: it dresses them as inked plates, lists
+// them in the outline, and inserts them cleanly. These helpers stay pure (they
+// take the set of known tags, never the component catalog).
+// ---------------------------------------------------------------------------
+
+/** The char range [start,end) of the line that `index` sits on. */
+export function lineBoundsAt(
+  value: string,
+  index: number
+): { start: number; end: number } {
+  const start = value.lastIndexOf("\n", index - 1) + 1;
+  const nl = value.indexOf("\n", index);
+  return { start, end: nl === -1 ? value.length : nl };
+}
+
+/**
+ * If `line` is nothing but a single known figure tag — `<tag></tag>`, `<tag/>`,
+ * or a bare `<tag>` — return the tag name, else null. Attributes disqualify it
+ * (the figures take none), which keeps ordinary HTML/JSX in a post untouched.
+ */
+export function matchFigureTag(line: string, tags: Set<string>): string | null {
+  const t = line.trim();
+  const m =
+    /^<([a-z][a-z0-9-]*)\s*>\s*<\/\1\s*>$/i.exec(t) || // <tag></tag>
+    /^<([a-z][a-z0-9-]*)\s*\/>$/i.exec(t) || //           <tag/>
+    /^<([a-z][a-z0-9-]*)\s*>$/i.exec(t); //               <tag>
+  if (!m) return null;
+  const tag = m[1].toLowerCase();
+  return tags.has(tag) ? tag : null;
+}
+
+export type FigureEntry = {
+  tag: string;
+  /** char offset of the figure line's start (for sort + jump) */
+  index: number;
+  /** where the pen should land (line start) */
+  caret: number;
+};
+
+/** Every standalone figure line in `content`, in document order (skips fences). */
+export function parseFigures(
+  content: string,
+  tags: Set<string>
+): FigureEntry[] {
+  if (tags.size === 0) return [];
+  const lines = content.split("\n");
+  const out: FigureEntry[] = [];
+  let inFence = false;
+  let offset = 0;
+  for (const l of lines) {
+    if (/^```/.test(l.trim())) {
+      inFence = !inFence;
+    } else if (!inFence) {
+      const tag = matchFigureTag(l, tags);
+      if (tag) out.push({ tag, index: offset, caret: offset });
+    }
+    offset += l.length + 1;
+  }
+  return out;
+}
+
+/**
+ * Drop a figure onto its own line at the caret, with a blank line above and
+ * below — without stacking blanks against text that's already spaced. Goes
+ * through insertText so the owner's undo stack survives.
+ */
+export function insertFigure(ta: HTMLTextAreaElement, tag: string) {
+  ta.focus();
+  const { selectionStart: s, selectionEnd: e, value } = ta;
+  const before = value.slice(0, s);
+  const after = value.slice(e);
+  const block = `<${tag}></${tag}>`;
+  const leadNL = /\n*$/.exec(before)?.[0].length ?? 0;
+  const trailNL = /^\n*/.exec(after)?.[0].length ?? 0;
+  const lead = before === "" ? "" : "\n".repeat(Math.max(0, 2 - leadNL));
+  const trail = after === "" ? "" : "\n".repeat(Math.max(0, 2 - trailNL));
+  insertText(ta, `${lead}${block}${trail}`);
+  const caret = s + lead.length + block.length;
+  ta.setSelectionRange(caret, caret);
+}
