@@ -36,7 +36,7 @@ export const openaimFigures: FigureDef[] = [
   {
     tag: "capability-radar",
     label: "the shape of your aim",
-    blurb: "the five-axis capability radar, live.",
+    blurb: "the 14-axis capability radar, live.",
     kind: "interactive",
     component: dynamic(() => import("./CapabilityRadar")),
   },

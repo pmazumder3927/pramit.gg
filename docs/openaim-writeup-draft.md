@@ -2,21 +2,27 @@
   DRAFT — openaim writeup for pramit.gg
   voice: lowercase-leaning, honest, deep, self-aware, ✦, tl;dr, setbacks section, sign-off.
 
-  TWO VISUAL LAYERS:
-  1) Static inline SVG figures — self-contained + theme-neutral (light card / dark ink),
-     so they render anywhere, even in a plain markdown preview.
-  2) FIVE INTERACTIVE WIDGETS — custom tags that render real React components on pramit.gg
-     via the same custom-tag → component mapping the site already uses for <plotly-graph>:
-       <submovement-lab>   → app/components/openaim/SignalNoiseLab.tsx   (signal-dependent noise, live)
-       <noise-frontier>    → app/components/openaim/NoiseFrontier.tsx    (drag your operating point)
-       <challenge-point>   → app/components/openaim/ChallengePoint.tsx   (solve difficulty to 0.68)
-       <capability-radar>  → app/components/openaim/CapabilityRadar.tsx  (14 cited axes, run a session)
-       <sens-spectrum>     → app/components/openaim/SensSpectrum.tsx      (expand your mastered band)
-     Wiring: app/post/[id]/PostContent.tsx (imports + `components` map + `blockTags`).
-     Preview all five at /dev/openaim-preview. Shared kit: app/components/openaim/kit.tsx.
-     AUTHORING CAVEAT: always use explicit closing tags (<noise-frontier></noise-frontier>),
-     never self-closing — HTML parsing does not self-close custom elements.
-  Replace <!-- SCREENSHOT --> placeholders with real captures when you want them.
+  FIGURES — all custom tags that render real, THEME-AWARE React components on pramit.gg,
+  via the generic per-post figure registry (app/components/post-widgets.tsx →
+  app/components/openaim/registry.tsx). PostContent.tsx stays generic; nothing OpenAim-
+  specific is hardcoded in the shared renderer, and each figure is a next/dynamic split
+  point so other posts never download this code. The writing room can browse/insert them
+  (app/write/Figures.tsx). Shared kit: app/components/openaim/kit.tsx.
+
+  5 INTERACTIVE widgets:  <submovement-lab> <noise-frontier> <challenge-point>
+                          <capability-radar> <sens-spectrum>
+  8 static (theme-aware) diagrams:  <submovement-fig> <loop-fig> <input-recovery-fig>
+                          <miss-fingerprints-fig> <session-plan-fig> <commons-fig>
+                          <browser-pipeline-fig> <timeline-fig>
+  Preview all of them at /dev/openaim-widgets.
+  AUTHORING CAVEAT: always use explicit closing tags (<noise-frontier></noise-frontier>),
+  never self-closing — HTML parsing does not self-close custom elements.
+
+  SCREENSHOTS — 5 real captures are in ~/openaim-screenshots/ (menu, onboarding, scenarios,
+  settings, coached-briefing). They are NOT committed — upload them through the write room like
+  any other post image and paste the returned URL at each "SCREENSHOT — upload via the write
+  room" placeholder below. Three data-rich screens (Replay Lab, populated Player profile,
+  results card) still need YOUR real run data — see the SCREENSHOT note in engine 1.
 -->
 
 # i built an aim trainer that tells you *why* you miss
@@ -62,41 +68,8 @@ when you snap your crosshair to a target, that movement is not one smooth motion
 
 that second paper — Harris & Wolpert, *Nature*, 1998, 3000+ citations — is the load-bearing one. a single "minimize the variance caused by signal-dependent noise" principle predicts the trajectories of *both* eye saccades and arm reaches, and it *derives* Fitts's law from first principles instead of just curve-fitting it.
 
-<figure>
-<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One flick, decomposed. Top: mouse-speed profile with one large ballistic primary hump and two small corrective humps. Bottom: crosshair error over the same time, overshooting the target then settling into the hit window." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="380" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">one flick, decomposed</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">the atomic unit of diagnosis — segment the speed profile, then blame the phase that failed</text>
-  <text x="24" y="78" font-size="9.5" fill="#6b7280" transform="rotate(-90 24 78)" text-anchor="middle">mouse speed °/s</text>
-  <line x1="70" y1="70" x2="70" y2="175" stroke="#cfd7d6"/>
-  <line x1="70" y1="175" x2="694" y2="175" stroke="#cfd7d6"/>
-  <line x1="266" y1="70" x2="266" y2="175" stroke="#d8dedd" stroke-dasharray="3 3"/>
-  <line x1="359" y1="70" x2="359" y2="175" stroke="#d8dedd" stroke-dasharray="3 3"/>
-  <line x1="452" y1="70" x2="452" y2="175" stroke="#d8dedd" stroke-dasharray="3 3"/>
-  <path d="M70,175 C110,175 140,58 163,54 C188,50 240,160 266,162 C288,164 300,120 308,120 C320,120 345,161 359,162 C378,163 395,142 401,142 C415,142 440,167 452,167 L694,168" fill="none" stroke="#d9351d" stroke-width="2.4"/>
-  <circle cx="163" cy="54" r="4.5" fill="#d9351d"/>
-  <circle cx="308" cy="120" r="3.5" fill="#2b6cb0"/>
-  <circle cx="401" cy="142" r="3.5" fill="#2b6cb0"/>
-  <circle cx="266" cy="162" r="3" fill="none" stroke="#6b7280"/>
-  <circle cx="359" cy="162" r="3" fill="none" stroke="#6b7280"/>
-  <text x="163" y="44" font-size="9.5" fill="#d9351d" text-anchor="middle">primary (ballistic launch)</text>
-  <text x="355" y="104" font-size="9.5" fill="#2b6cb0" text-anchor="middle">corrective submovements</text>
-  <text x="24" y="290" font-size="9.5" fill="#6b7280" transform="rotate(-90 24 290)" text-anchor="middle">crosshair error °</text>
-  <line x1="70" y1="215" x2="70" y2="340" stroke="#cfd7d6"/>
-  <line x1="70" y1="340" x2="694" y2="340" stroke="#cfd7d6"/>
-  <rect x="70" y="300" width="624" height="26" fill="#1f7a4d" opacity="0.10"/>
-  <line x1="70" y1="313" x2="694" y2="313" stroke="#1f7a4d" stroke-dasharray="4 3" opacity="0.7"/>
-  <text x="688" y="297" font-size="8.5" fill="#1f7a4d" text-anchor="end">target hit window</text>
-  <path d="M70,232 C120,236 150,332 175,336 C210,341 250,338 266,336 C300,332 300,318 308,318 C330,318 345,314 359,314 C385,312 395,311 401,311 C430,311 450,311 452,311 L694,311" fill="none" stroke="#7a4fd0" stroke-width="2.4"/>
-  <circle cx="175" cy="336" r="3.5" fill="#7a4fd0"/>
-  <text x="188" y="332" font-size="9" fill="#7a4fd0">overshoot — signal-dependent noise</text>
-  <text x="382" y="366" font-size="9.5" fill="#6b7280" text-anchor="middle">time after target appears (ms) →</text>
-  <text x="70" y="366" font-size="8.5" fill="#8b9793" text-anchor="middle">0</text>
-  <text x="266" y="366" font-size="8.5" fill="#8b9793" text-anchor="middle">190</text>
-  <text x="452" y="366" font-size="8.5" fill="#8b9793" text-anchor="middle">370</text>
-</svg>
-<figcaption><em>fig — every engagement is split into a ballistic primary submovement plus optional corrections. a miss gets blamed on whichever phase failed: a bad launch is a different problem than shaky corrections, and they need different drills.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<submovement-fig></submovement-fig>
 
 here's why this matters for a *browser aim trainer* specifically: **all of that is estimable from raw mouse telemetry.** i don't need a lab, EMG electrodes, or an eye tracker. i need your mouse deltas at a high enough sample rate, and i can reconstruct the submovement structure, fit your personal noise-vs-speed line, and read off the single most useful number in your whole profile — the slope of that line, your **motor-noise coefficient σᵥ**. that number *is* your personal speed-accuracy frontier: the fastest you can flick before noise, not skill, dominates the outcome.
 
@@ -115,51 +88,11 @@ that's the bet. the rest of this post is what i built on top of it.
 
 before the parts, the whole. openaim is not five features stapled together — it's **one player model, observed through four engines**, wired into a loop that never stops turning.
 
-<figure>
-<svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The closed loop: telemetry feeds diagnosis, which updates the player model and feeds the coach, which asks the scenario engine for a drill, which produces new telemetry. The sensitivity engine reads the same submovement stream." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="340" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">one model, four engines, one loop</text>
-  <!-- center player model -->
-  <rect x="286" y="140" width="148" height="60" rx="8" fill="#d9351d" opacity="0.10" stroke="#d9351d"/>
-  <text x="360" y="166" font-size="11" fill="#17211f" text-anchor="middle" font-weight="700">the player model</text>
-  <text x="360" y="184" font-size="8.5" fill="#6b7280" text-anchor="middle">σᵥ · 14 demand axes · pace · gain</text>
-  <!-- four boxes -->
-  <g>
-    <rect x="70" y="60" width="150" height="52" rx="8" fill="#fff" stroke="#cfd7d6"/>
-    <text x="145" y="82" font-size="10.5" fill="#17211f" text-anchor="middle" font-weight="700">0 · telemetry</text>
-    <text x="145" y="98" font-size="8.5" fill="#6b7280" text-anchor="middle">raw mouse @ ~2 kHz</text>
-  </g>
-  <g>
-    <rect x="500" y="60" width="150" height="52" rx="8" fill="#fff" stroke="#cfd7d6"/>
-    <text x="575" y="82" font-size="10.5" fill="#17211f" text-anchor="middle" font-weight="700">1 · diagnosis</text>
-    <text x="575" y="98" font-size="8.5" fill="#6b7280" text-anchor="middle">why you missed</text>
-  </g>
-  <g>
-    <rect x="500" y="228" width="150" height="52" rx="8" fill="#fff" stroke="#cfd7d6"/>
-    <text x="575" y="250" font-size="10.5" fill="#17211f" text-anchor="middle" font-weight="700">3 · the coach</text>
-    <text x="575" y="266" font-size="8.5" fill="#6b7280" text-anchor="middle">what to train next</text>
-  </g>
-  <g>
-    <rect x="70" y="228" width="150" height="52" rx="8" fill="#fff" stroke="#cfd7d6"/>
-    <text x="145" y="250" font-size="10.5" fill="#17211f" text-anchor="middle" font-weight="700">2 · scenario engine</text>
-    <text x="145" y="266" font-size="8.5" fill="#6b7280" text-anchor="middle">generate the drill</text>
-  </g>
-  <!-- arrows cycle -->
-  <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b9793"/></marker></defs>
-  <path d="M220,86 L500,86" fill="none" stroke="#8b9793" stroke-width="1.6" marker-end="url(#ar)"/>
-  <path d="M575,112 L575,228" fill="none" stroke="#8b9793" stroke-width="1.6" marker-end="url(#ar)"/>
-  <path d="M500,254 L220,254" fill="none" stroke="#8b9793" stroke-width="1.6" marker-end="url(#ar)"/>
-  <path d="M145,228 L145,112" fill="none" stroke="#8b9793" stroke-width="1.6" marker-end="url(#ar)"/>
-  <!-- model links -->
-  <path d="M500,98 C470,120 450,150 434,158" fill="none" stroke="#d9351d" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar)"/>
-  <path d="M434,182 C470,200 490,220 500,240" fill="none" stroke="#d9351d" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar)"/>
-  <text x="252" y="180" font-size="9.5" fill="#7a4fd0">4 · sensitivity engine</text>
-  <text x="252" y="196" font-size="8" fill="#6b7280">reads the same submovement stream</text>
-  <path d="M286,172 C260,172 245,175 235,178" fill="none" stroke="#7a4fd0" stroke-width="1.3" marker-end="url(#ar)"/>
-  <text x="336" y="120" font-size="8" fill="#6b7280" text-anchor="middle">updates ↑ · reads ↓</text>
-</svg>
-<figcaption><em>fig — telemetry → diagnosis updates the model and names your limiting sub-skill → the coach picks what to train and how hard → the scenario engine generates a drill predicted to hit that difficulty for <strong>you</strong> → back to telemetry. the sensitivity engine runs continuously off the same signal. diagnosis and prescription are the same math.</em></figcaption>
-</figure>
+<!-- SCREENSHOT — upload via the write room, then paste the returned image here.
+     source file: openaim-screenshots/menu.png  ·  caption: "the trainer itself — a zero-install browser app, everything stays on your machine. the coached session is the front door; free play and the tools sit below." -->
+
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<loop-fig></loop-fig>
 
 let's walk the loop.
 
@@ -169,38 +102,17 @@ let's walk the loop.
 
 before any of the science matters, i have to actually *capture* the movement — and i chose to do it in a browser, which sounds insane for a latency-sensitive input problem. the reasons: zero install, the whole thing is a link you can send someone, replays are shareable, and "open" only means something if there's nothing to download and trust.
 
+<!-- SCREENSHOT — upload via the write room, then paste the returned image here.
+     source file: openaim-screenshots/onboarding.png  ·  caption: "the first thing it asks for: your two physical constants — mouse counts-per-inch and cm/360 — because every drill is built from a *measured* model of your aim, and everything stays on the device." -->
+
 the trick that makes it possible is a stack of three web APIs most people never touch:
 
 - **Pointer Lock** hides the cursor and gives you unbounded relative `movementX/Y` — mandatory for an FPS feel.
 - **`pointerrawupdate`** delivers pointer events *without* the coalescing normal `pointermove` applies.
 - **`getCoalescedEvents()`** is the actual magic. browsers batch input samples into one animation-frame callback, but this method hands you back *every underlying sample* with its own timestamp. a 1000–8000 Hz mouse produces many samples per rendered frame, and this is how you recover them. **i validated real capture at ~2000 Hz on actual hardware.**
 
-<figure>
-<svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A 60 Hz render frame is 16.7 milliseconds wide and contains about 33 raw mouse samples at 2000 Hz. getCoalescedEvents recovers all of them." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="200" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">what getCoalescedEvents() gives back</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">one 60 Hz frame = 16.7 ms = ~33 raw samples you'd otherwise never see</text>
-  <!-- frame regions -->
-  <rect x="70" y="80" width="200" height="60" fill="#2b6cb0" opacity="0.06" stroke="#2b6cb0" stroke-dasharray="4 3"/>
-  <rect x="270" y="80" width="200" height="60" fill="#d9351d" opacity="0.07" stroke="#d9351d" stroke-dasharray="4 3"/>
-  <rect x="470" y="80" width="200" height="60" fill="#2b6cb0" opacity="0.06" stroke="#2b6cb0" stroke-dasharray="4 3"/>
-  <text x="170" y="74" font-size="8.5" fill="#6b7280" text-anchor="middle">frame n</text>
-  <text x="370" y="74" font-size="8.5" fill="#d9351d" text-anchor="middle" font-weight="700">frame n+1 (expanded)</text>
-  <text x="570" y="74" font-size="8.5" fill="#6b7280" text-anchor="middle">frame n+2</text>
-  <!-- ticks in the emphasized frame -->
-  <g stroke="#d9351d" stroke-width="1">
-    <line x1="276" y1="88" x2="276" y2="132"/><line x1="282" y1="88" x2="282" y2="132"/><line x1="288" y1="88" x2="288" y2="132"/><line x1="294" y1="88" x2="294" y2="132"/><line x1="300" y1="88" x2="300" y2="132"/><line x1="306" y1="88" x2="306" y2="132"/><line x1="312" y1="88" x2="312" y2="132"/><line x1="318" y1="88" x2="318" y2="132"/><line x1="324" y1="88" x2="324" y2="132"/><line x1="330" y1="88" x2="330" y2="132"/><line x1="336" y1="88" x2="336" y2="132"/><line x1="342" y1="88" x2="342" y2="132"/><line x1="348" y1="88" x2="348" y2="132"/><line x1="354" y1="88" x2="354" y2="132"/><line x1="360" y1="88" x2="360" y2="132"/><line x1="366" y1="88" x2="366" y2="132"/><line x1="372" y1="88" x2="372" y2="132"/><line x1="378" y1="88" x2="378" y2="132"/><line x1="384" y1="88" x2="384" y2="132"/><line x1="390" y1="88" x2="390" y2="132"/><line x1="396" y1="88" x2="396" y2="132"/><line x1="402" y1="88" x2="402" y2="132"/><line x1="408" y1="88" x2="408" y2="132"/><line x1="414" y1="88" x2="414" y2="132"/><line x1="420" y1="88" x2="420" y2="132"/><line x1="426" y1="88" x2="426" y2="132"/><line x1="432" y1="88" x2="432" y2="132"/><line x1="438" y1="88" x2="438" y2="132"/><line x1="444" y1="88" x2="444" y2="132"/><line x1="450" y1="88" x2="450" y2="132"/><line x1="456" y1="88" x2="456" y2="132"/><line x1="462" y1="88" x2="462" y2="132"/>
-  </g>
-  <!-- naive single sample in other frames -->
-  <line x1="170" y1="88" x2="170" y2="132" stroke="#2b6cb0" stroke-width="2.2"/>
-  <line x1="570" y1="88" x2="570" y2="132" stroke="#2b6cb0" stroke-width="2.2"/>
-  <text x="170" y="158" font-size="8" fill="#6b7280" text-anchor="middle">naive pointermove:</text>
-  <text x="170" y="169" font-size="8" fill="#6b7280" text-anchor="middle">1 sample / frame</text>
-  <text x="370" y="158" font-size="8" fill="#d9351d" text-anchor="middle">coalesced: every underlying</text>
-  <text x="370" y="169" font-size="8" fill="#d9351d" text-anchor="middle">sample, timestamped</text>
-</svg>
-<figcaption><em>fig — the whole diagnostic premise dies without this. the browser can recover raw device cadence between animation frames; the replay stores the raw unaccelerated pointer-lock counts, and the rendered crosshair is a pure function of them so a verifier can re-derive the camera exactly.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<input-recovery-fig></input-recovery-fig>
 
 and the part i'm weirdly proud of, because no incumbent does it: **the trainer measures its own latency and shows it to you.** since i'm measuring human timing at millisecond scale, the system's own input→photon delay is a confound i have to quantify and subtract, not hide. disclosing your own latency is a transparency win *and* a correctness requirement for any honest timing metric. i'd rather show you the number and its error bars than pretend it's zero. (the in-app probe is honest about its own limits, too — it measures the software pipeline; true input→photon needs hardware, so it says so instead of guessing.)
 
@@ -233,28 +145,8 @@ that's it. that's the signal-dependent-noise law from the thesis, fit to *your* 
 
 a miss isn't a miss. the engine classifies every failed engagement into one of five mechanisms, each with a **dissociable telemetry fingerprint** (this is the ablation logic from the point-and-click simulation literature run in reverse — perceptual vs motor deficits leave distinguishable traces in the miss-rate-vs-time tradeoff[^doclick][^icp]):
 
-<figure>
-<svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A movement timeline from target-appears to trigger-pull, with five failure mechanisms marked at where in the movement each one breaks: perception before onset, planning at the ballistic launch, tracking throughout, correction at the settle, timing at the trigger." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="250" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">five ways to miss, five fingerprints</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">each mechanism breaks at a different point in the movement — and needs a different drill</text>
-  <!-- timeline -->
-  <line x1="70" y1="120" x2="660" y2="120" stroke="#cfd7d6" stroke-width="2"/>
-  <text x="70" y="212" font-size="8.5" fill="#8b9793">target appears</text>
-  <text x="655" y="212" font-size="8.5" fill="#8b9793" text-anchor="end">trigger</text>
-  <!-- markers -->
-  <g font-size="9" text-anchor="middle">
-    <circle cx="120" cy="120" r="6" fill="#7a4fd0"/><text x="120" y="96" fill="#7a4fd0">perception</text><text x="120" y="146" fill="#6b7280" font-size="7.5">slow reaction</text>
-    <circle cx="260" cy="120" r="6" fill="#d9351d"/><text x="260" y="96" fill="#d9351d">planning</text><text x="260" y="146" fill="#6b7280" font-size="7.5">bad launch, big error</text>
-    <circle cx="400" cy="120" r="6" fill="#2b6cb0"/><text x="400" y="96" fill="#2b6cb0">correction</text><text x="400" y="146" fill="#6b7280" font-size="7.5">shaky settle, 2+ subs</text>
-    <circle cx="560" cy="120" r="6" fill="#1f7a4d"/><text x="560" y="96" fill="#1f7a4d">timing</text><text x="560" y="146" fill="#6b7280" font-size="7.5">on target, wrong instant</text>
-  </g>
-  <!-- tracking spans -->
-  <line x1="120" y1="176" x2="560" y2="176" stroke="#8b9793" stroke-width="6" opacity="0.35" stroke-linecap="round"/>
-  <text x="340" y="172" font-size="8.5" fill="#6b7280" text-anchor="middle">tracking — error accrues the whole time the target moves</text>
-</svg>
-<figcaption><em>fig — perception (reaction &gt; ~350 ms) · planning (primary lands outside the target radius) · correction (2+ corrective submovements or a slow settle) · timing (on-target but the trigger fires at the wrong instant — the thing that separates elite from novice clickers[^icp]) · tracking (on-target fraction drops across a moving engagement). the app scores all five continuously and blames the dominant one.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<miss-fingerprints-fig></miss-fingerprints-fig>
 
 ### the "why you missed" screen (the report that isn't a report)
 
@@ -264,7 +156,11 @@ my first version of this was a Python markdown report — a wall of cited text. 
 - a **per-flick scope**: your crosshair's path drawn in the target's own frame of reference, colored by phase (reaction / ballistic / correction / settle), with the launch vector, the landing dot, and the kill-or-miss marker. it's the literal picture of figure 1, for one real flick.
 - a **speed fingerprint** chart with the movement phases shaded behind it, and a click-through attribution dashboard: click "correction," it seeks the scrubber to your *worst* corrective flick and shows you.
 
-<!-- SCREENSHOT: the Replay Lab — 3D playback + per-flick scope + speed fingerprint. -->
+<!-- SCREENSHOT — the Replay Lab needs your real run data (a headless capture can't populate it):
+     play a run, open it in the Replay Lab, screenshot, and drop it in via the write room here.
+     Caption: "the Replay Lab — 3D playback of a run, the per-flick scope in the target's own
+     frame, and the speed fingerprint; click a mechanism to jump to your worst example of it."
+     Same deal for a populated Player profile and a Run results card. -->
 
 there's a subtlety worth admitting: the in-browser diagnosis is a *principled approximation* of the full Python engine (no submovement deconvolution, no bootstrap CI live) — for the rigorous version there's a one-click "full engine report." i'd rather ship the honest fast version and label it than pretend the quick client math is the deep fit.
 
@@ -275,6 +171,9 @@ there's a subtlety worth admitting: the in-browser diagnosis is a *principled ap
 the incumbents think in scenarios: "Reactive Flick," "Strafe Track," a named list you scroll. the second-biggest idea in openaim (after the noise model) is throwing that out. on day one i wrote a scenario generator; by the end of day one i'd deleted it, because **a drill is not a category — it's a point in a parameter space.**
 
 concretely, a drill is a **13-number vector**: amplitude, target width, target speed, reversal rate, motion smoothness, hold-to-kill time, simultaneous target count, verticality, **absolute sensitivity in cm/360**, pace pressure, hits-to-kill, blink/dash rate, and jump/bounce. every community category — flicks, micro, wall/moving/stability switching, moving clicks, reactive vs smooth tracking, multi-tap, blink reflex, bounce, air tracking — is a *region* of that space. and configurations no human ever hand-authored are just as reachable.
+
+<!-- SCREENSHOT — upload via the write room, then paste the returned image here.
+     source file: openaim-screenshots/scenarios.png  ·  caption: "free play, grouped by what each region trains — clicking/flicking, tracking, switching, and the "advanced" mechanics (blink, bounce, 2-tap). every one of these is just a neighbourhood of the same 13-number space." -->
 
 all of it compiles down to **one bot simulation**. this is the part that keeps the whole thing honest. generated coach drills, built-in scenarios, and reverse-engineered benchmark replicas all execute on a single engine with real mechanics: acceleration-based movement in a Quake/UE style, gravity and jump/bounce physics, flyers, blink dashes with charge systems, HP pools with regen, dodge state machines, and hitscan weapons with cadence, magazines, and reloads — plus faithful KovaaK's scoring. **a demand the model prices is a demand that actually runs**, because the same instrumentation reads every run identically no matter where the drill came from.
 
@@ -350,31 +249,13 @@ three of those deserve a callout, because they're where the education research e
 
 and then the session itself is *assembled*, not authored — a transparent **plan** at real playlist scale (default 30 × 60-second drills, the length of a Viscose routine):
 
-<figure>
-<svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A session plan as a horizontal spine: a warm-up block, a measurement probe, several themed 3-drill blocks each with a rising rung ladder, a stretch drill about a third of the way in, and a sens ladder near the end." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="220" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">a session is a plan, not a bag of picks</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">warm-up → probe → themed blocks (with rung ladders) → stretch → sens ladder</text>
-  <!-- spine blocks -->
-  <g>
-    <rect x="40" y="80" width="60" height="34" rx="5" fill="#1f7a4d" opacity="0.5"/><text x="70" y="101" font-size="8" fill="#17211f" text-anchor="middle">warm-up</text>
-    <rect x="106" y="80" width="46" height="34" rx="5" fill="#7a4fd0" opacity="0.45"/><text x="129" y="101" font-size="8" fill="#17211f" text-anchor="middle">probe</text>
-    <rect x="158" y="80" width="120" height="34" rx="5" fill="#d9351d" opacity="0.16" stroke="#d9351d"/><text x="218" y="101" font-size="8" fill="#17211f" text-anchor="middle">focus block ×3</text>
-    <rect x="284" y="80" width="120" height="34" rx="5" fill="#d9351d" opacity="0.16" stroke="#d9351d"/><text x="344" y="101" font-size="8" fill="#17211f" text-anchor="middle">focus block ×3</text>
-    <rect x="410" y="80" width="44" height="34" rx="5" fill="#2b6cb0" opacity="0.4"/><text x="432" y="101" font-size="8" fill="#17211f" text-anchor="middle">stretch</text>
-    <rect x="460" y="80" width="120" height="34" rx="5" fill="#d9351d" opacity="0.16" stroke="#d9351d"/><text x="520" y="101" font-size="8" fill="#17211f" text-anchor="middle">focus block ×3</text>
-    <rect x="586" y="80" width="94" height="34" rx="5" fill="#7a4fd0" opacity="0.28" stroke="#7a4fd0"/><text x="633" y="101" font-size="8" fill="#17211f" text-anchor="middle">sens ladder</text>
-  </g>
-  <!-- rung ladder under one block -->
-  <text x="218" y="150" font-size="8" fill="#6b7280" text-anchor="middle">rung ratchets up on success (×1.18), down on fail (×0.92)</text>
-  <g stroke="#d9351d" stroke-width="2">
-    <line x1="170" y1="185" x2="190" y2="185"/><line x1="205" y1="178" x2="225" y2="178"/><line x1="240" y1="169" x2="260" y2="169"/>
-  </g>
-  <path d="M170,185 L260,169" stroke="#d9351d" stroke-dasharray="2 2" stroke-width="1" fill="none"/>
-  <text x="470" y="150" font-size="8" fill="#6b7280">every drill: sampled from the space, solved to 0.68 success, scored by training value</text>
-</svg>
-<figcaption><em>fig — the plan (real "briefing" screen). progressive overload made explicit: within a themed block the difficulty rung ratchets up on success and carries into that axis's next block. it <em>looks</em> like a curated playlist. it's generated for you, today, and it's different tomorrow.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<session-plan-fig></session-plan-fig>
+
+here's a real one — the pre-session briefing that opens every coached session, showing exactly what it's about to train and why (this is the app's "slate" theme):
+
+<!-- SCREENSHOT — upload via the write room, then paste the returned image here.
+     source file: openaim-screenshots/coached-briefing.png  ·  caption: "the generated session plan, live from the app — the block spine, the per-capability bars, and each block's predicted success + pace budget. the reasoning behind every choice is shown inline." -->
 
 ---
 
@@ -387,6 +268,9 @@ openaim treats sensitivity as an **absolute physical dimension** — cm/360, on 
 - **an AutoGain anchor.** the same under/overshoot signal engine 1 already computes tells you if your gain is mismatched: land consistently short in a speed band and your gain there is too low; overshoot and it's too high.[^autogain] the coach nudges your anchor toward *learnable* errors — a gain matched to your motor system so a miss reflects *your noise*, not you fighting a bad transfer function. (a well-matched gain can even *lower* your score at first while you stop compensating. that's allowed. that's the point.)
 - **a mastered band** around that anchor, and a **sens ladder** in the session plan that replays one solved geometry at the band's *edges*. hold an edge and the band expands outward toward the full spectrum. "a good aimer at every sensitivity" becomes a *measurable state* — capability held across the band — instead of a slogan.
 - **prescribed sensitivities are honored.** some Viscose fingertip work mandates ≤ 50 cm/360; the trainer runs it at that, badges it in the menu, and stamps it in the replay.
+
+<!-- SCREENSHOT — upload via the write room, then paste the returned image here.
+     source file: openaim-screenshots/settings.png  ·  caption: "the settings "bench console" — a live scope with your reticle, your sens resolved to an absolute cm/360, and the theme system (the whole app is theme-aware, which is why the figures in this post are too)." -->
 
 <!-- INTERACTIVE WIDGET — drag the anchor; "cleared a rung" expands your mastered band toward the full spectrum. -->
 <sens-spectrum></sens-spectrum>
@@ -408,32 +292,8 @@ the interesting math is the population model. it's a **factor model** over playe
 
 each contributor's own fit noise (their Laplace posterior covariance) is *subtracted* before estimating the between-player covariance, so the manifold `L` is real human variation, not fitting artifacts. the number of latent factors `k` is chosen by a scree/parallel-analysis cut. and `μ_pop` is precision-weighted, so sharp fits count more than noisy ones.
 
-<figure>
-<svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three panels: a wide fuzzy blob labelled you, session one; a tilted narrow ellipse labelled the population manifold; and a smaller tilted ellipse labelled your sharpened estimate, showing the correlated prior pulling the single-player uncertainty onto the population axis." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="240" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">a correlated prior beats a lonely guess</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">the population manifold pulls your noisy day-one estimate onto the axis people actually vary along</text>
-  <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b9793"/></marker></defs>
-  <!-- panel 1 -->
-  <circle cx="130" cy="150" r="55" fill="#2b6cb0" opacity="0.10"/><circle cx="130" cy="150" r="34" fill="#2b6cb0" opacity="0.10"/>
-  <circle cx="130" cy="150" r="4" fill="#2b6cb0"/>
-  <text x="130" y="220" font-size="9" fill="#6b7280" text-anchor="middle">you, session 1</text>
-  <text x="130" y="232" font-size="8" fill="#8b9793" text-anchor="middle">wide, uncorrelated</text>
-  <!-- arrow -->
-  <path d="M200,150 L260,150" stroke="#8b9793" stroke-width="1.4" marker-end="url(#ar4)"/>
-  <!-- panel 2 population manifold -->
-  <g transform="translate(360,150) rotate(-28)"><ellipse rx="70" ry="22" fill="#7a4fd0" opacity="0.14"/><ellipse rx="45" ry="13" fill="#7a4fd0" opacity="0.14"/></g>
-  <text x="360" y="220" font-size="9" fill="#6b7280" text-anchor="middle">population manifold</text>
-  <text x="360" y="232" font-size="8" fill="#8b9793" text-anchor="middle">Σ_pop = LLᵀ + diag(ψ)</text>
-  <path d="M430,150 L490,150" stroke="#8b9793" stroke-width="1.4" marker-end="url(#ar4)"/>
-  <!-- panel 3 sharpened -->
-  <g transform="translate(590,150) rotate(-28)"><ellipse rx="42" ry="12" fill="#d9351d" opacity="0.16" stroke="#d9351d"/></g>
-  <circle cx="590" cy="150" r="4" fill="#d9351d"/>
-  <text x="590" y="220" font-size="9" fill="#6b7280" text-anchor="middle">your sharpened estimate</text>
-  <text x="590" y="232" font-size="8" fill="#8b9793" text-anchor="middle">correlated, tighter</text>
-</svg>
-<figcaption><em>fig — a newcomer is cold-started on the population manifold; once ≥25 contributors exist, ratings and weakness get renormalized against the crowd. difficulty stays absolute (a hard drill is hard for everyone) — only the "where do you sit" changes. this is also how "weakness" stopped meaning "your worst axis" and started meaning "worse than people."</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<commons-fig></commons-fig>
 
 and because the whole thing is public-facing, it needs teeth. the coach's **BALD** acquisition (`infoGain = κs/(1+κs)`) uses the *full* predictive variance, so two correlated axes don't get double-counted when the coach goes looking for the most informative drill — active learning, not just "do the uncertain thing." leaderboards get a two-tier integrity model: every submission is re-checked for feature parity (the 15 features are recomputed on the server and must match to 1e-6), sanity-ranged, and screened for superhuman kill times — but **`verified` is only earned by re-simulation.** the engine is a pure function of `(spec, sens, seed, inputs)` with no wall-clock, so a determinism verifier can re-run your recorded inputs and demand a bit-exact track. a forged seed or geometry can't reproduce even the first target's motion. rate limits are keyed by endpoint class, not identity, because a rotating anonymous UUID can't be trusted as a key.
 
@@ -445,25 +305,8 @@ honest status: the backend is deployed and the full train → publish → serve 
 
 this is the piece i think is quietly the coolest. the diagnosis engine is a real Python package — numpy, submovement deconvolution, bootstrap CIs, the works. and it runs **client-side, in your browser**, with zero setup.
 
-<figure>
-<svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A pipeline: the browser trainer produces an .oar replay, which goes to a Web Worker running Pyodide plus numpy, which reads a corpus from IndexedDB and returns a capability profile to the coach. An optional native server at localhost 8317 is preferred when present." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="250" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">your data never leaves your machine</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">the Python analysis engine, compiled to WASM, running in a Web Worker</text>
-  <defs><marker id="ar5" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b9793"/></marker></defs>
-  <rect x="34" y="90" width="128" height="50" rx="7" fill="#fff" stroke="#cfd7d6"/><text x="98" y="112" font-size="9.5" fill="#17211f" text-anchor="middle" font-weight="700">trainer</text><text x="98" y="127" font-size="8" fill="#6b7280" text-anchor="middle">.oar replay</text>
-  <path d="M162,115 L200,115" stroke="#8b9793" stroke-width="1.5" marker-end="url(#ar5)"/>
-  <rect x="200" y="82" width="150" height="66" rx="7" fill="#d9351d" opacity="0.09" stroke="#d9351d"/><text x="275" y="106" font-size="9.5" fill="#17211f" text-anchor="middle" font-weight="700">Web Worker</text><text x="275" y="121" font-size="8" fill="#6b7280" text-anchor="middle">Pyodide + numpy</text><text x="275" y="134" font-size="8" fill="#6b7280" text-anchor="middle">openaim_analysis</text>
-  <path d="M275,148 L275,180" stroke="#8b9793" stroke-width="1.5" marker-end="url(#ar5)"/>
-  <rect x="200" y="182" width="150" height="42" rx="7" fill="#fff" stroke="#cfd7d6"/><text x="275" y="200" font-size="9" fill="#17211f" text-anchor="middle" font-weight="700">IndexedDB corpus</text><text x="275" y="214" font-size="8" fill="#6b7280" text-anchor="middle">your replays, local</text>
-  <path d="M350,115 L392,115" stroke="#8b9793" stroke-width="1.5" marker-end="url(#ar5)"/>
-  <rect x="392" y="90" width="150" height="50" rx="7" fill="#fff" stroke="#cfd7d6"/><text x="467" y="112" font-size="9.5" fill="#17211f" text-anchor="middle" font-weight="700">capability profile</text><text x="467" y="127" font-size="8" fill="#6b7280" text-anchor="middle">→ back into the coach</text>
-  <!-- optional native -->
-  <rect x="560" y="90" width="128" height="50" rx="7" fill="#fff" stroke="#7a4fd0" stroke-dasharray="4 3"/><text x="624" y="110" font-size="8.5" fill="#7a4fd0" text-anchor="middle" font-weight="700">native server</text><text x="624" y="124" font-size="7.5" fill="#6b7280" text-anchor="middle">:8317 · preferred</text><text x="624" y="135" font-size="7.5" fill="#6b7280" text-anchor="middle">if running</text>
-  <path d="M542,105 L560,105" stroke="#7a4fd0" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ar5)"/>
-</svg>
-<figcaption><em>fig — a Pyodide WASM worker bundles the actual Python package, mounts your replay corpus from IndexedDB, and refits your Bayesian profile in the background after every run. if you happen to be running the optional native server on localhost, the router prefers it for speed; either way the corpora converge and telemetry never leaves your machine. a static build of the site <em>is</em> the full product.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<browser-pipeline-fig></browser-pipeline-fig>
 
 so the loop, in practice: you finish a run → it auto-syncs to your local corpus → the engine refits your capability profile in the background → at session end, the sharpened profile flows back into the coach *live*, and the summary shows you exactly which axes moved. no server round-trip, no account, no upload. the thing that would normally be a backend is sitting in a WASM sandbox in your tab.
 
@@ -473,28 +316,8 @@ so the loop, in practice: you finish a run → it auto-syncs to your local corpu
 
 i want to be honest about the timeline because it's kind of absurd: **the entire thing above is 79 commits across 3 days** — a weekend, basically. here's the arc, because the earlier versions are genuinely different animals.
 
-<figure>
-<svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A three-day timeline (July 6 to 8) split into six phases: the toy, the engine, going scientific and 3D on day one; the unified engine, profile, and WASM on day two; the commons and the replay lab on day three." font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace">
-  <rect x="0" y="0" width="720" height="250" rx="10" fill="#fbfbf9" stroke="#e2e6e5"/>
-  <text x="24" y="30" font-size="13" fill="#17211f" font-weight="700">empty repo → deployed adaptive trainer, in 3 days</text>
-  <text x="24" y="47" font-size="10.5" fill="#6b7280">79 commits · jul 6–8 2026 · ≈26 commits/day</text>
-  <!-- day bands -->
-  <rect x="40" y="70" width="206" height="24" rx="4" fill="#d9351d" opacity="0.08"/><text x="143" y="86" font-size="9" fill="#6b7280" text-anchor="middle">jul 6 · 19 commits</text>
-  <rect x="250" y="70" width="206" height="24" rx="4" fill="#2b6cb0" opacity="0.08"/><text x="353" y="86" font-size="9" fill="#6b7280" text-anchor="middle">jul 7 · 18 commits</text>
-  <rect x="460" y="70" width="220" height="24" rx="4" fill="#7a4fd0" opacity="0.08"/><text x="570" y="86" font-size="9" fill="#6b7280" text-anchor="middle">jul 8 · 42 commits</text>
-  <line x1="40" y1="118" x2="680" y2="118" stroke="#cfd7d6" stroke-width="2"/>
-  <g font-size="8.5">
-    <circle cx="70" cy="118" r="5" fill="#d9351d"/><text x="70" y="140" fill="#17211f" text-anchor="middle" font-weight="700">the toy</text><text x="70" y="153" fill="#6b7280" text-anchor="middle" font-size="7.5">canvas + replay</text>
-    <circle cx="160" cy="118" r="5" fill="#d9351d"/><text x="160" y="168" fill="#17211f" text-anchor="middle" font-weight="700">the engine</text><text x="160" y="181" fill="#6b7280" text-anchor="middle" font-size="7.5">continuous space</text>
-    <circle cx="240" cy="118" r="5" fill="#d9351d"/><text x="240" y="140" fill="#17211f" text-anchor="middle" font-weight="700">offline fit + 3D</text><text x="240" y="153" fill="#6b7280" text-anchor="middle" font-size="7.5">PERSPECTIVE</text>
-    <circle cx="360" cy="118" r="5" fill="#2b6cb0"/><text x="360" y="168" fill="#17211f" text-anchor="middle" font-weight="700">unified + profile</text><text x="360" y="181" fill="#6b7280" text-anchor="middle" font-size="7.5">viz layer</text>
-    <circle cx="440" cy="118" r="5" fill="#2b6cb0"/><text x="440" y="140" fill="#17211f" text-anchor="middle" font-weight="700">WASM worker</text><text x="440" y="153" fill="#6b7280" text-anchor="middle" font-size="7.5">python in-browser</text>
-    <circle cx="540" cy="118" r="5" fill="#7a4fd0"/><text x="540" y="168" fill="#17211f" text-anchor="middle" font-weight="700">the commons</text><text x="540" y="181" fill="#6b7280" text-anchor="middle" font-size="7.5">convex backend</text>
-    <circle cx="650" cy="118" r="5" fill="#7a4fd0"/><text x="650" y="140" fill="#17211f" text-anchor="middle" font-weight="700">replay lab</text><text x="650" y="153" fill="#6b7280" text-anchor="middle" font-size="7.5">+ coach rollout</text>
-  </g>
-</svg>
-<figcaption><em>fig — the git history, six phases deep.</em></figcaption>
-</figure>
+<!-- theme-aware diagram — renders via the custom-tag → component map -->
+<timeline-fig></timeline-fig>
 
 - **the toy** (`initial concept`). the very first commit is already opinionated: 5,000+ lines dropping a Canvas2D renderer, a TypeScript game loop, *and* a full Python analysis package all at once — plus a `vision.md` manifesto arguing aim training has "a feedback problem, not a content problem." three hand-named scenarios: Triple Click, Reactive Flick, Strafe Track. commit #2 is `ADD REPLAY` — replay was foundational, not bolted on.
 - **the engine** (`continuous task spaces`). this is the day-one leap that defines the project: the generator gets deleted, and a drill becomes a point in a parameter space instead of a name. every hand-named family becomes a region. the coach can now train configurations no human authored.
