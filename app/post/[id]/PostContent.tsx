@@ -16,6 +16,11 @@ import { formatDistanceToNow, format } from "date-fns";
 import { useViewCount, ViewCount } from "./ViewCountTracker";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
 import OwnerEditLink from "@/app/components/OwnerEditLink";
+import SignalNoiseLab from "@/app/components/openaim/SignalNoiseLab";
+import NoiseFrontier from "@/app/components/openaim/NoiseFrontier";
+import ChallengePoint from "@/app/components/openaim/ChallengePoint";
+import CapabilityRadar from "@/app/components/openaim/CapabilityRadar";
+import SensSpectrum from "@/app/components/openaim/SensSpectrum";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
@@ -440,6 +445,11 @@ export default function PostContent({
                       "ol",
                       "blockquote",
                       "plotly-graph",
+                      "submovement-lab",
+                      "noise-frontier",
+                      "challenge-point",
+                      "capability-radar",
+                      "sens-spectrum",
                     ];
                     if (node?.children) {
                       const hasBlockElement = node.children.some((child: any) =>
@@ -638,6 +648,12 @@ export default function PostContent({
                       </div>
                     );
                   },
+                  // OpenAim essay widgets — self-contained, theme-aware, no props
+                  "submovement-lab": () => <SignalNoiseLab />,
+                  "noise-frontier": () => <NoiseFrontier />,
+                  "challenge-point": () => <ChallengePoint />,
+                  "capability-radar": () => <CapabilityRadar />,
+                  "sens-spectrum": () => <SensSpectrum />,
                 }}
               >
                 {post.content}
