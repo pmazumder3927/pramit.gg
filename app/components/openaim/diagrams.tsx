@@ -94,27 +94,27 @@ export function SubmovementFig() {
 export function LoopFig() {
   return (
     <VizCard
-      title="one model, four engines, one loop"
+      title="one player model, one loop"
       hint="① → ② → ③ → ④, forever"
       caption={
         <>
           fig — telemetry → diagnosis updates the model and names your limiting
-          sub-skill → the coach picks what to train → the scenario engine
-          generates the drill → back to telemetry. the sensitivity engine reads
-          the same submovement stream. diagnosis and prescription are the same math.
+          sub-skill → the coach picks what to train → the drill engine generates
+          and simulates it → back to telemetry. sensitivity rides the same
+          submovement stream. diagnosis and prescription are the same math.
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <Box n="0" title="telemetry" sub="raw mouse ~2 kHz" />
-          <Box n="1" title="diagnosis" sub="why you missed" tone="accent" />
+          <Box n="1" title="telemetry" sub="raw mouse ~2 kHz" />
+          <Box n="2" title="diagnosis" sub="why you missed" tone="accent" />
           <Box n="3" title="the coach" sub="what to train next" />
-          <Box n="2" title="scenario engine" sub="generate the drill" />
+          <Box n="4" title="drill engine" sub="generate + simulate" />
         </div>
         <div className="rounded-xl border border-accent-orange/40 bg-accent-orange/[0.06] px-4 py-2.5 text-center">
           <div className="font-serif text-sm font-medium text-ink">the shared player model</div>
-          <div className="font-hand text-base text-ink-faint">σᵥ · 14 demand axes · pace budget · gain curve — every engine reads and writes it</div>
+          <div className="font-hand text-base text-ink-faint">σᵥ · 14 demand axes · pace budget · gain curve — every stage reads and writes it</div>
         </div>
         <p className="text-center font-hand text-base text-ink-faint">
           the loop never stops turning — each drill sharpens the model, which reshapes the next drill.
@@ -313,31 +313,45 @@ export function CommonsFig() {
   );
 }
 
-/* ------------------------------------------------ 7 · in-browser WASM pipeline */
+/* ------------------------------------------------------------- 7 · the ledger */
 
-export function BrowserPipelineFig() {
+export function LedgerFig() {
   return (
     <VizCard
-      title="your data never leaves your machine"
-      hint="the Python engine, in a Web Worker"
+      title="one fact stream, one fold, one spec"
+      hint="the rewrite, in one picture"
       caption={
         <>
-          fig — a Pyodide WASM worker bundles the real Python package, mounts your
-          replay corpus from IndexedDB, and refits your Bayesian profile in the
-          background after every run. an optional native server is preferred when
-          present; either way, telemetry stays local. a static build is the full product.
+          fig — every target engagement becomes a durable fact row (timeouts
+          included). your skill estimate isn&apos;t stored anywhere — it&apos;s
+          re-computed by folding the facts, and the identical fold code runs in
+          your browser (live, offline) and on the server (canonical, for
+          leaderboards). only facts ever cross the wire, so there is no skill
+          number a tampered client could forge.
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <Box title="trainer" sub=".oar replay" />
-          <Box title="Web Worker" sub="Pyodide + numpy" tone="accent" />
-          <Box title="IndexedDB corpus" sub="your replays, local" />
-          <Box title="capability profile" sub="→ back into the coach" />
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <Box title="engine" sub="one target closes…" />
+          <Box title="engagement row" sub="realized geometry · outcome · every shot" tone="accent" />
+          <Box title="the ledger" sub="append-only facts, on your device" />
+        </div>
+        <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-[1fr_auto_1fr]">
+          <div className="rounded-xl border border-line bg-paper-2/50 px-3 py-2.5 text-center">
+            <div className="font-serif text-sm font-medium text-ink">fold(facts) — in your browser</div>
+            <div className="font-hand text-base leading-tight text-ink-faint">the live model the coach plays against</div>
+          </div>
+          <div className="flex items-center justify-center px-1 text-center font-hand text-base leading-tight text-accent-purple">
+            same code
+          </div>
+          <div className="rounded-xl border border-line bg-paper-2/50 px-3 py-2.5 text-center">
+            <div className="font-serif text-sm font-medium text-ink">fold(facts) — on the server</div>
+            <div className="font-hand text-base leading-tight text-ink-faint">the canonical one behind leaderboards</div>
+          </div>
         </div>
         <div className="rounded-xl border border-dashed border-accent-purple/40 bg-accent-purple/[0.05] px-4 py-2 text-center font-hand text-base text-ink-soft">
-          optional native server on <span className="font-mono text-sm">localhost:8317</span> — preferred for speed when it's running
+          facts sync up — never a skill estimate. ratings, weaknesses, the mastered band: all readouts of the fold, none stored where they can drift.
         </div>
       </div>
     </VizCard>
@@ -348,19 +362,27 @@ export function BrowserPipelineFig() {
 
 export function TimelineFig() {
   const phases = [
-    { day: "jul 6", name: "the toy", note: "canvas renderer + full Python analysis + replay, on commit one" },
+    { day: "jul 6", name: "the toy", note: "canvas renderer + analysis + replay, on commit one" },
     { day: "jul 6", name: "the engine", note: "a drill becomes a point in a parameter space, not a named scenario" },
-    { day: "jul 6", name: "offline fit + 3D", note: "capability fit wired in; a real perspective room" },
-    { day: "jul 7", name: "unified + profile", note: "one engine; the whole ECharts + micro-viz layer" },
-    { day: "jul 7", name: "WASM worker", note: "the Python analysis moves into the browser" },
-    { day: "jul 8", name: "the commons", note: "Convex backend, population model, determinism verifier" },
-    { day: "jul 8", name: "replay lab + coach", note: "interactive diagnosis dashboard; forward-simulated rollout planner" },
+    { day: "jul 7", name: "unified + profile", note: "one engine, a real 3D room, the whole viz layer" },
+    { day: "jul 8", name: "the commons", note: "backend, population model, determinism verifier" },
+    { day: "jul 8", name: "the replay lab", note: "the text report dies; interactive diagnosis dashboard" },
+    { day: "jul 9", name: "the coach, rewritten", note: "hand-weighted heuristics → one value function under a Thompson draw" },
+    { day: "jul 9", name: "one fitter", note: "the in-browser Python engine deleted; ~950 lines gone, on purpose" },
+    { day: "jul 10", name: "the heist", note: "adversarial bots audit the scoring — every exploitable family found and closed" },
+    { day: "jul 10", name: "the ledger", note: "the self-audit becomes a defect register becomes a ground-up rewrite" },
   ];
   return (
     <VizCard
-      title="empty repo → deployed adaptive trainer, in 3 days"
-      hint="79 commits · jul 6–8"
-      caption={<>fig — the git history, six phases deep, over one weekend.</>}
+      title="empty repo → trainer → teardown, in 5 days"
+      hint="jul 6–10"
+      caption={
+        <>
+          fig — the git history. three days to build it, one to rewrite its
+          judgment, one to audit it like a hostile reviewer and start rebuilding
+          its brain.
+        </>
+      }
     >
       <ol className="relative ml-2 border-l border-line pl-5">
         {phases.map((p, i) => (

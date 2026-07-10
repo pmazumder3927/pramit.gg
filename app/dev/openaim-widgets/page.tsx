@@ -5,6 +5,7 @@ import NoiseFrontier from "@/app/components/openaim/NoiseFrontier";
 import ChallengePoint from "@/app/components/openaim/ChallengePoint";
 import CapabilityRadar from "@/app/components/openaim/CapabilityRadar";
 import SensSpectrum from "@/app/components/openaim/SensSpectrum";
+import CheatLab from "@/app/components/openaim/CheatLab";
 import {
   SubmovementFig,
   LoopFig,
@@ -12,7 +13,7 @@ import {
   MissFingerprintsFig,
   SessionPlanFig,
   CommonsFig,
-  BrowserPipelineFig,
+  LedgerFig,
   TimelineFig,
 } from "@/app/components/openaim/diagrams";
 
@@ -27,6 +28,7 @@ export default function Page() {
       <ChallengePoint />
       <CapabilityRadar />
       <SensSpectrum />
+      <CheatLab />
       <h1 className="mb-2 mt-12 font-serif text-3xl text-ink">openaim — diagrams</h1>
       <SubmovementFig />
       <LoopFig />
@@ -34,7 +36,7 @@ export default function Page() {
       <MissFingerprintsFig />
       <SessionPlanFig />
       <CommonsFig />
-      <BrowserPipelineFig />
+      <LedgerFig />
       <TimelineFig />
     </main>
   );

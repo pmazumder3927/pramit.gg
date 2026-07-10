@@ -3,13 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Tape,
   PaperClip,
@@ -203,9 +197,23 @@ export default function CollageExperience({
             {/* the taped polaroid-style frame */}
             <div className="relative mx-auto max-w-3xl -rotate-[0.8deg] bg-card p-3 pb-5 shadow-paper-lg sm:p-4 sm:pb-6 [border:1px_solid_rgb(var(--line))] transition-transform duration-300 hover:rotate-0">
               {/* tape at the corners */}
-              <Tape tone="orange" rotate={-8} className="-top-3 left-8 sm:left-12" width={92} />
-              <Tape tone="purple" rotate={7} className="-top-3 right-8 sm:right-12" width={92} />
-              <PaperClip className="-top-5 left-1/2 -translate-x-1/2" rotate={4} tone="ink" />
+              <Tape
+                tone="orange"
+                rotate={-8}
+                className="-top-3 left-8 sm:left-12"
+                width={92}
+              />
+              <Tape
+                tone="purple"
+                rotate={7}
+                className="-top-3 right-8 sm:right-12"
+                width={92}
+              />
+              <PaperClip
+                className="-top-5 left-1/2 -translate-x-1/2"
+                rotate={4}
+                tone="ink"
+              />
 
               <div className="relative aspect-[3/2] w-full overflow-hidden border border-ink/15 bg-paper-2">
                 <AnimatePresence mode="popLayout" custom={direction}>
@@ -294,7 +302,11 @@ export default function CollageExperience({
             {/* counter, scrawled below */}
             {total > 1 && (
               <div className="mt-5 text-center">
-                <HandNote tone="rust" rotate={-2} className="text-xl tabular-nums">
+                <HandNote
+                  tone="rust"
+                  rotate={-2}
+                  className="text-xl tabular-nums"
+                >
                   {String(index + 1).padStart(2, "0")} of{" "}
                   {String(total).padStart(2, "0")} nights
                 </HandNote>
@@ -321,8 +333,16 @@ export default function CollageExperience({
             className="relative mt-24 md:mt-32"
           >
             <div className="mb-10 text-center">
-              <div className="mb-3 flex items-center justify-center gap-3" aria-hidden>
-                <Doodle name="squiggle" tone="purple" className="h-4 w-24" strokeWidth={2.5} />
+              <div
+                className="mb-3 flex items-center justify-center gap-3"
+                aria-hidden
+              >
+                <Doodle
+                  name="squiggle"
+                  tone="purple"
+                  className="h-4 w-24"
+                  strokeWidth={2.5}
+                />
               </div>
               <h2 className="font-serif text-2xl md:text-3xl font-medium text-ink">
                 the doodles that made it
@@ -354,8 +374,8 @@ export default function CollageExperience({
               strokeWidth={2.5}
             />
             <p className="font-serif text-base italic text-ink-soft mb-6 leading-relaxed">
-              leave a sketch in the booth. if the council lets it through, it
-              lands in tomorrow&apos;s painting.
+              leave a sketch for the website! it ends up on the background
+              sometimes depending on the song
             </p>
             <Link href="/connect" className="btn-sketch btn-sketch-solid group">
               leave a sketch
@@ -521,7 +541,8 @@ const PIN_TONES = ["orange", "purple", "rust"] as const;
 
 function SketchCard({ sketch }: { sketch: SketchPreview }) {
   const rot = jitter(sketch.id, 5);
-  const tone = PIN_TONES[Math.abs(Math.round(jitter(sketch.id + "t", 100))) % 3];
+  const tone =
+    PIN_TONES[Math.abs(Math.round(jitter(sketch.id + "t", 100))) % 3];
 
   return (
     <figure

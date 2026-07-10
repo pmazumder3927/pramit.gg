@@ -95,15 +95,29 @@ export default function MusicClient() {
   // Parallax is applied once per list (not per card): every card in a list used
   // the same strength, so a single container transform reproduces the exact
   // drift while running one spring instead of dozens. Hidden tabs don't paint.
-  const trackPX = useSpring(useTransform(mouseX, [0, 1], [-6, 6]), { stiffness: 150, damping: 20 });
-  const trackPY = useSpring(useTransform(mouseY, [0, 1], [-6, 6]), { stiffness: 150, damping: 20 });
-  const listPX = useSpring(useTransform(mouseX, [0, 1], [-10, 10]), { stiffness: 100, damping: 20 });
-  const listPY = useSpring(useTransform(mouseY, [0, 1], [-10, 10]), { stiffness: 100, damping: 20 });
+  const trackPX = useSpring(useTransform(mouseX, [0, 1], [-6, 6]), {
+    stiffness: 150,
+    damping: 20,
+  });
+  const trackPY = useSpring(useTransform(mouseY, [0, 1], [-6, 6]), {
+    stiffness: 150,
+    damping: 20,
+  });
+  const listPX = useSpring(useTransform(mouseX, [0, 1], [-10, 10]), {
+    stiffness: 100,
+    damping: 20,
+  });
+  const listPY = useSpring(useTransform(mouseY, [0, 1], [-10, 10]), {
+    stiffness: 100,
+    damping: 20,
+  });
   const [selectedTab, setSelectedTab] = useState<
     "recent" | "top" | "playlists"
   >("recent");
   // Track which tabs have been opened so we mount them once and keep them alive
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(["recent"]));
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(
+    new Set(["recent"]),
+  );
 
   // The "suggest me a song" panel collapses inline in the hero so it's a CTA,
   // not a buried section. Open it → scroll it into view.
@@ -123,28 +137,28 @@ export default function MusicClient() {
   const { data: nowPlaying } = useSWR<NowPlayingTrack>(
     "/api/spotify/now-playing",
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
   const { data: recentlyPlayed } = useSWR<{ tracks: SpotifyTrack[] }>(
     "/api/spotify/recently-played",
     fetcher,
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
   const { data: topTracks } = useSWR<{ tracks: SpotifyTrack[] }>(
     "/api/spotify/top-tracks",
     fetcher,
-    { refreshInterval: 300000 }
+    { refreshInterval: 300000 },
   );
   const { data: playlists } = useSWR<{ playlists: SpotifyPlaylist[] }>(
     "/api/spotify/playlists",
     fetcher,
-    { refreshInterval: 600000 }
+    { refreshInterval: 600000 },
   );
 
   // Collapse on-loop runs so a song played 10× in a row is one row, not ten.
   const recentTracks = useMemo(
     () => collapseConsecutive(recentlyPlayed?.tracks ?? []),
-    [recentlyPlayed]
+    [recentlyPlayed],
   );
 
   // Extract color from now playing album art - this drives the page's accent color
@@ -154,7 +168,7 @@ export default function MusicClient() {
   useEffect(() => {
     if (recentlyPlayed?.tracks) {
       preloadColors(
-        recentlyPlayed.tracks.slice(0, 10).map((t) => t.albumImageUrl)
+        recentlyPlayed.tracks.slice(0, 10).map((t) => t.albumImageUrl),
       );
     }
     if (topTracks?.tracks) {
@@ -208,7 +222,7 @@ export default function MusicClient() {
             behavior: "smooth",
             block: "center",
           }),
-        480
+        480,
       );
       return () => clearTimeout(id);
     }
@@ -326,8 +340,7 @@ export default function MusicClient() {
               </div>
 
               <p className="mt-3 -rotate-1 font-hand text-lg text-ink-faint">
-                ↑ pick a song and it lands in my &lsquo;beloved user
-                suggestions&rsquo; playlist
+                ↑ suggest me a song
               </p>
             </motion.div>
 
@@ -377,7 +390,10 @@ export default function MusicClient() {
           {visitedTabs.has("recent") && (
             <div className={selectedTab === "recent" ? "" : "hidden"}>
               <SheetHeading label="the rotation" sub="recently played" />
-              <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
+              <motion.div
+                className="space-y-2.5 md:space-y-3"
+                style={{ x: trackPX, y: trackPY }}
+              >
                 {recentTracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id + index}
@@ -399,7 +415,10 @@ export default function MusicClient() {
           {visitedTabs.has("top") && (
             <div className={selectedTab === "top" ? "" : "hidden"}>
               <SheetHeading label="heavy hitters" sub="top of the moment" />
-              <motion.div className="space-y-2.5 md:space-y-3" style={{ x: trackPX, y: trackPY }}>
+              <motion.div
+                className="space-y-2.5 md:space-y-3"
+                style={{ x: trackPX, y: trackPY }}
+              >
                 {topTracks?.tracks.map((track, index) => (
                   <ChaoticTrackCard
                     key={track.id}
@@ -417,7 +436,10 @@ export default function MusicClient() {
 
           {visitedTabs.has("playlists") && (
             <div className={selectedTab === "playlists" ? "" : "hidden"}>
-              <SheetHeading label="my playlists" sub="curated personally, constantly" />
+              <SheetHeading
+                label="my playlists"
+                sub="curated personally, constantly"
+              />
               <motion.div
                 className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
                 style={{ x: listPX, y: listPY }}
@@ -454,7 +476,11 @@ function SheetHeading({ label, sub }: { label: string; sub: string }) {
           {label}
         </h2>
       </div>
-      <HandNote tone="rust" rotate={-2} className="hidden text-lg sm:block md:text-xl">
+      <HandNote
+        tone="rust"
+        rotate={-2}
+        className="hidden text-lg sm:block md:text-xl"
+      >
         {sub}
       </HandNote>
     </div>

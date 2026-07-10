@@ -97,7 +97,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
       },
       () => {
         if (previewReqRef.current === req) setPreviewingId(null);
-      }
+      },
     );
   };
 
@@ -117,7 +117,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
       try {
         const res = await fetch(
           `/api/spotify/suggest/search?q=${encodeURIComponent(q)}`,
-          { signal: controller.signal }
+          { signal: controller.signal },
         );
         if (!res.ok) {
           setResults([]);
@@ -246,15 +246,19 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
               <HandNote tone="purple" rotate={-3} className="text-xl">
                 your turn
               </HandNote>
-              <Doodle name="arrow" tone="purple" className="h-4 w-9" strokeWidth={3} />
+              <Doodle
+                name="arrow"
+                tone="purple"
+                className="h-4 w-9"
+                strokeWidth={3}
+              />
             </div>
             <h3 className="mt-0.5 font-serif text-2xl font-medium text-ink">
               suggest me a song
             </h3>
             <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-              search spotify, pick one, and watch it get written onto the tape —
-              it drops straight into my playlist &lsquo;beloved user
-              suggestions&rsquo;. make it count.
+              search spotify for a song recommendation for me. it will randoml
+              enter my playlist one day and I will wonder if I have dementia.
             </p>
           </div>
           {onClose && (
@@ -284,7 +288,12 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
               exit={{ opacity: 0, scale: 0.96 }}
               className="relative -rotate-[0.4deg] rounded-[3px] border border-line bg-card p-10 text-center shadow-paper-lg"
             >
-              <Tape tone="purple" rotate={-4} className="-top-3 left-1/2 -translate-x-1/2" width={90} />
+              <Tape
+                tone="purple"
+                rotate={-4}
+                className="-top-3 left-1/2 -translate-x-1/2"
+                width={90}
+              />
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -326,13 +335,26 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                 }}
                 transition={
                   cardDown
-                    ? { duration: MIN_POSTING_MS / 1000, ease: [0.34, 1.2, 0.64, 1] }
+                    ? {
+                        duration: MIN_POSTING_MS / 1000,
+                        ease: [0.34, 1.2, 0.64, 1],
+                      }
                     : { type: "spring", stiffness: 220, damping: 22 }
                 }
                 className="relative rounded-[3px] border border-line bg-card shadow-paper-lg"
               >
-                <Tape tone="purple" rotate={-3} className="-top-3 left-10" width={90} />
-                <Tape tone="orange" rotate={4} className="-top-3 right-10" width={90} />
+                <Tape
+                  tone="purple"
+                  rotate={-3}
+                  className="-top-3 left-10"
+                  width={90}
+                />
+                <Tape
+                  tone="orange"
+                  rotate={4}
+                  className="-top-3 right-10"
+                  width={90}
+                />
                 <PaperClip
                   className="-top-4 right-1/2 translate-x-1/2 md:right-16 md:translate-x-0"
                   rotate={8}
@@ -347,7 +369,11 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                       a song for pramit
                     </Stamp>
                     <CassetteReels spinning={previewingId !== null} />
-                    <Stamp tone="rust" rotate={3} className="hidden sm:inline-flex">
+                    <Stamp
+                      tone="rust"
+                      rotate={3}
+                      className="hidden sm:inline-flex"
+                    >
                       mixtape
                     </Stamp>
                   </div>
@@ -404,8 +430,17 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                     {/* prompt / caret state */}
                     {!chosen && (
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <Doodle name="arrow" tone="rust" className="h-3 w-6 rotate-[8deg]" strokeWidth={2.5} />
-                        <HandNote tone="rust" rotate={-1} className="text-base text-ink-faint">
+                        <Doodle
+                          name="arrow"
+                          tone="rust"
+                          className="h-3 w-6 rotate-[8deg]"
+                          strokeWidth={2.5}
+                        />
+                        <HandNote
+                          tone="rust"
+                          rotate={-1}
+                          className="text-base text-ink-faint"
+                        >
                           {searching
                             ? "rummaging through the crate..."
                             : "what should i add to the playlist?"}
@@ -414,7 +449,11 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                     )}
                     {chosen && (
                       <div className="mt-2 flex items-center gap-3">
-                        <HandNote tone="purple" rotate={-1} className="text-base text-ink-faint">
+                        <HandNote
+                          tone="purple"
+                          rotate={-1}
+                          className="text-base text-ink-faint"
+                        >
                           one song. make it count.
                         </HandNote>
                         <button
@@ -437,10 +476,19 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                         initial={{ opacity: 0, scale: 0.6, rotate: 10 }}
                         animate={{ opacity: 1, scale: 1, rotate: -3 }}
                         exit={{ opacity: 0, scale: 0.6 }}
-                        transition={{ type: "spring", stiffness: 180, damping: 16 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 180,
+                          damping: 16,
+                        }}
                         className="pointer-events-none absolute right-4 top-16 z-10 h-14 w-14 sm:right-6"
                       >
-                        <Tape tone="orange" rotate={-12} width={26} className="-top-1.5 left-1/2 -translate-x-1/2" />
+                        <Tape
+                          tone="orange"
+                          rotate={-12}
+                          width={26}
+                          className="-top-1.5 left-1/2 -translate-x-1/2"
+                        />
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={chosen.albumImageUrl}
@@ -471,12 +519,18 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                   {/* optional liner note */}
                   {chosen && (
                     <div className="mt-4">
-                      <HandNote tone="rust" rotate={-1} className="mb-1 block text-base">
+                      <HandNote
+                        tone="rust"
+                        rotate={-1}
+                        className="mb-1 block text-base"
+                      >
                         a line about why? (optional · only i&apos;ll read it)
                       </HandNote>
                       <input
                         value={note}
-                        onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+                        onChange={(e) =>
+                          setNote(e.target.value.slice(0, NOTE_MAX))
+                        }
                         disabled={busy}
                         placeholder="it reminds me of..."
                         className="w-full rounded-[3px] border-[1.4px] border-line bg-paper-2/50 px-3 py-2 font-serif text-sm text-ink placeholder:text-ink-faint focus:border-accent-rust/50 focus:outline-none"
@@ -499,7 +553,9 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                       whileTap={{ scale: chosen && !busy ? 0.99 : 1 }}
                       className="btn-sketch btn-sketch-solid w-full justify-center !py-3 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {chosen ? "drop it in the mailbox ↓" : "pick a song first"}
+                      {chosen
+                        ? "drop it in the mailbox ↓"
+                        : "pick a song first"}
                     </motion.button>
                     {/* slot mouth */}
                     <div className="mt-2 flex items-center justify-center gap-1.5">

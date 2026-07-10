@@ -47,6 +47,13 @@ export const openaimFigures: FigureDef[] = [
     kind: "interactive",
     component: dynamic(() => import("./SensSpectrum")),
   },
+  {
+    tag: "cheat-lab",
+    label: "try to rob the grader",
+    blurb: "adversarial bots vs the anti-exploit grade — flip the grader, see who profits.",
+    kind: "interactive",
+    component: dynamic(() => import("./CheatLab")),
+  },
   // ---- theme-aware static diagrams ----------------------------------------
   {
     tag: "submovement-fig",
@@ -57,7 +64,7 @@ export const openaimFigures: FigureDef[] = [
   },
   {
     tag: "loop-fig",
-    label: "one model, four engines, one loop",
+    label: "one player model, one loop",
     blurb: "the closed diagnosis → prescription loop.",
     kind: "diagram",
     component: dynamic(() => import("./diagrams").then((m) => m.LoopFig)),
@@ -91,16 +98,16 @@ export const openaimFigures: FigureDef[] = [
     component: dynamic(() => import("./diagrams").then((m) => m.CommonsFig)),
   },
   {
-    tag: "browser-pipeline-fig",
-    label: "your data never leaves your machine",
-    blurb: "the in-browser Pyodide analysis pipeline.",
+    tag: "ledger-fig",
+    label: "one fact stream, one fold, one spec",
+    blurb: "the rewrite: engagement rows in, identical fold on both sides of the wire.",
     kind: "diagram",
-    component: dynamic(() => import("./diagrams").then((m) => m.BrowserPipelineFig)),
+    component: dynamic(() => import("./diagrams").then((m) => m.LedgerFig)),
   },
   {
     tag: "timeline-fig",
-    label: "empty repo → deployed trainer, in 3 days",
-    blurb: "the three-day build timeline, six phases deep.",
+    label: "empty repo → trainer → teardown, in 5 days",
+    blurb: "the build timeline: three days up, two days auditing and rebuilding the brain.",
     kind: "diagram",
     component: dynamic(() => import("./diagrams").then((m) => m.TimelineFig)),
   },
