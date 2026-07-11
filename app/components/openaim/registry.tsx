@@ -54,6 +54,27 @@ export const openaimFigures: FigureDef[] = [
     kind: "interactive",
     component: dynamic(() => import("./CheatLab")),
   },
+  {
+    tag: "harness-replay",
+    label: "watch the synthetic test harness",
+    blurb: "real engine runs, extracted from .oar replays and made scrubbable.",
+    kind: "interactive",
+    component: dynamic(() => import("./HarnessReplay")),
+  },
+  {
+    tag: "servo-lab",
+    label: "what the tracking model assumes",
+    blurb: "intermittent correction, reaction delay, Gaussian error, and deliberate model mismatch.",
+    kind: "interactive",
+    component: dynamic(() => import("./ServoLab")),
+  },
+  {
+    tag: "ledger-collapse",
+    label: "watch a run lose its information",
+    blurb: "real target engagements collapsing into the old run-level update.",
+    kind: "interactive",
+    component: dynamic(() => import("./LedgerCollapse")),
+  },
   // ---- theme-aware static diagrams ----------------------------------------
   {
     tag: "submovement-fig",

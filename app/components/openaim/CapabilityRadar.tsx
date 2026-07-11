@@ -34,7 +34,12 @@ const RAD = 150;
 
 const pt = (i: number, val: number) => {
   const a = ((-90 + (i * 360) / N) * Math.PI) / 180;
-  return [CX + Math.cos(a) * RAD * val, CY + Math.sin(a) * RAD * val] as const;
+  // V8 can differ at the last floating-point bit between server and browser.
+  // Stabilize SVG attributes so React hydration sees identical coordinates.
+  return [
+    Number((CX + Math.cos(a) * RAD * val).toFixed(10)),
+    Number((CY + Math.sin(a) * RAD * val).toFixed(10)),
+  ] as const;
 };
 const poly = (vals: number[]) => vals.map((v, i) => pt(i, v).join(",")).join(" ");
 

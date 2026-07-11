@@ -6,6 +6,9 @@ import ChallengePoint from "@/app/components/openaim/ChallengePoint";
 import CapabilityRadar from "@/app/components/openaim/CapabilityRadar";
 import SensSpectrum from "@/app/components/openaim/SensSpectrum";
 import CheatLab from "@/app/components/openaim/CheatLab";
+import HarnessReplay from "@/app/components/openaim/HarnessReplay";
+import ServoLab from "@/app/components/openaim/ServoLab";
+import LedgerCollapse from "@/app/components/openaim/LedgerCollapse";
 import {
   SubmovementFig,
   LoopFig,
@@ -29,6 +32,9 @@ export default function Page() {
       <CapabilityRadar />
       <SensSpectrum />
       <CheatLab />
+      <HarnessReplay />
+      <ServoLab />
+      <LedgerCollapse />
       <h1 className="mb-2 mt-12 font-serif text-3xl text-ink">openaim — diagrams</h1>
       <SubmovementFig />
       <LoopFig />

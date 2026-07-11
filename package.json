@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "media:upload": "node scripts/upload-media.mjs",
     "migrate:slugs": "ts-node scripts/migrate-slugs.ts"
   },
   "dependencies": {
