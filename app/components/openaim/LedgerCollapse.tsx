@@ -80,7 +80,8 @@ export default function LedgerCollapse() {
         <div className="overflow-hidden border border-line bg-paper-2/40">
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="block w-full"
+            className="block w-full font-sans"
+            fontWeight={500}
             role="img"
             aria-label={ledger ? "Ten engagements separated by amplitude and acquisition time" : "Ten engagements collapsed into one run summary"}
           >
@@ -91,8 +92,8 @@ export default function LedgerCollapse() {
                   <line x1={X0 + fraction * (X1 - X0)} x2={X0 + fraction * (X1 - X0)} y1={Y1} y2={Y0} stroke={C.lineA(0.35)} strokeDasharray="3 4" />
                 </g>
               ))}
-              <text x={(X0 + X1) / 2} y={H - 10} textAnchor="middle" fill={C.faint} fontSize="11" fontFamily="var(--font-caveat), cursive">realized amplitude (degrees)</text>
-              <text x="15" y={(Y0 + Y1) / 2} textAnchor="middle" fill={C.faint} fontSize="11" fontFamily="var(--font-caveat), cursive" transform={`rotate(-90 15 ${(Y0 + Y1) / 2})`}>acquisition time</text>
+              <text x={(X0 + X1) / 2} y={H - 10} textAnchor="middle" fill={C.faint} className="text-[20px] sm:text-[12px]">realized amplitude (degrees)</text>
+              <text x="15" y={(Y0 + Y1) / 2} textAnchor="middle" fill={C.faint} className="text-[20px] sm:text-[12px]" transform={`rotate(-90 15 ${(Y0 + Y1) / 2})`}>acquisition time</text>
             </g>
 
             {rows.map((row, index) => {
@@ -117,8 +118,8 @@ export default function LedgerCollapse() {
 
             <g style={{ opacity: ledger ? 0 : 1, transition: "opacity 300ms ease" }}>
               <circle cx={xOf(meanA)} cy={yOf(meanT)} r="38" fill={C.rustA(0.08)} stroke={C.rust} strokeWidth="1.5" strokeDasharray="4 4" />
-              <text x={xOf(meanA)} y={yOf(meanT) - 2} textAnchor="middle" fill={C.rust} fontSize="18" fontFamily="var(--font-mono), monospace">10 → 1</text>
-              <text x={xOf(meanA)} y={yOf(meanT) + 16} textAnchor="middle" fill={C.faint} fontSize="11" fontFamily="var(--font-caveat), cursive">one aggregate update</text>
+              <text x={xOf(meanA)} y={yOf(meanT) - 7} textAnchor="middle" fill={C.rust} className="font-mono text-[22px] sm:text-[18px]">10 → 1</text>
+              <text x={xOf(meanA)} y={yOf(meanT) + 20} textAnchor="middle" fill={C.faint} className="text-[18px] sm:text-[11px]">one aggregate update</text>
             </g>
           </svg>
         </div>
@@ -138,7 +139,7 @@ export default function LedgerCollapse() {
               style={{ opacity: ledger ? 1 : 0.32 }}
             >
               <div className="font-mono text-xs" style={{ color: ledger ? C.hit : C.faint }}>target {row.index + 1}</div>
-              <div className="mt-1 font-hand text-base leading-tight text-ink-faint">{row.amplitudeDeg}° · {row.acquireMs}ms</div>
+              <div className="mt-1 font-mono text-xs leading-tight text-ink-faint">{row.amplitudeDeg}° · {row.acquireMs}ms</div>
             </div>
           ))}
         </div>

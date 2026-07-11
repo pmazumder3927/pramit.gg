@@ -60,7 +60,8 @@ export default function SensSpectrum() {
         <svg
           ref={drag.ref}
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full touch-none cursor-ew-resize"
+          className="w-full touch-none cursor-ew-resize font-sans"
+          fontWeight={500}
           onPointerDown={drag.onPointerDown}
           onPointerMove={drag.onPointerMove}
           role="img"
@@ -75,22 +76,22 @@ export default function SensSpectrum() {
           <text x={xOf(bandHi) + 6} y={YB + 4} fontSize={12} fill={C.hit} textAnchor="start">►</text>
           {/* anchor */}
           <circle cx={xOf(anchor)} cy={YB} r={7} fill={C.acc} stroke="rgb(var(--surface))" strokeWidth={2} />
-          <text x={xOf(anchor)} y={YB - 20} fontSize={11} fill={C.acc} textAnchor="middle" fontFamily="var(--font-caveat), cursive">anchor</text>
+          <text x={xOf(anchor)} y={YB - 20} fontSize={11} fill={C.acc} textAnchor="middle">anchor</text>
           {/* ticks */}
           {ticks.map((t) => (
             <g key={t}>
               <line x1={xOf(t)} y1={YB + 14} x2={xOf(t)} y2={YB + 19} stroke={C.faint} />
-              <text x={xOf(t)} y={YB + 32} fontSize={11} fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">{t}</text>
+              <text x={xOf(t)} y={YB + 32} fontSize={11} fill={C.faint} textAnchor="middle">{t}</text>
             </g>
           ))}
-          <text x={X1} y={YB + 32} fontSize={11} fill={C.faint} textAnchor="end" fontFamily="var(--font-caveat), cursive">cm/360</text>
+          <text x={X1} y={YB + 32} fontSize={11} fill={C.faint} textAnchor="end">cm/360</text>
         </svg>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <div className="flex flex-wrap gap-2">
             <Btn onClick={clearRung}>cleared a rung ↑</Btn>
-            <button type="button" onClick={missEdge} className="rounded-full border border-line/90 px-3.5 py-1.5 font-hand text-lg leading-none text-ink-faint transition-colors hover:border-accent-rust hover:text-accent-rust">missed the edge ↓</button>
-            <button type="button" onClick={reset} className="font-hand text-lg text-ink-faint underline decoration-dotted underline-offset-4 hover:text-accent-rust">reset</button>
+            <button type="button" onClick={missEdge} className="min-h-8 rounded-full border border-line/90 px-3.5 py-1.5 font-sans text-sm font-medium leading-none text-ink-faint transition-colors hover:border-accent-rust hover:text-accent-rust">missed the edge ↓</button>
+            <button type="button" onClick={reset} className="font-sans text-sm font-medium text-ink-faint underline decoration-dotted underline-offset-4 hover:text-accent-rust">reset</button>
           </div>
           <div className="ml-auto flex gap-6">
             <Stat value={`${Math.round(bandLo)}–${Math.round(bandHi)}`} label="mastered cm/360" color={C.acc} />

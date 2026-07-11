@@ -67,19 +67,19 @@ export default function ChallengePoint() {
       }
     >
       <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Logistic success curve; current predicted success ${Math.round(p * 100)} percent`}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full font-sans" fontWeight={500} role="img" aria-label={`Logistic success curve; current predicted success ${Math.round(p * 100)} percent`}>
           {/* axes */}
           <line x1={X0} y1={Y1} x2={X0} y2={Y0} stroke={C.lineA(0.8)} />
           <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke={C.lineA(0.8)} />
-          <text x={16} y={(Y0 + Y1) / 2} fontSize={10} fill={C.faint} transform={`rotate(-90 16 ${(Y0 + Y1) / 2})`} textAnchor="middle" fontFamily="var(--font-caveat), cursive">P(success)</text>
-          <text x={(X0 + X1) / 2} y={H - 8} fontSize={10} fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">skill − demand →</text>
+          <text x={16} y={(Y0 + Y1) / 2} fill={C.faint} transform={`rotate(-90 16 ${(Y0 + Y1) / 2})`} textAnchor="middle" className="text-[16px] sm:text-[11px]">P(success)</text>
+          <text x={(X0 + X1) / 2} y={H - 8} fill={C.faint} textAnchor="middle" className="text-[16px] sm:text-[11px]">skill − demand →</text>
           {/* gridlines P=0/0.5/1 */}
           {[0, 0.5, 1].map((pp) => (
             <line key={pp} x1={X0} y1={yOf(pp)} x2={X1} y2={yOf(pp)} stroke={C.lineA(0.4)} strokeDasharray="2 4" />
           ))}
           {/* challenge point band */}
           <line x1={X0} y1={yOf(target)} x2={X1} y2={yOf(target)} stroke={C.hit} strokeDasharray="5 4" />
-          <text x={X1} y={yOf(target) - 5} fontSize={9} fill={C.hit} textAnchor="end" fontFamily="var(--font-caveat), cursive">assumed peak = {target.toFixed(2)}</text>
+          <text x={X1} y={yOf(target) - 5} fill={C.hit} textAnchor="end" className="text-[15px] sm:text-[10px]">assumed peak = {target.toFixed(2)}</text>
           <line x1={xOf(targetGap)} y1={Y1} x2={xOf(targetGap)} y2={Y0} stroke={C.hitA(0.5)} strokeDasharray="3 3" />
 
           {/* sigmoid */}

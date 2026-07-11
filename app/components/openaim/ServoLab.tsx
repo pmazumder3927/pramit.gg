@@ -177,7 +177,7 @@ export default function ServoLab() {
         <div className="overflow-hidden border border-line bg-paper-2/40">
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="block w-full"
+            className="block w-full font-sans"
             role="img"
             aria-label={`Tracking model with ${delay} millisecond correction delay and ${Math.round(onTarget * 100)} percent recent time on target`}
           >
@@ -201,13 +201,13 @@ export default function ServoLab() {
               <circle r="1.5" fill={current.onTarget ? C.acc : C.rust} stroke="none" />
             </g>
 
-            <text x="50" y="122" fill={C.faint} fontSize="11" fontFamily="var(--font-mono), monospace">last four seconds</text>
+            <text x="50" y="122" fill={C.faint} className="font-mono text-[18px] sm:text-[11px]">last four seconds</text>
             {[166, 218, 270].map((y) => (
               <line key={y} x1="50" x2="590" y1={y} y2={y} stroke={C.lineA(0.4)} strokeDasharray="3 4" />
             ))}
             <polyline points={targetPath} fill="none" stroke={C.hit} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             <polyline points={cursorPath} fill="none" stroke={C.pur} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <g fontFamily="var(--font-mono), monospace" fontSize="10">
+            <g className="font-mono text-[17px] sm:text-[10px]">
               <text x="590" y="136" textAnchor="end" fill={C.hit}>target</text>
               <text x="590" y="150" textAnchor="end" fill={C.pur}>crosshair</text>
             </g>

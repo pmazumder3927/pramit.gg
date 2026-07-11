@@ -131,20 +131,20 @@ export default function CheatLab() {
         </div>
 
         <div className="rounded-xl border border-line bg-paper-2/40 px-4 py-3">
-          <div className="font-hand text-lg leading-snug text-ink-soft">
+          <div className="font-sans text-sm leading-relaxed text-ink-soft">
             <span className="font-mono text-sm" style={{ color: bot.color }}>
               {bot.name}
             </span>{" "}
             — {bot.scheme}
           </div>
           {guarded ? (
-            <div className="mt-1.5 font-hand text-lg leading-snug" style={{ color: C.hit }}>
+            <div className="mt-1.5 font-sans text-sm leading-relaxed" style={{ color: C.hit }}>
               {bot.counter}
             </div>
           ) : null}
         </div>
 
-        <p className="text-center font-hand text-lg leading-snug" style={{ color: beaters > 0 ? C.rust : C.hit }}>
+        <p className="text-center font-sans text-sm font-medium leading-relaxed" style={{ color: beaters > 0 ? C.rust : C.hit }}>
           {beaters > 0
             ? `${beaters} of 3 dishonest bots beat the honest player — this scoreboard trains cheesing, not aim.`
             : "0 exploitable — the honest player wins everywhere, so the score finally measures aim."}

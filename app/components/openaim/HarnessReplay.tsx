@@ -183,7 +183,7 @@ export default function HarnessReplay() {
                 type="button"
                 onClick={() => switchClip(id)}
                 aria-pressed={clip.id === id}
-                className="border px-3 py-1 font-hand text-lg leading-none transition-colors"
+                className="min-h-8 border px-3 py-1 font-sans text-sm font-medium leading-none transition-colors"
                 style={{
                   borderColor: clip.id === id ? C.pur : C.lineA(0.8),
                   color: clip.id === id ? C.pur : C.faint,
@@ -202,7 +202,7 @@ export default function HarnessReplay() {
         <div className="overflow-hidden border border-line bg-paper-2/40">
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="block aspect-video w-full"
+            className="block aspect-video w-full font-sans"
             role="img"
             aria-label={`${clip.player} synthetic player running ${clip.scenario}`}
           >
@@ -256,7 +256,7 @@ export default function HarnessReplay() {
               <circle r="1.8" fill={recentEvent?.[1] === "miss" ? C.rust : C.acc} />
             </g>
 
-            <g fontFamily="var(--font-mono), monospace" fontSize="12">
+            <g className="font-mono text-[22px] sm:text-[12px]">
               <text x="14" y="22" fill={C.soft}>{clip.player.toUpperCase()} MODEL</text>
               <text x={W - 14} y="22" textAnchor="end" fill={C.faint}>seed {clip.id.includes("tap") ? 13 : clip.id.includes("track") ? 11 : 7}</text>
               <text x="14" y={H - 14} fill={C.faint}>{(time / 1000).toFixed(1)} / {(clip.durationMs / 1000).toFixed(0)}s</text>
@@ -311,7 +311,7 @@ export default function HarnessReplay() {
           <div className="space-y-2 pt-1">
             <div className="flex items-baseline justify-between gap-4">
               <span className="font-serif text-sm text-ink">three-seed exploit check</span>
-              <span className="font-hand text-lg text-ink-faint">shipped grader · 8s runs</span>
+              <span className="font-sans text-xs font-medium text-ink-faint">shipped grader · 8s runs</span>
             </div>
             {auditRows.map((row) => (
               <div key={row.strategy} className="grid grid-cols-[4.5rem_1fr_3rem] items-center gap-2">
@@ -328,7 +328,7 @@ export default function HarnessReplay() {
                 <span className="text-right font-mono text-xs tabular-nums text-ink-faint">{Math.round(row.score)}</span>
               </div>
             ))}
-            <p className="font-hand text-lg leading-snug text-ink-faint">
+            <p className="font-sans text-sm leading-relaxed text-ink-faint">
               the camper does about {Math.round(exploit.minTravelRatio * 100)}% of the honest crosshair travel; the score still keeps both attacks below {Math.round(exploit.worstScoreRatio * 100)}% of the honest run.
             </p>
           </div>

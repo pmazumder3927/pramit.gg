@@ -40,7 +40,7 @@ function Box({
     >
       {n ? <div className="font-mono text-xs text-ink-faint">{n}</div> : null}
       <div className="font-serif text-sm font-medium leading-tight text-ink">{title}</div>
-      {sub ? <div className="mt-0.5 font-hand text-base leading-tight text-ink-faint">{sub}</div> : null}
+      {sub ? <div className="mt-1 font-sans text-xs leading-snug text-ink-faint">{sub}</div> : null}
     </div>
   );
 }
@@ -61,29 +61,29 @@ export function SubmovementFig() {
         </>
       }
     >
-      <svg viewBox={`0 0 ${W} 300`} className="w-full" role="img" aria-label="Top: mouse speed profile with a large ballistic primary hump and two small corrective humps. Bottom: crosshair error overshooting then settling into the hit window.">
+      <svg viewBox={`0 0 ${W} 300`} className="w-full font-sans" fontWeight={500} role="img" aria-label="Top: mouse speed profile with a large ballistic primary hump and two small corrective humps. Bottom: crosshair error overshooting then settling into the hit window.">
         {/* top: speed */}
-        <text x="22" y="90" fontSize="12" fill={C.faint} transform="rotate(-90 22 90)" textAnchor="middle" fontFamily="var(--font-caveat), cursive">mouse speed</text>
+        <text x="22" y="90" fill={C.faint} transform="rotate(-90 22 90)" textAnchor="middle" className="text-[20px] sm:text-[12px]">mouse speed</text>
         <line x1="60" y1="40" x2="60" y2="150" stroke={C.lineA(0.8)} />
         <line x1="60" y1="150" x2={W - 20} y2="150" stroke={C.lineA(0.8)} />
         <path d="M60,150 C110,150 150,54 176,50 C205,46 250,142 280,144 C305,146 320,104 330,104 C345,104 372,143 388,144 C408,145 428,120 438,120 C455,120 480,146 496,146 L620,147" fill="none" stroke={C.acc} strokeWidth="2.6" />
         <circle cx="176" cy="50" r="5" fill={C.acc} />
-        <text x="176" y="34" fontSize="12" fill={C.acc} textAnchor="middle" fontFamily="var(--font-caveat), cursive">primary — ballistic launch</text>
+        <text x="176" y="34" fill={C.acc} textAnchor="middle" className="text-[20px] sm:text-[12px]">primary — ballistic launch</text>
         <circle cx="330" cy="104" r="4" fill={C.pur} />
         <circle cx="438" cy="120" r="4" fill={C.pur} />
-        <text x="384" y="90" fontSize="12" fill={C.pur} textAnchor="middle" fontFamily="var(--font-caveat), cursive">corrective submovements</text>
+        <text x="384" y="90" fill={C.pur} textAnchor="middle" className="text-[20px] sm:text-[12px]">corrective submovements</text>
 
         {/* bottom: error */}
-        <text x="22" y="235" fontSize="12" fill={C.faint} transform="rotate(-90 22 235)" textAnchor="middle" fontFamily="var(--font-caveat), cursive">crosshair error</text>
+        <text x="22" y="235" fill={C.faint} transform="rotate(-90 22 235)" textAnchor="middle" className="text-[20px] sm:text-[12px]">crosshair error</text>
         <line x1="60" y1="185" x2="60" y2="285" stroke={C.lineA(0.8)} />
         <line x1="60" y1="285" x2={W - 20} y2="285" stroke={C.lineA(0.8)} />
         <rect x="60" y="256" width={W - 80} height="22" fill={C.hitA(0.12)} />
         <line x1="60" y1="267" x2={W - 20} y2="267" stroke={C.hit} strokeDasharray="5 4" opacity="0.8" />
-        <text x={W - 24} y="251" fontSize="11" fill={C.hit} textAnchor="end" fontFamily="var(--font-caveat), cursive">target hit window</text>
+        <text x={W - 24} y="251" fill={C.hit} textAnchor="end" className="text-[18px] sm:text-[11px]">target hit window</text>
         <path d="M60,196 C120,200 150,282 180,285 C220,289 250,286 280,283 C310,280 320,271 330,270 C360,268 380,267 400,267 L620,267" fill="none" stroke={C.pur} strokeWidth="2.6" />
         <circle cx="180" cy="285" r="4" fill={C.pur} />
-        <text x="196" y="281" fontSize="12" fill={C.pur} fontFamily="var(--font-caveat), cursive">overshoot — signal-dependent noise</text>
-        <text x={(W + 40) / 2} y="299" fontSize="11" fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">time after target appears →</text>
+        <text x="196" y="281" fill={C.pur} className="text-[18px] sm:text-[12px]">overshoot — signal-dependent noise</text>
+        <text x={(W + 40) / 2} y="299" fill={C.faint} textAnchor="middle" className="text-[18px] sm:text-[11px]">time after target appears →</text>
       </svg>
     </VizCard>
   );
@@ -114,9 +114,9 @@ export function LoopFig() {
         </div>
         <div className="rounded-xl border border-accent-orange/40 bg-accent-orange/[0.06] px-4 py-2.5 text-center">
           <div className="font-serif text-sm font-medium text-ink">the shared player model</div>
-          <div className="font-hand text-base text-ink-faint">σᵥ · 14 demand axes · pace budget · gain curve — every stage reads and writes it</div>
+          <div className="mt-1 font-sans text-sm text-ink-faint">σᵥ · 14 demand axes · pace budget · gain curve — every stage reads and writes it</div>
         </div>
-        <p className="text-center font-hand text-base text-ink-faint">
+        <p className="text-center font-sans text-sm leading-relaxed text-ink-faint">
           the loop never stops turning — each drill sharpens the model, which reshapes the next drill.
         </p>
       </div>
@@ -141,21 +141,21 @@ export function InputRecoveryFig() {
         </>
       }
     >
-      <svg viewBox={`0 0 ${W} 150`} className="w-full" role="img" aria-label="A middle render frame expanded to show ~33 raw sample ticks, versus one sample per frame in the neighbouring frames.">
+      <svg viewBox={`0 0 ${W} 150`} className="w-full font-sans" fontWeight={500} role="img" aria-label="A middle render frame expanded to show ~33 raw sample ticks, versus one sample per frame in the neighbouring frames.">
         <rect x="60" y="55" width="170" height="56" rx="4" fill={C.purA(0.06)} stroke={C.purA(0.5)} strokeDasharray="4 3" />
         <rect x="240" y="55" width="180" height="56" rx="4" fill={C.accA(0.08)} stroke={C.acc} strokeDasharray="4 3" />
         <rect x="430" y="55" width="170" height="56" rx="4" fill={C.purA(0.06)} stroke={C.purA(0.5)} strokeDasharray="4 3" />
-        <text x="145" y="46" fontSize="11" fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">frame n</text>
-        <text x="330" y="46" fontSize="11" fill={C.acc} textAnchor="middle" fontFamily="var(--font-caveat), cursive">frame n+1 (expanded)</text>
-        <text x="515" y="46" fontSize="11" fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">frame n+2</text>
+        <text x="145" y="46" fontSize="11" fill={C.faint} textAnchor="middle">frame n</text>
+        <text x="330" y="46" fontSize="11" fill={C.acc} textAnchor="middle">frame n+1 (expanded)</text>
+        <text x="515" y="46" fontSize="11" fill={C.faint} textAnchor="middle">frame n+2</text>
         {ticks.map((x) => (
           <line key={x} x1={x} y1="63" x2={x} y2="103" stroke={C.acc} strokeWidth="1" />
         ))}
         <line x1="145" y1="63" x2="145" y2="103" stroke={C.pur} strokeWidth="2.5" />
         <line x1="515" y1="63" x2="515" y2="103" stroke={C.pur} strokeWidth="2.5" />
-        <text x="145" y="130" fontSize="11" fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">1 sample / frame</text>
-        <text x="330" y="130" fontSize="11" fill={C.acc} textAnchor="middle" fontFamily="var(--font-caveat), cursive">every underlying sample, timestamped</text>
-        <text x="515" y="130" fontSize="11" fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">1 sample / frame</text>
+        <text x="145" y="130" fontSize="11" fill={C.faint} textAnchor="middle">1 sample / frame</text>
+        <text x="330" y="130" fontSize="11" fill={C.acc} textAnchor="middle">every underlying sample, timestamped</text>
+        <text x="515" y="130" fontSize="11" fill={C.faint} textAnchor="middle">1 sample / frame</text>
       </svg>
     </VizCard>
   );
@@ -190,13 +190,13 @@ export function MissFingerprintsFig() {
                 <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: it.c }} />
                 <span className="font-mono text-sm" style={{ color: it.c }}>{it.k}</span>
               </div>
-              <div className="mt-1 font-hand text-base leading-snug text-ink-faint">{it.d}</div>
+              <div className="mt-1 font-sans text-xs leading-snug text-ink-faint">{it.d}</div>
             </div>
           ))}
         </div>
         <div className="rounded-xl border border-dashed border-line bg-paper-2/30 px-4 py-2.5 text-center">
           <span className="font-mono text-sm text-ink-soft">tracking</span>
-          <span className="ml-2 font-hand text-base text-ink-faint">— error accrues the whole time the target moves →</span>
+          <span className="ml-2 font-sans text-sm text-ink-faint">— error accrues the whole time the target moves →</span>
         </div>
       </div>
     </VizCard>
@@ -236,16 +236,16 @@ export function SessionPlanFig() {
               className="flex items-center justify-center rounded-md border border-line/70 px-1 py-3 text-center"
               style={{ flexGrow: b.grow, flexBasis: 0, background: b.tone }}
             >
-              <span className="font-hand text-sm leading-tight text-ink sm:text-base">{b.label}</span>
+              <span className="font-sans text-xs font-medium leading-tight text-ink sm:text-sm">{b.label}</span>
             </div>
           ))}
         </div>
         <div className="flex items-end gap-1.5 pl-1">
-          <span className="font-hand text-base text-ink-faint">rung ↑</span>
+          <span className="font-sans text-xs font-medium text-ink-faint">rung ↑</span>
           <span className="inline-block h-2 w-6 rounded-sm" style={{ background: C.acc }} />
           <span className="inline-block h-3.5 w-6 rounded-sm" style={{ background: C.acc }} />
           <span className="inline-block h-5 w-6 rounded-sm" style={{ background: C.acc }} />
-          <span className="font-hand text-base text-ink-faint">— overload within &amp; across blocks</span>
+          <span className="font-sans text-xs text-ink-faint">— overload within &amp; across blocks</span>
         </div>
       </div>
     </VizCard>
@@ -296,17 +296,17 @@ export function CommonsFig() {
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
         <figure className="text-center">
           <Blob kind="wide" />
-          <figcaption className="font-hand text-base text-ink-faint">you, session 1 — wide, uncorrelated</figcaption>
+          <figcaption className="font-sans text-xs leading-snug text-ink-faint">you, session 1 — wide, uncorrelated</figcaption>
         </figure>
         <div className="text-center text-accent-orange/70"><span className="hidden text-xl sm:inline">→</span><span className="text-xl sm:hidden">↓</span></div>
         <figure className="text-center">
           <Blob kind="manifold" />
-          <figcaption className="font-hand text-base text-ink-faint">population manifold — Σ = LLᵀ + diag(ψ)</figcaption>
+          <figcaption className="font-sans text-xs leading-snug text-ink-faint">population manifold — Σ = LLᵀ + diag(ψ)</figcaption>
         </figure>
         <div className="text-center text-accent-orange/70"><span className="hidden text-xl sm:inline">→</span><span className="text-xl sm:hidden">↓</span></div>
         <figure className="text-center">
           <Blob kind="tight" />
-          <figcaption className="font-hand text-base text-ink-faint">your estimate — correlated, tighter</figcaption>
+          <figcaption className="font-sans text-xs leading-snug text-ink-faint">your estimate — correlated, tighter</figcaption>
         </figure>
       </div>
     </VizCard>
@@ -340,17 +340,17 @@ export function LedgerFig() {
         <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-[1fr_auto_1fr]">
           <div className="rounded-xl border border-line bg-paper-2/50 px-3 py-2.5 text-center">
             <div className="font-serif text-sm font-medium text-ink">fold(facts) — in your browser</div>
-            <div className="font-hand text-base leading-tight text-ink-faint">the live model the coach plays against</div>
+            <div className="mt-1 font-sans text-xs leading-snug text-ink-faint">the live model the coach plays against</div>
           </div>
-          <div className="flex items-center justify-center px-1 text-center font-hand text-base leading-tight text-accent-purple">
+          <div className="flex items-center justify-center px-1 text-center font-mono text-xs font-medium leading-tight text-accent-purple">
             same code
           </div>
           <div className="rounded-xl border border-line bg-paper-2/50 px-3 py-2.5 text-center">
             <div className="font-serif text-sm font-medium text-ink">fold(facts) — on the server</div>
-            <div className="font-hand text-base leading-tight text-ink-faint">the canonical one behind leaderboards</div>
+            <div className="mt-1 font-sans text-xs leading-snug text-ink-faint">the canonical one behind leaderboards</div>
           </div>
         </div>
-        <div className="rounded-xl border border-dashed border-accent-purple/40 bg-accent-purple/[0.05] px-4 py-2 text-center font-hand text-base text-ink-soft">
+        <div className="rounded-xl border border-dashed border-accent-purple/40 bg-accent-purple/[0.05] px-4 py-2 text-center font-sans text-xs leading-relaxed text-ink-soft">
           facts sync up — never a skill estimate. ratings, weaknesses, the mastered band: all readouts of the fold, none stored where they can drift.
         </div>
       </div>
@@ -392,7 +392,7 @@ export function TimelineFig() {
               <span className="font-serif text-sm font-medium text-ink">{p.name}</span>
               <span className="rounded bg-ink/[0.06] px-1.5 py-0.5 font-mono text-2xs text-ink-faint">{p.day}</span>
             </div>
-            <div className="font-hand text-base leading-snug text-ink-faint">{p.note}</div>
+            <div className="mt-0.5 font-sans text-sm leading-snug text-ink-faint">{p.note}</div>
           </li>
         ))}
       </ol>

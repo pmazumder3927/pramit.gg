@@ -60,7 +60,8 @@ export default function NoiseFrontier() {
         <svg
           ref={drag.ref}
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full touch-none cursor-ew-resize"
+          className="w-full touch-none cursor-ew-resize font-sans"
+          fontWeight={500}
           onPointerDown={drag.onPointerDown}
           onPointerMove={drag.onPointerMove}
           role="img"
@@ -69,12 +70,12 @@ export default function NoiseFrontier() {
           {/* axes */}
           <line x1={X0} y1={Y1} x2={X0} y2={Y0} stroke={C.lineA(0.8)} />
           <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke={C.lineA(0.8)} />
-          <text x={16} y={(Y0 + Y1) / 2} fontSize={10} fill={C.faint} transform={`rotate(-90 16 ${(Y0 + Y1) / 2})`} textAnchor="middle" fontFamily="var(--font-caveat), cursive">endpoint SD °</text>
-          <text x={(X0 + X1) / 2} y={H - 8} fontSize={10} fill={C.faint} textAnchor="middle" fontFamily="var(--font-caveat), cursive">flick speed °/s →</text>
+          <text x={16} y={(Y0 + Y1) / 2} fontSize={11} fill={C.faint} transform={`rotate(-90 16 ${(Y0 + Y1) / 2})`} textAnchor="middle">endpoint SD °</text>
+          <text x={(X0 + X1) / 2} y={H - 8} fontSize={11} fill={C.faint} textAnchor="middle">flick speed °/s →</text>
 
           {/* target radius line */}
           <line x1={X0} y1={yOf(R)} x2={X1} y2={yOf(R)} stroke={C.hit} strokeDasharray="5 4" />
-          <text x={X1} y={yOf(R) - 5} fontSize={9} fill={C.hit} textAnchor="end" fontFamily="var(--font-caveat), cursive">target radius — miss above</text>
+          <text x={X1} y={yOf(R) - 5} fontSize={10} fill={C.hit} textAnchor="end">target radius — miss above</text>
 
           {/* noise line σ0 + σv·v */}
           <line x1={xOf(0)} y1={yOf(sdAt(0))} x2={xOf(V_MAX)} y2={yOf(sdAt(V_MAX))} stroke={C.pur} strokeWidth={2.4} />
@@ -83,17 +84,17 @@ export default function NoiseFrontier() {
           {frontier > 0 && frontier <= V_MAX && (
             <>
               <circle cx={xOf(fClamped)} cy={yOf(R)} r={5.5} fill="none" stroke={C.hit} strokeWidth={2} />
-              <text x={xOf(fClamped)} y={yOf(R) + 18} fontSize={9} fill={C.hit} textAnchor="middle" fontFamily="var(--font-caveat), cursive">frontier</text>
+              <text x={xOf(fClamped)} y={yOf(R) + 18} fontSize={10} fill={C.hit} textAnchor="middle">frontier</text>
             </>
           )}
           {frontier > V_MAX && (
-            <text x={X1 - 4} y={Y1 + 14} fontSize={9} fill={C.hit} textAnchor="end" fontFamily="var(--font-caveat), cursive">frontier &gt; {V_MAX} °/s ↗</text>
+            <text x={X1 - 4} y={Y1 + 14} fontSize={10} fill={C.hit} textAnchor="end">frontier &gt; {V_MAX} °/s ↗</text>
           )}
 
           {/* operating point */}
           <line x1={xOf(vOp)} y1={Y1} x2={xOf(vOp)} y2={Y0} stroke={C.accA(0.5)} strokeDasharray="3 3" />
           <circle cx={xOf(vOp)} cy={yOf(sdOp)} r={7} fill={C.acc} stroke="rgb(var(--surface))" strokeWidth={2} />
-          <text x={xOf(vOp)} y={Y1 + 2} fontSize={9} fill={C.acc} textAnchor="middle" fontFamily="var(--font-caveat), cursive">you</text>
+          <text x={xOf(vOp)} y={Y1 + 2} fontSize={10} fill={C.acc} textAnchor="middle">you</text>
         </svg>
 
         <div className="space-y-4">
@@ -104,7 +105,7 @@ export default function NoiseFrontier() {
             <Stat value={`${sdOp.toFixed(2)}°`} label="your SD" color={C.faint} />
           </div>
           <div
-            className="rounded-lg border px-3 py-2 font-hand text-lg leading-tight"
+            className="rounded-lg border px-3 py-2 font-sans text-sm font-medium leading-snug"
             style={{ borderColor: verdict.c, color: verdict.c, background: C.accA(0.06) }}
           >
             {verdict.t}

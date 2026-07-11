@@ -2,7 +2,8 @@
 
 // Shared kit for the OpenAim interactive widgets embedded in the essay.
 // Everything is theme-aware via the site's CSS-var tokens (paper light / indigo
-// dark) and styled to match the sketchbook look (sketch-card, hand + mono type).
+// dark) and styled to match the sketchbook look. Instrument text stays on the
+// readable sans/mono stacks; handwriting is reserved for the editorial caption.
 
 import React, { useCallback, useRef } from "react";
 
@@ -26,8 +27,7 @@ export const C = {
 } as const;
 
 /** Card shell that matches the essay's figures — a sketch-card with a titled
- *  header, a hint chip, and a hand-written caption underneath. `not-prose`
- *  keeps the post's typography from leaking into the widget internals. */
+ *  header, a hint chip, and a hand-written caption underneath. */
 export function VizCard({
   title,
   hint,
@@ -45,12 +45,12 @@ export function VizCard({
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line/70 px-5 py-3">
           <h4 className="font-serif text-base font-medium text-ink">{title}</h4>
           {hint ? (
-            <span className="font-hand text-lg -rotate-1 text-accent-purple">
+            <span className="font-mono text-xs font-medium text-accent-purple">
               {hint}
             </span>
           ) : null}
         </div>
-        <div className="p-4 sm:p-5">{children}</div>
+        <div className="p-4 font-sans sm:p-5">{children}</div>
       </div>
       {caption ? (
         <p className="mx-auto mt-3 max-w-prose px-1 text-center font-hand text-lg leading-snug text-ink-faint">
@@ -84,7 +84,7 @@ export function Ctl({
   return (
     <label className="block select-none">
       <div className="flex items-baseline justify-between">
-        <span className="font-hand text-lg text-ink-soft">{label}</span>
+        <span className="font-sans text-sm font-medium text-ink-soft">{label}</span>
         <span className="font-mono text-sm text-ink" style={{ color: accent }}>
           {fmt ? fmt(value) : value}
         </span>
@@ -106,7 +106,7 @@ export function Ctl({
   );
 }
 
-/** A small stat read-out: big mono number + hand label, optionally colored. */
+/** A small stat read-out: big mono number + compact sans label. */
 export function Stat({
   value,
   label,
@@ -124,7 +124,7 @@ export function Stat({
       >
         {value}
       </div>
-      <div className="mt-1 font-hand text-base leading-tight text-ink-faint">
+      <div className="mt-1 font-sans text-xs font-medium leading-snug text-ink-faint">
         {label}
       </div>
     </div>
@@ -148,7 +148,7 @@ export function Toggle({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className="rounded-full border px-3.5 py-1.5 font-hand text-lg leading-none transition-colors"
+      className="min-h-8 rounded-full border px-3.5 py-1.5 font-sans text-sm font-medium leading-none transition-colors"
       style={{
         borderColor: on ? accent : C.lineA(0.9),
         color: on ? accent : C.faint,
@@ -172,7 +172,7 @@ export function Btn({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-hand text-lg leading-none text-accent-orange transition-colors hover:bg-accent-orange/25"
+      className="min-h-8 rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-sans text-sm font-medium leading-none text-accent-orange transition-colors hover:bg-accent-orange/25"
     >
       {children}
     </button>

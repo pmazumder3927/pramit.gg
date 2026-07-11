@@ -91,7 +91,7 @@ export default function CapabilityRadar() {
       }
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-center">
-        <svg viewBox="0 0 420 420" className="mx-auto w-full max-w-[26rem]" role="img" aria-label="14-axis capability radar">
+        <svg viewBox="0 0 420 420" className="mx-auto w-full max-w-[26rem] font-sans" role="img" aria-label="14-axis capability radar">
           {/* rings */}
           {[0.25, 0.5, 0.75, 1].map((r) => (
             <circle key={r} cx={CX} cy={CY} r={RAD * r} fill="none" stroke={C.lineA(0.5)} />
@@ -107,12 +107,11 @@ export default function CapabilityRadar() {
                 <text
                   x={lx}
                   y={ly}
-                  fontSize={9}
+                  fontSize={10}
                   fill={active ? C.acc : C.faint}
                   fontWeight={active ? 700 : 400}
                   textAnchor={lx < CX - 6 ? "end" : lx > CX + 6 ? "start" : "middle"}
                   dominantBaseline="middle"
-                  fontFamily="var(--font-caveat), cursive"
                   className="cursor-pointer"
                   onClick={() => setSel(i)}
                 >
@@ -138,16 +137,16 @@ export default function CapabilityRadar() {
           <div className="flex flex-wrap gap-2">
             <Btn onClick={runSession}>run a session →</Btn>
             <Toggle on={showGhost} onClick={() => setShowGhost((s) => !s)}>ghost</Toggle>
-            <button type="button" onClick={reset} className="font-hand text-lg text-ink-faint underline decoration-dotted underline-offset-4 hover:text-accent-rust">reset</button>
+            <button type="button" onClick={reset} className="font-sans text-sm font-medium text-ink-faint underline decoration-dotted underline-offset-4 hover:text-accent-rust">reset</button>
           </div>
           <div className="rounded-lg border border-line/70 bg-paper-2/40 p-3">
             <div className="flex items-baseline justify-between">
               <span className="font-mono text-base" style={{ color: C.acc }}>{a.short}</span>
               <span className="font-mono text-sm text-ink">{Math.round(now[sel] * 100)}</span>
             </div>
-            <p className="mt-1.5 font-hand text-lg leading-snug text-ink-soft">{a.what}</p>
+            <p className="mt-1.5 font-sans text-sm leading-relaxed text-ink-soft">{a.what}</p>
             <div className="mt-2 rounded bg-ink/[0.05] px-2 py-1 font-mono text-xs text-accent-rust">{a.formula}</div>
-            <p className="mt-1.5 font-hand text-base text-ink-faint">{a.cite}</p>
+            <p className="mt-1.5 font-sans text-xs leading-relaxed text-ink-faint">{a.cite}</p>
           </div>
         </div>
       </div>

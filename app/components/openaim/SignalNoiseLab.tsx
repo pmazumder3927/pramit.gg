@@ -80,7 +80,8 @@ export default function SignalNoiseLab() {
       <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-center">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full"
+          className="w-full font-sans"
+          fontWeight={500}
           role="img"
           aria-label={`Shot scatter on a target at ${Math.round(v)} degrees per second flick speed, ${hitPct} percent hits`}
         >
@@ -89,7 +90,7 @@ export default function SignalNoiseLab() {
           <circle cx={CX} cy={CY} r={px(R)} fill={C.hitA(0.08)} stroke={C.hit} strokeWidth={1.5} />
           <line x1={CX - 8} y1={CY} x2={CX + 8} y2={CY} stroke={C.faint} />
           <line x1={CX} y1={CY - 8} x2={CX} y2={CY + 8} stroke={C.faint} />
-          <text x={CX + px(R) + 4} y={CY - 4} fontSize={11} fill={C.hit} fontFamily="var(--font-caveat), cursive">
+          <text x={CX + px(R) + 4} y={CY - 4} fontSize={11} fill={C.hit}>
             hit window
           </text>
           {/* shots */}
@@ -127,7 +128,7 @@ export default function SignalNoiseLab() {
             fmt={(x) => `${Math.round(x)} °/s`}
           />
           <div className="flex items-center justify-between">
-            <span className="font-hand text-lg text-ink-soft">corrections</span>
+            <span className="font-sans text-sm font-medium text-ink-soft">corrections</span>
             <Toggle on={correct} onClick={() => setCorrect((s) => !s)}>
               {correct ? "on" : "off"}
             </Toggle>
