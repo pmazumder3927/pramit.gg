@@ -91,7 +91,11 @@
     0%   { opacity: 0; transform: translate3d(0, 6px, 0); }
     100% { opacity: 1; transform: translate3d(0, 0, 0); }
   }
-  .page-reveal { animation: page-reveal 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+  /* backwards (not both/forwards): the entrance transform must not linger
+     after the animation ends, or it becomes the containing block for any
+     position:fixed descendant (e.g. the writing room's Verso/ghost palette),
+     pinning them to the page's own box instead of the viewport on long pages. */
+  .page-reveal { animation: page-reveal 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) backwards; }
   @media (prefers-reduced-motion: reduce) {
     .page-reveal { animation: none; transform: none; opacity: 1; }
   }
