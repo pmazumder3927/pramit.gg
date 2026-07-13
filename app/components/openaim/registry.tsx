@@ -82,14 +82,14 @@ export const openaimFigures: FigureDef[] = [
     kind: "interactive",
     component: dynamic(() => import("./LedgerCollapse")),
   },
-  // ---- theme-aware static diagrams ----------------------------------------
   {
     tag: "submovement-fig",
     label: "one flick, decomposed",
-    blurb: "a real captured flick, split into a ballistic primary plus corrections.",
-    kind: "diagram",
-    component: dynamic(() => import("./diagrams").then((m) => m.SubmovementFig)),
+    blurb: "a real captured flick, played back and split into reaction, ballistic launch, correction, and settle.",
+    kind: "interactive",
+    component: dynamic(() => import("./FlickAnatomy")),
   },
+  // ---- theme-aware static diagrams ----------------------------------------
   {
     tag: "loop-fig",
     label: "one player model, one loop",
