@@ -49,7 +49,7 @@ export const openaimFigures: FigureDef[] = [
   },
   {
     tag: "aim-model-playground",
-    label: "see the demand behind a drill",
+    label: "a drill and its fourteen demands",
     blurb: "watch one scenario, then inspect its compact fourteen-axis demand shape.",
     kind: "interactive",
     component: dynamic(() => import("./AimModelPlayground")),
@@ -63,21 +63,21 @@ export const openaimFigures: FigureDef[] = [
   },
   {
     tag: "harness-replay",
-    label: "watch the synthetic test harness",
+    label: "synthetic players, real engine",
     blurb: "real engine runs, extracted from .oar replays and made scrubbable.",
     kind: "interactive",
     component: dynamic(() => import("./HarnessReplay")),
   },
   {
     tag: "servo-lab",
-    label: "what the tracking model assumes",
+    label: "the servo-gaussian tracking assumption",
     blurb: "intermittent correction, reaction delay, Gaussian error, and deliberate model mismatch.",
     kind: "interactive",
     component: dynamic(() => import("./ServoLab")),
   },
   {
     tag: "ledger-collapse",
-    label: "watch a run lose its information",
+    label: "a run, averaged into one update",
     blurb: "real target engagements collapsing into the old run-level update.",
     kind: "interactive",
     component: dynamic(() => import("./LedgerCollapse")),

@@ -153,8 +153,8 @@ export default function AimModelPlayground() {
 
   return (
     <VizCard
-      title="see the demand behind a drill"
-      hint="choose a drill, then inspect its shape"
+      title="a drill and its fourteen demands"
+      hint="pick one, then adjust its geometry"
       caption={
         <>
           fig — the same aim task in screen space, hand space, and the model&apos;s
@@ -321,8 +321,7 @@ export default function AimModelPlayground() {
                           {active ? (
                             <div className="border-t border-line/50 bg-paper-2/50 px-3 py-3" aria-live="polite">
                               <p className="text-xs leading-relaxed text-ink-soft">{axis.meaning}</p>
-                              <p className="mt-2 font-mono text-[11px] leading-relaxed text-accent-rust">{axis.formula}</p>
-                              <p className="mt-1 text-[11px] text-ink-faint">Loaded by {axis.driver}.</p>
+                              <p className="mt-2 text-[11px] text-ink-faint">Loaded by {axis.driver}.</p>
                             </div>
                           ) : null}
                         </div>

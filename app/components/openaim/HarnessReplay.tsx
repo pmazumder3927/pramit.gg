@@ -143,8 +143,8 @@ export default function HarnessReplay() {
 
   return (
     <VizCard
-      title="the test harness, caught in the act"
-      hint="real engine · real .oar replay"
+      title="synthetic players, real engine"
+      hint="sampled from .oar replays"
       caption={
         <>
           fig — these are not hand-animated paths. each clip was produced by
