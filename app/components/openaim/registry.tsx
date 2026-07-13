@@ -29,7 +29,7 @@ export const openaimFigures: FigureDef[] = [
   {
     tag: "challenge-point",
     label: "how hard should the next drill be?",
-    blurb: "the challenge-point sweet spot, made playable.",
+    blurb: "nudge the learned challenge zone without pretending the peak is universal.",
     kind: "interactive",
     component: dynamic(() => import("./ChallengePoint")),
   },
