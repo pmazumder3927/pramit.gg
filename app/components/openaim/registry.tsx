@@ -86,7 +86,7 @@ export const openaimFigures: FigureDef[] = [
   {
     tag: "submovement-fig",
     label: "one flick, decomposed",
-    blurb: "a flick split into a ballistic primary plus corrections.",
+    blurb: "a real captured flick, split into a ballistic primary plus corrections.",
     kind: "diagram",
     component: dynamic(() => import("./diagrams").then((m) => m.SubmovementFig)),
   },

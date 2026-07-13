@@ -6,6 +6,7 @@
 // the genuinely chart-shaped ones stay SVG, coloured from CSS-var tokens.
 
 import { C, VizCard } from "./kit";
+import { FLICK_FIXTURE } from "./flickFixture";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -49,40 +50,84 @@ function Box({
 
 export function SubmovementFig() {
   const W = 640;
+  const f = FLICK_FIXTURE;
+
+  // Plot geometry — real telemetry mapped onto the same axes the old
+  // illustrative version used, so the layout still reads the same.
+  const x0 = 60;
+  const x1 = W - 20;
+  const xAt = (t: number) => x0 + (t / f.acquireMs) * (x1 - x0);
+
+  const speedTop = 40;
+  const speedBase = 150; // speed = 0
+  const speedScaleMax = 400; // deg/s headroom above the recorded peak (381)
+  const ySpeed = (s: number) => speedBase - (Math.min(s, speedScaleMax) / speedScaleMax) * (speedBase - speedTop);
+
+  const errTop = 185;
+  const errBase = 285; // err = 0
+  const errScaleMax = 34; // deg headroom above the recorded amplitude (32.43)
+  const yErr = (e: number) => errBase - (Math.min(e, errScaleMax) / errScaleMax) * (errBase - errTop);
+
+  const pxPerDeg = (errBase - errTop) / errScaleMax;
+  const hitH = f.targetRadiusDeg * pxPerDeg;
+
+  const speedPath = f.path.map(([t, s], i) => `${i === 0 ? "M" : "L"}${xAt(t).toFixed(1)},${ySpeed(s).toFixed(1)}`).join(" ");
+  const errPath = f.path.map(([t, , e], i) => `${i === 0 ? "M" : "L"}${xAt(t).toFixed(1)},${yErr(e).toFixed(1)}`).join(" ");
+
+  const at = (t: number) => f.path.find((p) => Math.abs(p[0] - t) < 0.01)!;
+  const primary = f.path.reduce((best, p) => (p[1] > best[1] ? p : best));
+  // The two corrective speed pulses the kinematics segmenter itself found
+  // (analyzeFlick's countSubmovements) for this engagement — nSubmovements: 3.
+  const corr1 = at(530.72);
+  const corr2 = at(542.69);
+  const overshoot = at(347.16);
+
+  const primaryX = xAt(primary[0]);
+  const primaryY = ySpeed(primary[1]);
+  const corr1X = xAt(corr1[0]);
+  const corr1Y = ySpeed(corr1[1]);
+  const corr2X = xAt(corr2[0]);
+  const corr2Y = ySpeed(corr2[1]);
+  const overshootX = xAt(overshoot[0]);
+  const overshootY = yErr(overshoot[2]);
+
   return (
     <VizCard
       title="one flick, decomposed"
-      hint="anatomy of a shot"
+      hint="a real capture, not a sketch"
       caption={
         <>
-          fig — every engagement splits into a ballistic primary submovement plus
-          optional corrections. a miss is blamed on whichever phase failed — a
-          bad launch and a shaky settle need different drills.
+          fig — one actual engagement, pulled straight from a captured .oar
+          replay: {f.amplitudeDeg}° amplitude, {Math.round(f.peakSpeed)}°/s
+          peak crosshair speed, killed {Math.round(f.acquireMs)} ms after
+          spawn across {f.nSubmovements} submovements — a ballistic primary
+          plus two corrective taps. a miss is blamed on whichever phase
+          failed — a bad launch and a shaky settle need different drills.
         </>
       }
     >
-      <svg viewBox={`0 0 ${W} 300`} className="w-full font-sans" fontWeight={500} role="img" aria-label="Top: mouse speed profile with a large ballistic primary hump and two small corrective humps. Bottom: crosshair error overshooting then settling into the hit window.">
+      <svg viewBox={`0 0 ${W} 300`} className="w-full font-sans" fontWeight={500} role="img" aria-label="Top: real mouse speed profile from a captured flick, with a large ballistic primary hump and two small corrective humps near the end. Bottom: the same flick's crosshair error, overshooting the target before settling into the hit window.">
         {/* top: speed */}
         <text x="22" y="90" fill={C.faint} transform="rotate(-90 22 90)" textAnchor="middle" className="text-[20px] sm:text-[12px]">mouse speed</text>
-        <line x1="60" y1="40" x2="60" y2="150" stroke={C.lineA(0.8)} />
-        <line x1="60" y1="150" x2={W - 20} y2="150" stroke={C.lineA(0.8)} />
-        <path d="M60,150 C110,150 150,54 176,50 C205,46 250,142 280,144 C305,146 320,104 330,104 C345,104 372,143 388,144 C408,145 428,120 438,120 C455,120 480,146 496,146 L620,147" fill="none" stroke={C.acc} strokeWidth="2.6" />
-        <circle cx="176" cy="50" r="5" fill={C.acc} />
-        <text x="176" y="34" fill={C.acc} textAnchor="middle" className="text-[20px] sm:text-[12px]">primary — ballistic launch</text>
-        <circle cx="330" cy="104" r="4" fill={C.pur} />
-        <circle cx="438" cy="120" r="4" fill={C.pur} />
-        <text x="384" y="90" fill={C.pur} textAnchor="middle" className="text-[20px] sm:text-[12px]">corrective submovements</text>
+        <line x1={x0} y1={speedTop} x2={x0} y2={speedBase} stroke={C.lineA(0.8)} />
+        <line x1={x0} y1={speedBase} x2={x1} y2={speedBase} stroke={C.lineA(0.8)} />
+        <path d={speedPath} fill="none" stroke={C.acc} strokeWidth="2.2" strokeLinejoin="round" />
+        <circle cx={primaryX} cy={primaryY} r="5" fill={C.acc} />
+        <text x={primaryX} y={Math.max(18, primaryY - 16)} fill={C.acc} textAnchor="middle" className="text-[20px] sm:text-[12px]">primary — ballistic launch</text>
+        <circle cx={corr1X} cy={corr1Y} r="4" fill={C.pur} />
+        <circle cx={corr2X} cy={corr2Y} r="4" fill={C.pur} />
+        <text x={Math.min(corr1X, corr2X) - 10} y={Math.min(corr1Y, corr2Y) - 14} fill={C.pur} textAnchor="end" className="text-[20px] sm:text-[12px]">corrective submovements</text>
 
         {/* bottom: error */}
         <text x="22" y="235" fill={C.faint} transform="rotate(-90 22 235)" textAnchor="middle" className="text-[20px] sm:text-[12px]">crosshair error</text>
-        <line x1="60" y1="185" x2="60" y2="285" stroke={C.lineA(0.8)} />
-        <line x1="60" y1="285" x2={W - 20} y2="285" stroke={C.lineA(0.8)} />
-        <rect x="60" y="256" width={W - 80} height="22" fill={C.hitA(0.12)} />
-        <line x1="60" y1="267" x2={W - 20} y2="267" stroke={C.hit} strokeDasharray="5 4" opacity="0.8" />
-        <text x={W - 24} y="251" fill={C.hit} textAnchor="end" className="text-[18px] sm:text-[11px]">target hit window</text>
-        <path d="M60,196 C120,200 150,282 180,285 C220,289 250,286 280,283 C310,280 320,271 330,270 C360,268 380,267 400,267 L620,267" fill="none" stroke={C.pur} strokeWidth="2.6" />
-        <circle cx="180" cy="285" r="4" fill={C.pur} />
-        <text x="196" y="281" fill={C.pur} className="text-[18px] sm:text-[12px]">overshoot — signal-dependent noise</text>
+        <line x1={x0} y1={errTop} x2={x0} y2={errBase} stroke={C.lineA(0.8)} />
+        <line x1={x0} y1={errBase} x2={x1} y2={errBase} stroke={C.lineA(0.8)} />
+        <rect x={x0} y={errBase - hitH} width={x1 - x0} height={hitH} fill={C.hitA(0.2)} />
+        <line x1={x0} y1={errBase - hitH / 2} x2={x1} y2={errBase - hitH / 2} stroke={C.hit} strokeDasharray="5 4" opacity="0.8" />
+        <text x={x1 - 4} y={errBase - hitH - 8} fill={C.hit} textAnchor="end" className="text-[18px] sm:text-[11px]">target hit window ({f.targetRadiusDeg}°)</text>
+        <path d={errPath} fill="none" stroke={C.pur} strokeWidth="2.2" strokeLinejoin="round" />
+        <circle cx={overshootX} cy={overshootY} r="4" fill={C.pur} />
+        <text x={overshootX} y={overshootY - 10} fill={C.pur} textAnchor="middle" className="text-[18px] sm:text-[12px]">overshoot — signal-dependent noise</text>
         <text x={(W + 40) / 2} y="299" fill={C.faint} textAnchor="middle" className="text-[18px] sm:text-[11px]">time after target appears →</text>
       </svg>
     </VizCard>
