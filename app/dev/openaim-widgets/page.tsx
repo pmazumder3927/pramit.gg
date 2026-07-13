@@ -5,6 +5,7 @@ import NoiseFrontier from "@/app/components/openaim/NoiseFrontier";
 import ChallengePoint from "@/app/components/openaim/ChallengePoint";
 import CapabilityRadar from "@/app/components/openaim/CapabilityRadar";
 import SensSpectrum from "@/app/components/openaim/SensSpectrum";
+import AimModelPlayground from "@/app/components/openaim/AimModelPlayground";
 import CheatLab from "@/app/components/openaim/CheatLab";
 import HarnessReplay from "@/app/components/openaim/HarnessReplay";
 import ServoLab from "@/app/components/openaim/ServoLab";
@@ -31,6 +32,7 @@ export default function Page() {
       <ChallengePoint />
       <CapabilityRadar />
       <SensSpectrum />
+      <AimModelPlayground />
       <CheatLab />
       <HarnessReplay />
       <ServoLab />

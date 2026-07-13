@@ -42,10 +42,17 @@ export const openaimFigures: FigureDef[] = [
   },
   {
     tag: "sens-spectrum",
-    label: "good at every sensitivity",
-    blurb: "sweep the sens spectrum and watch the cost curve move.",
+    label: "sensitivity is part of the drill",
+    blurb: "keep screen geometry fixed and watch cm/360 reshape the four hand-space demands.",
     kind: "interactive",
     component: dynamic(() => import("./SensSpectrum")),
+  },
+  {
+    tag: "aim-model-playground",
+    label: "what this drill asks of you",
+    blurb: "animate one scenario in screen space, hand space, and all fourteen model demands.",
+    kind: "interactive",
+    component: dynamic(() => import("./AimModelPlayground")),
   },
   {
     tag: "cheat-lab",

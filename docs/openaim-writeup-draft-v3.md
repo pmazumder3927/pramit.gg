@@ -13,14 +13,14 @@
   - Publishable media is stored as content-addressed Supabase Storage objects;
     capture outputs are not committed to the site repository.
   - Custom figures used here: harness-replay, submovement-fig, servo-lab,
-    challenge-point, ledger-collapse.
+    challenge-point, sens-spectrum, aim-model-playground, ledger-collapse.
 -->
 
 hello.
 
 A lot has happened in my life recently, and as it happens I'm accepting a new position in the birthplace of fallen dreams (san francisco).
 
-I've been trying to take advantage of my freedom while I have it, so I have returned to my love/hate relationship with the video game Valorant. There is one issue with this. I'm bad at it.
+Exciting as this is, it means I will have to work again. I've been trying to take advantage of my freedom while I have it, so I have returned to my love/hate relationship with the video game Valorant. There is one issue with this: I'm bad at it.
 
 When I look at a game, I tend to divide it into micro and macro (for a much better explanation of what that means, [this video](https://www.youtube.com/watch?v=NgHvdCcmQ4o) is helpful). Applied to Valorant, this means that I am paranoid about having good aim. Unfortunately, I am very naturally uninclined towards this end.
 
@@ -30,45 +30,55 @@ However, as a perception engineer with a Cognitive Science degree and some dabbl
 
 ## tl;dr
 
-Most aim training works like this: somebody makes a playlist of scenarios, each one targets a certain skill, and you replay it until the number goes up. The hope is that the number represents better mouse control, which hopefully represents better aim, which even more hopefully transfers to the game.
+Most aim training works like so: somebody makes a playlist of scenarios, each one targets a certain skill, and you replay them until the number goes up. The hope being that this number represents better mouse control, which hopefully represents better aim, which even more hopefully transfers to the game you're playing.
 
-I had two hangups. First, the scenarios are usually fixed while the player is not. A useful drill for me this week may be too hard now and uselessly easy a month from now. Second, the score tells me that I did badly, but not _how_. A late click, a noisy flick, and a bad prediction of a moving target can all produce the same red number and require completely different practice.
+I had two hangups with this norm. First, the scenarios are usually fixed while the player is not. Anyone that's played an older Voltaic playlist knows this feeling, where the gap between the scenarios in the easiest playlist and the next one sometimes feels insurmountable. However, humans generally improve quickest at a slight challenge point, and this is very sensitive per player. This is one of the good parts of Viscose, difficulty jumps much less and keeps the player anchored on improvement. Second, scores give an overall read of the targets you clicked, but not _how_. If you clicked on a target late, or your wrist was shaky, or you just got tired, the end result is still just a single number that provides insight on only the peak of your performance on this one specfic scenario.
 
-So I made [OpenAim](https://github.com/pmazumder3927/openaim), a browser aim trainer that records the movement underneath the score, tries to explain what failed, and chooses another drill from that explanation. Then I built fake players to test it, discovered several of them were better at cheating my score than I was at aiming, and eventually turned the audit back on the trainer itself.
+So I made [openaim](https://openaim.pramit.gg/), a (free!) aim trainer that records your raw mouse movements and tries to estimate your actual motor proficiency skills with the mouse, instead of a score on a scenario. Then, an algorithmically-motivated coach generates drills to make scenarios that are just hard enough to foster improvement, in all the specific skills you're the worst at.
 
-That last part changed the project quite a bit.
+I wanted this article to be interesting to anyone interested in FPS games and aim trainers, as well as giga nerds like myself. This lended itself to a difficult to balance and technically dense writeup, so buckle up.
 
-![OpenAim's menu. The coached session is the front door; free play and the analysis tools use the same engine.](https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/openaim/1dae03d422a3922f-menu.webp)
+![OpenAim's menu](https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/openaim/1dae03d422a3922f-menu.webp)
 
 ---
 
 ## a score is a very small answer
 
-Before the math, here is a player who does not exist.
+Before the specifics, here is a player who does not exist.
 
 <video autoplay muted loop playsinline poster="https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/openaim/1d4e73ff2993b396-2tap-intermediate-24s-poster.webp">
   <source src="https://urfeanhummwzxrqvjxkm.supabase.co/storage/v1/object/public/images/uploads/openaim/1d3ae7fccc8a8bc5-2tap-intermediate-24s-stage-web.mp4" type="video/mp4" />
 </video>
 
-_This is a complete 24-second run from an intermediate synthetic player on 2-Tap Strafe: 21 kills from 64 shots, with 67% accuracy. It moves the mouse through the same input path as a person, the engine decides every hit, and the result is saved as a normal replay._
+_This is a 24-second run from a synthetic generated player on 2-Tap Strafe_
 
-I originally built the replay system because I wanted nicer run history. It ended up becoming the spine of the project.
+In order to get here, we have to start from the data. With my industry being where it is, it was incredibly tempting to jump to a transformer, but it's good practice to first find the simplest model that can accurately represent your objective. So the first natural question is, given a player's mouse inputs and an aim scenario, what can we estimate? The underlying system is, of course, a human, using a chain of very complicated muscles, including a feedback loop between your brain, arm, wrist, and fingertips. The output is literally just how much the mouse went up and down. So, given our run's raw mouse samples, camera angle, scenario targets, and sensitivity, we can make a decent back estimation of what your actual hand is.
 
-Every run records the raw mouse samples, rendered camera path, target tracks, scenario seed, sensitivity, and the events that happened. The result is an open `.oar` file. The current format also records when each target actually became hittable, where each shot landed, and the realized target engagements. This means a run is not frozen to whatever scoring rule I happened to like when I played it. I can open it later, reconstruct the same view, and ask a better question.
+In order to do this I tackled first the goliath that Riot Games dared not to till recently: a replay system. This would allow me to make a dataset of myself, then test the fit of models without losing data. This means a run is not frozen to whatever scoring rule I happened to like when I played it. I can open it later, reconstruct the same view, and ask a better question later on.
 
 The first better question was simple: what does a miss contain?
 
 Imagine two identical misses. In the first, the crosshair launches in the wrong direction. In the second, it launches correctly, reaches the target, and the click arrives 40 ms late. A leaderboard compresses both into zero points. As training data, they are almost opposites.
 
-The pointing-device literature gives a useful way to pull them apart. A fast aimed movement is not one perfectly smooth gesture. It usually has a large initial movement, often called the ballistic primary, followed by smaller corrections if the first landing was not good enough.[^meyer]
+# reminder that I went to college for this
+
+Human motor control theory has been around for a long time, and scientists have been building models for how your perception-motor stack responds to inputs for decades. I decided that in the spirit of my background this would be a good place to start.
+
+The pointing-device literature gives a useful way to pull them apart. A fast aimed movement is not one perfectly smooth gesture. It usually has a large initial movement, often called the ballistic primary, followed by smaller corrections if the first landing was not good enough.[^meyer] Most members of the aim training community know this already, and there's a popular approach called the bardoz method that rests on this principle. This principle is actually quantifiably true, looking at a (smoothed) graph of one of my own flicks:
 
 <submovement-fig></submovement-fig>
 
 There is a second idea underneath this. Motor commands carry signal-dependent noise: as the command gets larger and faster, its endpoint becomes less consistent.[^harris] This does not mean every person's hand obeys one magical straight line forever. It gives me a testable starting model:
 
-```text
-endpoint scatter = baseline scatter + speed-dependent scatter
-```
+$$
+\sigma_{\text{endpoint}}(v)
+=
+\sigma_{\text{baseline}}
++
+\sigma_{\text{speed}}(v)
+$$
+
+where $v$ is movement speed, $\sigma_{\text{baseline}}$ is the player's speed-independent endpoint scatter, and $\sigma_{\text{speed}}(v)$ is the additional scatter associated with moving faster.
 
 The useful word there is _testable_. The motor head fits this per shot in physical hand space, then checks whether the radial errors actually look like the distribution it assumes. If the points are heavy-tailed, directional, or full of occasional lapses, the acceptance dashboard complains instead of turning the mismatch into a personality trait. `you have bad left aim` is not an acceptable conclusion if the real answer is `my spawn geometry was lopsided`.
 
@@ -78,7 +88,7 @@ The little experiment below is not the paper's full equation. It is a picture of
 
 <servo-lab></servo-lab>
 
-This is how I now think about most of the science in OpenAim: useful priors that have to survive contact with a person's data. Not commandments.
+Thus, with the help of some 50 (!)+ year old literature, we have some useful bootstraps for creating a model of a person's aim.
 
 ---
 
@@ -120,37 +130,51 @@ After fixing that, the real scoring holes became obvious. The worst was a multi-
 
 On the current 8-second 2-Tap audit, averaged over three seeds, the honest advanced player scores 2072. The camper scores 467 and the sprayer 595. This is not proof that nobody can invent a better exploit; it means these two known attacks no longer win. The suite now has more than 500 tests so they at least stay dead when I change something else.
 
-The harness also reproduced a `left-side aim bias` that two of my visualizations had confidently attributed to my hand. A simulated player with no left side preference showed the same bias. The culprit was asymmetric spawn geometry plus within-run variance.
-
 I had built an instrument to explain my aim, and the fake player used it to explain a bug in the instrument. This should have been foreshadowing.
 
 There is one large caveat. The synthetic aimer uses many of the same motor assumptions as the model being evaluated. It is very good at finding plumbing errors, broken scoring, trivial drills, and mismatches against a known player. It cannot prove that the assumed noise law describes a human, because it was born inside that law. The harness therefore also runs Rayleigh, lognormal, Student-t, and lapse-heavy players, and checks whether the model raises an alarm when its favorite assumptions are false.
 
 ---
 
-## from an explanation to another drill
+## what now?
 
-Diagnosis is only useful if it changes what happens next.
+So we have a lot of data to form a diagnosis of a player. A dignosis is only useful if you can do something with it, however, so what now?
 
 Most aim trainers organize practice around named scenarios. OpenAim also has a small free-play menu, but underneath it a drill is a point in a continuous parameter space: target size, movement amplitude, speed, reversal rate, smoothness, target count, hold time, hits to kill, vertical motion, sensitivity, and a few stranger mechanics like blinking and depth movement. A `Reactive Flick` is a convenient neighborhood in that space, not a special species.
 
-I checked the range against the Viscose Season 2 files by parsing their scenario definitions and reconstructing the central distributions of target size, motion, and mechanics. Of 156 benchmark slots, 132 can be reproduced on the engine. The coverage test brackets the useful middle and most of the expert tracking range. It does not cover every outlier: the generator caps target speed at 72 degrees per second while one extreme benchmark reaches roughly 129. I would rather draw the missing tail than describe the space as infinite.
-
 Say my last few runs were weak on unpredictable tracking. The player model first asks a fairly ordinary question over this unusual drill space:
 
-```text
-P(clear the drill) = sigmoid(overall ability - cost of its demands for you)
-```
+$$
+P(\text{clear the drill})
+=
+\operatorname{sigmoid}(a-c)
+=
+\frac{1}{1+e^{-(a-c)}}
+$$
 
-There are fourteen rated demand axes in the player model, plus warm-up and fatigue terms that are deliberately excluded from your ratings. The names are less important than the split. Large physical mouse travel, fine hand precision, click timing, predictable pursuit, and reaction to reversals do not have to move together. Sensitivity is stored as cm/360 so the model can reason about actual hand travel instead of treating screen pixels as muscle.
+where $a$ is overall ability and $c$ is the player-specific cost of the drill's demands.
+
+There are fourteen rated demand axes in the player model, plus warm-up and fatigue terms that are deliberately excluded from your ratings. The names are less important than the split. Landing a far flick, intercepting a moving target, staying attached to a smooth one, reacting to a reversal, choosing between four live targets, and firing three controlled shots in a row are all different requests. Large physical mouse travel and tiny endpoint precision are different requests too.
+
+This is not fourteen new scores stapled to the end of a run. Each target engagement is projected into a fourteen-number **demand vector**: how much that moment asked for spatial precision, timing, reactivity, stability, switching, vertical control, arm-range control, micro control, fine-hand precision, hand speed, pace, smooth pursuit, reacquisition, and cadence. The player model learns which of those demands are expensive _for you_. That distinction matters: a bar below can say `this drill strongly loads reactivity`; only your history can say `reactivity is one of your weaknesses`.
+
+The playground is the closest visual translation of the model I could make. Pick a familiar scenario shape, then change its geometry. The left side is what happens on screen. The right side is a scaled proxy for the physical mouse displacement. Underneath, the same scenario lights up the fourteen demands the coach sees.
+
+<aim-model-playground></aim-model-playground>
 
 The first version updated that model once per run. Its coach sampled candidates and added hand-tuned bonuses for uncertainty, weakness, coverage, and variety. It worked well enough to generate a useful session. It was also exactly the kind of stack of heuristics that becomes difficult to defend after the fifth emergency weight named `REGION_FATIGUE`.
 
 The shipped coach now asks what the next minute could teach both my hand and its model. It draws one plausible version of my uncertain profile (Thompson sampling), then values each candidate for two reasons:
 
-```text
-value(drill) = expected skill gain + value of what it would teach the model
-```
+$$
+V(d)
+=
+\underbrace{\mathbb{E}[\Delta \text{skill}\mid d]}_{\text{expected skill gain}}
++
+\underbrace{\operatorname{EIG}(d)}_{\text{expected information gain}}
+$$
+
+where $d$ is a candidate drill and $\operatorname{EIG}(d)$ is the expected information gain: how much the outcome of that drill is expected to teach the player model.
 
 Everything enters through one sampler interface. A generated focus drill goes through the constrained search: for my tracking example it can make the target smaller, faster, or less predictable, but it cannot quietly turn tracking into a click task. A fixed probe passes through unchanged because changing the ruler would defeat the point. Variety is a hard rail rather than another bonus the search can ignore. There is finally one answer to `why did the coach serve this?`
 
@@ -158,7 +182,31 @@ The difficulty target begins around 70% predicted success. That number is a cold
 
 <challenge-point></challenge-point>
 
-Sensitivity follows the same philosophy. I did not make a `sens finder` that announces one correct number. The trainer records every run in physical units and fits baseline scatter separately from speed-dependent scatter across sensitivity. The mastered band is a readout over the engagement ledger, not a little progress variable that can drift away from the evidence. When the coach changes sensitivity, it logs the intervention, holds the comparison geometry still, and measures what part of the hand becomes expensive. AutoGain is an inspiration here, not a claim that its full per-speed gain curve has been reproduced.[^autogain]
+### sensitivity is not one magic number
+
+Sensitivity is where the hand-space idea gets interesting. OpenAim stores it as **cm/360**: how many centimeters the mouse must travel to turn the camera once. A larger number means a lower sensitivity. Unlike `0.27 in Valorant`, it means the same physical thing after you change games. That physical conversion is exact when DPI is supplied; without it, the trainer labels the hand-space value as an estimate from its assumed DPI.
+
+For a movement of $A$ degrees, a target $W$ degrees wide, moving at $v$ degrees per second, the hand-space version is just:
+
+$$
+A_{cm}=A\frac{C}{360},\qquad
+W_{cm}=W\frac{C}{360},\qquad
+v_{cm}=v\frac{C}{360}
+$$
+
+where $C$ is cm/360. The arithmetic is simple; the consequences are not. The same 24° flick takes 1.33 cm at 20 cm/360 and 4 cm at 60 cm/360. At the faster sensitivity, the move is short but the target becomes a tiny physical landing window, loading micro control and fine-hand precision. At the slower sensitivity, the visual target is unchanged but the mouse has to travel farther and faster, loading arm-range control and hand speed. Neither is universally harder. They expose different parts of the movement.
+
+<sens-spectrum></sens-spectrum>
+
+The hand drawing is intentionally a displacement proxy, not a claim that a browser can see my fingers. OpenAim observes mouse motion. It uses physical thresholds to reason about finger/wrist-scale, transitional, and arm-range demands; it does not reconstruct my joints from JavaScript.
+
+This is also why sensitivity is not a second curriculum bolted onto the coach. It is one coordinate of the same drill vector as target size, distance, speed, and reversals. Most candidate seeds stay at my comfortable anchor. A controlled share are drawn off-anchor across a wide physical range; for those candidates, cm/360 is free to move while the sampler searches for a drill that loads the chosen capability at my current challenge point.
+
+That makes sensitivity an intelligent demand choice, not a ladder rung. If the model wants fine-hand precision, a faster sensitivity can shrink the physical landing window. If it wants arm-range control or hand speed, a slower one can stretch the same angular task across more mousepad. The sensitivity still has to earn its place inside the whole decision: expected teaching gain, expected information gain, predicted success, and the session's variety constraints all count. Warm-ups and fixed probes stay pinned to the anchor because changing the ruler would ruin the measurement.
+
+The **mastered band** shown on the profile is derived from the posterior rather than advanced as progression state. The model solves a canonical flick at the anchor, sweeps that frozen geometry across cm/360, and reports the contiguous range where predicted capability still holds. It can widen as the underlying hand-space capabilities improve; ordinary focus drills are not scheduled as edge clears.
+
+The useful result is not `37.4 cm/360 is your destiny`. It is closer to `this candidate exposes your fine-hand precision without making the drill impossible`, with the served cm/360 and the reason logged beside every other demand. AutoGain is an inspiration for using under- and overshoot as evidence around the anchor, not a claim that its full per-speed gain curve has been reproduced.[^autogain]
 
 The first-session plan below uses a fixed calibration battery before the adaptive coach starts making decisions. After that battery, the same sampler plans the whole session and every block carries its predicted success, pace budget, and reason for being there.
 
@@ -175,10 +223,6 @@ I audited the repository as if it belonged to somebody I did not trust. Every st
 It did not go great.
 
 The engine already knew the story of every target, including its realized size, spawn position, timing window, shots, and landing errors. At the end of a run, the player model averaged most of that into one scalar and performed one update. A run with 40 engagements was treated as the same fixed amount of evidence as a run with four. I was producing the best data in the system and destroying it immediately before the part that learns.
-
-The core math existed in four representations across the client, server, Python, and a rating inverse. There were three definitions of kill time. Player state was spread across more than a dozen localStorage keys with several writers. The visible difficulty setting did not reach the solver at all. The validation harness planned sessions through a path that production never called. The replay verifier worked on the uncompressed fixtures my seed script uploaded and failed on the compressed `.oarz` files created by the real client. Even when it ran, it checked the first target track, not the full result.
-
-None of these bugs looked dramatic in the UI. Together they meant the system was asking for more trust than its architecture had earned.
 
 This is why the back half of the project became a rewrite instead of another feature.
 
@@ -225,10 +269,6 @@ The part I am happiest with is not that the trainer can produce a precise answer
 OpenAim may or may not make me good at Valorant. It has already made it considerably harder for me to lie to myself about why I'm bad.
 
 good enough for a weekend.
-
-that's the end. thanks for reading ✦
-
-— pramit ✦ mazumder
 
 ---
 
