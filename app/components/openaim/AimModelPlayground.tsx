@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { C, Ctl, Stat, Toggle, VizCard } from "./kit";
+import { C, Ctl, Toggle, VizCard } from "./kit";
 import {
-  AXIS_META,
   SCENARIO_PRESETS,
   axisDemands,
   clamp,
   demandBar,
-  effectorLabel,
   handSpace,
   type AxisGroup,
   type AxisId,
@@ -124,6 +122,9 @@ export default function AimModelPlayground() {
     setTask((current) => ({ ...current, [key]: value }));
     setPresetId("custom");
   };
+  const setSensitivity = (value: number) => {
+    setTask((current) => ({ ...current, cm360: value }));
+  };
   const applyPreset = (id: string) => {
     const preset = SCENARIO_PRESETS.find((candidate) => candidate.id === id);
     if (!preset) return;
@@ -133,203 +134,205 @@ export default function AimModelPlayground() {
 
   const physical = handSpace(task);
   const demands = axisDemands(task);
-  const selectedDemand = demands.find((axis) => axis.id === selected) ?? demands[0]!;
   const motion = motionAt(task, time);
   const targetX = 190 + motion.targetX;
-  const targetY = 155 + motion.targetY;
+  const targetY = 120 + motion.targetY;
   const cursorX = 190 + motion.cursorX;
-  const cursorY = 155 + motion.cursorY;
+  const cursorY = 120 + motion.cursorY;
   const targetRadius = Math.max(6, Math.min(21, 4 + task.W * 3.2));
   const onTarget = Math.hypot(cursorX - targetX, cursorY - targetY) <= targetRadius;
 
-  const handOriginX = 575;
-  const handY = 150;
-  const unclippedMouseX = handOriginX + physical.travelCm * 28 * motion.normalizedHand;
-  const mouseX = clamp(unclippedMouseX, 430, 724);
+  const handOriginX = 190;
+  const handY = 118;
+  const handScale = 24;
+  const unclippedMouseX = handOriginX + physical.travelCm * handScale * motion.normalizedHand;
+  const mouseX = clamp(unclippedMouseX, 28, 352);
   const pathClipped = Math.abs(unclippedMouseX - mouseX) > 0.5;
-  const footprintPx = Math.max(4, physical.targetCm * 28);
+  const footprintPx = Math.max(4, physical.targetCm * handScale);
   const activePreset = SCENARIO_PRESETS.find((preset) => preset.id === presetId);
 
   return (
     <VizCard
-      title="what this drill asks of you"
-      hint="choose a scenario · move the knobs · inspect an axis"
+      title="see the demand behind a drill"
+      hint="choose a drill, then inspect its shape"
       caption={
         <>
-          fig — a live projection of one scenario into OpenAim&apos;s fourteen
-          demand axes. the bars are raw drill demand, not your skill rating;
-          the hand view is a scaled mouse-displacement proxy, not pose tracking.
+          fig — the same aim task in screen space, hand space, and the model&apos;s
+          fourteen raw demand axes. the hand is a displacement proxy, not pose tracking.
         </>
       }
     >
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Scenario preset">
-          {SCENARIO_PRESETS.map((preset) => {
-            const active = preset.id === presetId;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => applyPreset(preset.id)}
-                aria-pressed={active}
-                className="min-h-8 rounded-full border px-3 py-1.5 font-mono text-xs transition-colors"
-                style={{
-                  borderColor: active ? C.acc : C.lineA(0.9),
-                  color: active ? C.acc : C.faint,
-                  background: active ? C.accA(0.1) : "transparent",
-                }}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-          <span className="ml-auto">
-            <Toggle on={playing} onClick={() => setPlaying((current) => !current)} accent={C.pur}>
-              {playing ? "pause motion" : "play motion"}
-            </Toggle>
-          </span>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-0 flex-1 sm:max-w-xs">
+            <span className="mb-1 block text-xs font-medium text-ink-faint">Scenario</span>
+            <select
+              value={presetId}
+              onChange={(event) => applyPreset(event.target.value)}
+              className="min-h-10 w-full rounded-md border border-line bg-paper px-3 text-sm text-ink"
+              aria-label="Scenario preset"
+            >
+              {presetId === "custom" ? <option value="custom">Custom scenario</option> : null}
+              {SCENARIO_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>{preset.label}</option>
+              ))}
+            </select>
+          </label>
+          <Toggle on={playing} onClick={() => setPlaying((current) => !current)} accent={C.pur}>
+            {playing ? "pause" : "play"}
+          </Toggle>
         </div>
 
-        <p className="font-sans text-sm leading-relaxed text-ink-soft">
+        <p className="text-sm leading-relaxed text-ink-soft">
           {activePreset?.note ?? "A custom point in the same continuous scenario space."}
         </p>
 
-        <div className="overflow-x-auto border border-line bg-paper-2/40">
-          <svg
-            viewBox="0 0 760 300"
-            className="block w-full min-w-[680px] font-sans"
-            role="img"
-            aria-label={`${activePreset?.label ?? "Custom drill"}: ${physical.travelCm.toFixed(2)} centimeters of mouse travel, ${physical.targetCm.toFixed(3)} centimeter physical target width, ${selectedDemand.label} demand ${selectedDemand.value.toFixed(2)}`}
-          >
-            <rect x="0" y="0" width="380" height="300" fill={C.lineA(0.08)} />
-            <rect x="380" y="0" width="380" height="300" fill={C.lineA(0.16)} />
-            <line x1="380" x2="380" y1="0" y2="300" stroke={C.lineA(0.8)} />
-            <g className="font-mono text-[11px]">
-              <text x="22" y="28" fill={C.faint}>WHAT THE SCREEN ASKS</text>
-              <text x="402" y="28" fill={C.faint}>WHAT THE MOUSE MUST DO · SCALED</text>
-            </g>
+        <div className="rounded-md border border-accent-orange/30 bg-accent-orange/5 p-3 sm:p-4">
+          <Ctl
+            label="Sensitivity"
+            value={task.cm360}
+            min={10}
+            max={100}
+            step={1}
+            onChange={setSensitivity}
+            fmt={(value) => `${value} cm/360`}
+          />
+          <p className="mt-2 text-xs text-ink-faint">
+            Changes the hand-space demand, not the on-screen task.
+          </p>
+        </div>
 
-            {[0, 1, 2, 3].slice(0, Math.max(0, task.n - 1)).map((index) => {
-              const angle = (index / Math.max(1, task.n - 1)) * Math.PI * 2 + 0.5;
+        <div className="grid gap-3 md:grid-cols-2">
+          <section className="min-w-0 overflow-hidden rounded-md border border-line bg-paper-2/40" aria-labelledby="screen-space-title">
+            <div className="flex items-baseline justify-between gap-2 border-b border-line/70 px-3 py-2">
+              <h5 id="screen-space-title" className="text-sm font-medium text-ink">Screen space</h5>
+              <span className="font-mono text-[11px] text-ink-faint">{task.A.toFixed(0)}° move · {task.W.toFixed(1)}° target</span>
+            </div>
+            <svg
+              viewBox="0 0 380 240"
+              className="block h-auto w-full"
+              role="img"
+              aria-label={`${activePreset?.label ?? "Custom drill"} on screen: ${task.A.toFixed(0)} degree movement and ${task.W.toFixed(1)} degree target`}
+            >
+              {[0, 1, 2, 3].slice(0, Math.max(0, task.n - 1)).map((index) => {
+                const angle = (index / Math.max(1, task.n - 1)) * Math.PI * 2 + 0.5;
+                return (
+                  <circle
+                    key={index}
+                    cx={190 + Math.cos(angle) * 112}
+                    cy={120 + Math.sin(angle) * 72}
+                    r={Math.max(5, targetRadius * 0.76)}
+                    fill={C.hitA(0.08)}
+                    stroke={C.hitA(0.42)}
+                    strokeDasharray="3 4"
+                  />
+                );
+              })}
+              <path d={`M190 120 L${targetX.toFixed(1)} ${targetY.toFixed(1)}`} stroke={C.lineA(0.75)} strokeDasharray="4 5" />
+              <circle cx={targetX} cy={targetY} r={targetRadius + 5} fill={C.hitA(motion.snapped ? 0.03 : 0.08)} />
+              <circle cx={targetX} cy={targetY} r={targetRadius} fill={C.hitA(0.7)} stroke={C.ink} strokeWidth="1.3" />
+              <Crosshair x={cursorX} y={cursorY} onTarget={onTarget} />
+            </svg>
+          </section>
+
+          <section className="min-w-0 overflow-hidden rounded-md border border-line bg-paper-2/40" aria-labelledby="hand-space-title">
+            <div className="flex items-baseline justify-between gap-2 border-b border-line/70 px-3 py-2">
+              <h5 id="hand-space-title" className="text-sm font-medium text-ink">Hand space</h5>
+              <span className="font-mono text-[11px] text-ink-faint">{physical.travelCm.toFixed(2)} cm move · {physical.targetCm.toFixed(3)} cm window</span>
+            </div>
+            <svg
+              viewBox="0 0 380 240"
+              className="block h-auto w-full"
+              role="img"
+              aria-label={`${physical.travelCm.toFixed(2)} centimeters of mouse travel, ${physical.targetCm.toFixed(3)} centimeter landing window, at ${physical.speedCmS.toFixed(1)} centimeters per second`}
+            >
+              <rect x={handOriginX - 1.2 * handScale} y="20" width={2.4 * handScale} height="190" fill={C.purA(0.06)} />
+              <line x1={handOriginX - 3.5 * handScale} x2={handOriginX - 3.5 * handScale} y1="20" y2="210" stroke={C.rustA(0.42)} strokeDasharray="3 5" />
+              <line x1={handOriginX + 3.5 * handScale} x2={handOriginX + 3.5 * handScale} y1="20" y2="210" stroke={C.rustA(0.42)} strokeDasharray="3 5" />
+              <line x1={handOriginX} x2={mouseX} y1={handY} y2={handY} stroke={C.acc} strokeWidth="3" strokeLinecap="round" />
+              <line x1={mouseX - footprintPx / 2} x2={mouseX + footprintPx / 2} y1="55" y2="55" stroke={C.hit} strokeWidth="6" strokeLinecap="round" />
+              <path
+                d={`M95 224 Q${(95 + mouseX - 7) / 2} 185 ${mouseX - 7} 142`}
+                fill="none"
+                stroke={C.accA(0.16)}
+                strokeWidth="27"
+                strokeLinecap="round"
+              />
+              <ellipse cx={mouseX - 3} cy="144" rx="22" ry="29" fill={C.accA(0.1)} stroke={C.accA(0.48)} />
+              <g transform={`translate(${mouseX} ${handY})`}>
+                <rect x="-12" y="-18" width="24" height="36" rx="11" fill={C.lineA(0.55)} stroke={C.acc} strokeWidth="1.7" />
+                <line x1="0" x2="0" y1="-17" y2="-5" stroke={C.acc} />
+                <circle cy="-10" r="2" fill={C.acc} />
+              </g>
+              <circle cx={handOriginX} cy={handY} r="4" fill={C.pur} />
+              {pathClipped ? (
+                <text x={mouseX} y="198" fill={C.rust} textAnchor="middle" className="font-mono text-[10px]">
+                  {unclippedMouseX < mouseX ? "← continues" : "continues →"}
+                </text>
+              ) : null}
+            </svg>
+          </section>
+        </div>
+
+        <details className="rounded-md border border-line/80 px-3 py-2">
+          <summary className="cursor-pointer select-none text-sm font-medium text-ink-soft">Adjust scenario geometry</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Ctl label="movement" value={task.A} min={2} max={70} step={1} onChange={(value) => setField("A", value)} fmt={(value) => `${value}°`} accent={C.pur} />
+            <Ctl label="target size" value={task.W} min={0.5} max={5} step={0.1} onChange={(value) => setField("W", value)} fmt={(value) => `${value.toFixed(1)}°`} accent={C.hit} />
+            <Ctl label="target speed" value={task.v} min={0} max={60} step={2} onChange={(value) => setField("v", value)} fmt={(value) => `${value}°/s`} accent={C.rust} />
+            <Ctl label="reversals" value={task.lam} min={0} max={3} step={0.1} onChange={(value) => setField("lam", value)} fmt={(value) => `${value.toFixed(1)} Hz`} accent={C.rust} />
+          </div>
+        </details>
+
+        <div>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h5 className="font-serif text-lg text-ink">Fourteen kinds of demand</h5>
+            <span className="font-mono text-[10px] text-ink-faint">raw load · bars cap at 1.5</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {GROUPS.map((group, groupIndex) => {
+              const barColor = group === "physical hand" ? C.pur : group === "control loop" ? C.hit : C.acc;
               return (
-                <circle
-                  key={index}
-                  cx={190 + Math.cos(angle) * 112}
-                  cy={155 + Math.sin(angle) * 75}
-                  r={Math.max(5, targetRadius * 0.76)}
-                  fill={C.hitA(0.12)}
-                  stroke={C.hitA(0.5)}
-                  strokeDasharray="3 3"
-                />
+                <section
+                  key={group}
+                  className={groupIndex === GROUPS.length - 1 ? "sm:col-span-2" : undefined}
+                  aria-labelledby={`axis-group-${group.replaceAll(" ", "-")}`}
+                >
+                  <h6 id={`axis-group-${group.replaceAll(" ", "-")}`} className="mb-1.5 font-mono text-[11px] uppercase tracking-wide text-ink-faint">{group}</h6>
+                  <div className="overflow-hidden rounded-md border border-line/80">
+                    {demands.filter((axis) => axis.group === group).map((axis, index) => {
+                      const active = axis.id === selected;
+                      const negative = axis.value < 0;
+                      return (
+                        <div key={axis.id} className={index ? "border-t border-line/60" : undefined}>
+                          <button
+                            type="button"
+                            onClick={() => setSelected(axis.id)}
+                            aria-pressed={active}
+                            className="grid min-h-10 w-full grid-cols-[minmax(0,1fr)_4.5rem_2.5rem] items-center gap-2 px-3 py-2 text-left transition-colors"
+                            style={{ background: active ? (group === "physical hand" ? C.purA(0.09) : group === "control loop" ? C.hitA(0.09) : C.accA(0.09)) : "transparent" }}
+                          >
+                            <span className="text-xs font-medium" style={{ color: active ? barColor : C.ink }}>{axis.label}</span>
+                            <span className="h-1 overflow-hidden rounded-full bg-line/60">
+                              <span className="block h-full rounded-full" style={{ width: `${demandBar(axis.value) * 100}%`, background: negative ? C.faint : barColor }} />
+                            </span>
+                            <span className="text-right font-mono text-[11px] tabular-nums" style={{ color: negative ? C.faint : barColor }}>{axis.value.toFixed(2)}</span>
+                          </button>
+                          {active ? (
+                            <div className="border-t border-line/50 bg-paper-2/50 px-3 py-3" aria-live="polite">
+                              <p className="text-xs leading-relaxed text-ink-soft">{axis.meaning}</p>
+                              <p className="mt-2 font-mono text-[11px] leading-relaxed text-accent-rust">{axis.formula}</p>
+                              <p className="mt-1 text-[11px] text-ink-faint">Loaded by {axis.driver}.</p>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
               );
             })}
-            <path d={`M190 155 L${targetX.toFixed(1)} ${targetY.toFixed(1)}`} stroke={C.lineA(0.7)} strokeDasharray="4 5" />
-            <circle cx={targetX} cy={targetY} r={targetRadius + 5} fill={C.hitA(motion.snapped ? 0.04 : 0.1)} />
-            <circle cx={targetX} cy={targetY} r={targetRadius} fill={C.hitA(0.72)} stroke={C.ink} strokeWidth="1.4" />
-            <Crosshair x={cursorX} y={cursorY} onTarget={onTarget} />
-            <g className="font-mono text-[10px]">
-              <text x="22" y="276" fill={C.soft}>{task.A.toFixed(0)}° movement</text>
-              <text x="130" y="276" fill={C.soft}>{task.W.toFixed(1)}° target</text>
-              <text x="238" y="276" fill={C.soft}>{task.v.toFixed(0)}°/s</text>
-              <text x="358" y="276" fill={onTarget ? C.hit : C.rust} textAnchor="end">{onTarget ? "ON TARGET" : "CORRECTING"}</text>
-            </g>
-
-            <rect x="408" y="46" width="328" height="205" rx="9" fill={C.lineA(0.1)} stroke={C.lineA(0.65)} />
-            <rect x={handOriginX - 1.2 * 28} y="52" width={2.4 * 28} height="193" fill={C.purA(0.06)} />
-            <line x1={handOriginX - 3.5 * 28} x2={handOriginX - 3.5 * 28} y1="52" y2="245" stroke={C.rustA(0.5)} strokeDasharray="3 4" />
-            <line x1={handOriginX + 3.5 * 28} x2={handOriginX + 3.5 * 28} y1="52" y2="245" stroke={C.rustA(0.5)} strokeDasharray="3 4" />
-            <line x1={handOriginX} x2={mouseX} y1={handY} y2={handY} stroke={C.acc} strokeWidth="3" strokeLinecap="round" />
-            <line x1={mouseX - footprintPx / 2} x2={mouseX + footprintPx / 2} y1="87" y2="87" stroke={C.hit} strokeWidth="6" strokeLinecap="round" />
-            <text x={mouseX} y="77" fill={C.hit} textAnchor="middle" className="font-mono text-[9px]">landing window</text>
-
-            <path
-              d={`M470 270 Q${(470 + mouseX - 8) / 2} 222 ${mouseX - 8} 173`}
-              fill="none"
-              stroke={C.accA(0.18)}
-              strokeWidth="28"
-              strokeLinecap="round"
-            />
-            <ellipse cx={mouseX - 3} cy="172" rx="23" ry="31" fill={C.accA(0.12)} stroke={C.accA(0.55)} />
-            <g transform={`translate(${mouseX} ${handY})`}>
-              <rect x="-12" y="-18" width="24" height="36" rx="11" fill={C.lineA(0.55)} stroke={C.acc} strokeWidth="1.7" />
-              <line x1="0" x2="0" y1="-17" y2="-5" stroke={C.acc} />
-              <circle cy="-10" r="2" fill={C.acc} />
-            </g>
-            <circle cx={handOriginX} cy={handY} r="4" fill={C.pur} />
-            <text x={handOriginX} y="235" fill={C.pur} textAnchor="middle" className="font-mono text-[9px]">±1.2 cm micro zone</text>
-            <text x="417" y="61" fill={C.rust} className="font-mono text-[9px]">ARM RANGE ←</text>
-            <text x="727" y="61" fill={C.rust} textAnchor="end" className="font-mono text-[9px]">→ ARM RANGE</text>
-            <text x="402" y="276" fill={C.soft} className="font-mono text-[10px]">{physical.travelCm.toFixed(2)} cm travel</text>
-            <text x="528" y="276" fill={C.soft} className="font-mono text-[10px]">{physical.targetCm.toFixed(3)} cm window</text>
-            <text x="721" y="276" fill={C.soft} textAnchor="end" className="font-mono text-[10px]">{physical.speedCmS.toFixed(1)} cm/s</text>
-            {pathClipped ? <text x={mouseX} y="205" fill={C.rust} textAnchor="middle" className="font-mono text-[9px]">{unclippedMouseX < mouseX ? "← path continues" : "path continues →"}</text> : null}
-          </svg>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Ctl label="sensitivity" value={task.cm360} min={10} max={100} step={1} onChange={(value) => setField("cm360", value)} fmt={(value) => `${value} cm/360`} />
-          <Ctl label="movement" value={task.A} min={2} max={70} step={1} onChange={(value) => setField("A", value)} fmt={(value) => `${value}°`} accent={C.pur} />
-          <Ctl label="target size" value={task.W} min={0.5} max={5} step={0.1} onChange={(value) => setField("W", value)} fmt={(value) => `${value.toFixed(1)}°`} accent={C.hit} />
-          <Ctl label="target speed" value={task.v} min={0} max={60} step={2} onChange={(value) => setField("v", value)} fmt={(value) => `${value}°/s`} accent={C.rust} />
-          <Ctl label="reversals" value={task.lam} min={0} max={3} step={0.1} onChange={(value) => setField("lam", value)} fmt={(value) => `${value.toFixed(1)} Hz`} accent={C.rust} />
-        </div>
-
-        <div className="grid gap-4 border-y border-line/70 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <div aria-live="polite">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h5 className="font-serif text-lg text-ink">{selectedDemand.label}</h5>
-              <span className="font-mono text-sm text-accent-orange">raw load {selectedDemand.value.toFixed(2)}</span>
-            </div>
-            <p className="mt-1 font-sans text-sm leading-relaxed text-ink-soft">{selectedDemand.meaning}</p>
-            <p className="mt-2 font-mono text-xs leading-relaxed text-accent-rust">{selectedDemand.formula}</p>
-            <p className="mt-1 font-sans text-xs text-ink-faint">Loaded by {selectedDemand.driver}.</p>
           </div>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-1">
-            <Stat value={`${physical.travelCm.toFixed(2)} cm`} label="movement" color={C.acc} />
-            <Stat value={`${physical.targetCm.toFixed(3)} cm`} label="target in hand space" color={C.hit} />
-            <Stat value={effectorLabel(physical.travelCm)} label="model-side proxy" color={C.pur} />
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {GROUPS.map((group) => (
-            <section key={group} aria-labelledby={`axis-group-${group.replaceAll(" ", "-")}`}>
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <h5 id={`axis-group-${group.replaceAll(" ", "-")}`} className="font-mono text-xs uppercase tracking-wide text-ink-faint">{group}</h5>
-                <span className="font-mono text-[10px] text-ink-faint">raw model load · visual scale caps at 1.5</span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {demands.filter((axis) => axis.group === group).map((axis) => {
-                  const active = axis.id === selected;
-                  const meta = AXIS_META.find((item) => item.id === axis.id)!;
-                  const negative = axis.value < 0;
-                  const barColor = group === "physical hand" ? C.pur : group === "control loop" ? C.hit : C.acc;
-                  return (
-                    <button
-                      key={axis.id}
-                      type="button"
-                      onClick={() => setSelected(axis.id)}
-                      aria-pressed={active}
-                      className="rounded-md border p-3 text-left transition-colors"
-                      style={{
-                        borderColor: active ? barColor : C.lineA(0.75),
-                        background: active ? (group === "physical hand" ? C.purA(0.07) : group === "control loop" ? C.hitA(0.07) : C.accA(0.07)) : "transparent",
-                      }}
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-sans text-sm font-medium text-ink">{axis.label}</span>
-                        <span className="font-mono text-xs tabular-nums" style={{ color: negative ? C.faint : barColor }}>{axis.value.toFixed(2)}</span>
-                      </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/60">
-                        <div className="h-full rounded-full" style={{ width: `${demandBar(axis.value) * 100}%`, background: negative ? C.faint : barColor }} />
-                      </div>
-                      <div className="mt-1.5 font-mono text-[10px] text-ink-faint">{meta.short}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
         </div>
       </div>
     </VizCard>
