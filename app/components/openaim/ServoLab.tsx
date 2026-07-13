@@ -124,8 +124,8 @@ export default function ServoLab() {
 
   return (
     <VizCard
-      title="the servo-gaussian tracking assumption"
-      hint="readable vs. irregular motion"
+      title="the servo-gaussian tracking model"
+      hint="readable and irregular motion"
       caption={
         <>
           fig — a readable toy of the Servo-Gaussian premise: tracking as a

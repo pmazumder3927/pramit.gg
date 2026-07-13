@@ -143,7 +143,7 @@ export default function HarnessReplay() {
 
   return (
     <VizCard
-      title="synthetic players, real engine"
+      title="synthetic players on the real engine"
       hint="sampled from .oar replays"
       caption={
         <>

@@ -44,8 +44,8 @@ export default function LedgerCollapse() {
 
   return (
     <VizCard
-      title="a run, averaged into one update"
-      hint="old brain vs. the ledger"
+      title="the old run-level update"
+      hint="run average, then per-target rows"
       caption={
         <>
           fig — ten real engagements from the synthetic 2-Tap replay. the old

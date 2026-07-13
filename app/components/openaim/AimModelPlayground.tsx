@@ -153,8 +153,8 @@ export default function AimModelPlayground() {
 
   return (
     <VizCard
-      title="a drill and its fourteen demands"
-      hint="pick one, then adjust its geometry"
+      title="a drill's fourteen demands"
+      hint="choose a scenario"
       caption={
         <>
           fig — the same aim task in screen space, hand space, and the model&apos;s
