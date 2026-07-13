@@ -10,8 +10,8 @@ import CheatLab from "@/app/components/openaim/CheatLab";
 import HarnessReplay from "@/app/components/openaim/HarnessReplay";
 import ServoLab from "@/app/components/openaim/ServoLab";
 import LedgerCollapse from "@/app/components/openaim/LedgerCollapse";
+import FlickAnatomy from "@/app/components/openaim/FlickAnatomy";
 import {
-  SubmovementFig,
   LoopFig,
   InputRecoveryFig,
   MissFingerprintsFig,
@@ -37,8 +37,8 @@ export default function Page() {
       <HarnessReplay />
       <ServoLab />
       <LedgerCollapse />
+      <FlickAnatomy />
       <h1 className="mb-2 mt-12 font-serif text-3xl text-ink">openaim — diagrams</h1>
-      <SubmovementFig />
       <LoopFig />
       <InputRecoveryFig />
       <MissFingerprintsFig />
