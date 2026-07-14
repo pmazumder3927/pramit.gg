@@ -1,10 +1,11 @@
-import { Post, stripWorkingCopy } from "@/app/lib/supabase";
+import { stripWorkingCopy } from "@/app/lib/supabase";
 import SketchbookHome from "@/app/components/SketchbookHome";
 import { fetchLatestHomepageBanner } from "@/app/lib/homepage-banner";
+import { HomePost, trimPostForHome } from "@/app/lib/homePosts";
 import { rankPosts } from "@/app/lib/rankPosts";
 import { createPublicClient } from "@/utils/supabase/server";
 
-async function fetchPosts(): Promise<Post[]> {
+async function fetchPosts(): Promise<HomePost[]> {
   try {
     // Use public client (no cookies) to enable static generation/ISR
     const supabase = createPublicClient();
@@ -20,8 +21,9 @@ async function fetchPosts(): Promise<Post[]> {
       throw error;
     }
 
-    // never let the writing room's working copies reach the public payload
-    return rankPosts((data || []).map(stripWorkingCopy));
+    // never let the writing room's working copies reach the public payload;
+    // trim the full markdown down to precomputed previews (see homePosts)
+    return rankPosts((data || []).map(stripWorkingCopy)).map(trimPostForHome);
   } catch (error) {
     console.error("Error fetching posts server-side:", error);
     return [];

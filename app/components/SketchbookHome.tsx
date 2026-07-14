@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
-import { Post, analyzeContent } from "@/app/lib/supabase";
+import type { HomePost } from "@/app/lib/homePosts";
 import { isFreshPost } from "@/app/lib/rankPosts";
 import { POST_TYPE_META, POST_TYPE_FILTERS } from "@/app/lib/postTypes";
 import { useNowPlayingContext } from "@/app/components/NowPlayingContext";
@@ -23,27 +22,15 @@ const CURRENTLY = [
   "learning guitar",
 ];
 
+// "jun '26" — same output date-fns' format(…, "MMM ''yy") gave, without the lib
+const MONTHS = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
+];
 function fmtDate(iso: string) {
-  try {
-    return format(new Date(iso), "MMM ''yy").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-// A longer excerpt than analyzeContent's 150-char preview — the featured
-// sheet reads like the top of a real page, so it gets a real paragraph.
-function longPreview(content: string, max = 300): string {
-  const clean = content
-    .replace(/!\[.*?\]\(.*?\)/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[#*`_~>]/g, "")
-    .replace(/\n+/g, " ")
-    .trim();
-  if (clean.length <= max) return clean;
-  const cut = clean.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return cut.slice(0, lastSpace > 0 ? lastSpace : max) + "…";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return `${MONTHS[d.getMonth()]} '${String(d.getFullYear() % 100).padStart(2, "0")}`;
 }
 
 function NowSpinningCard() {
@@ -189,16 +176,16 @@ function CollageCard({
 // sketchbook fell open to.
 const IMAGE_URL_RE = /\.(jpe?g|png|webp|gif|avif)(\?|$)/i;
 
-function FeaturedSheet({ post }: { post: Post }) {
+function FeaturedSheet({ post }: { post: HomePost }) {
   const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
-  const { readingTime, images } = analyzeContent(post.content || "");
-  const preview = post.description || longPreview(post.content || "");
+  const { readingTime } = post;
+  const preview = post.description || post.previewLong;
   const fresh = isFreshPost(post, Date.now());
   // the headline plate: the owner-picked cover, else the post's first
   // image, else media_url when it's clearly an image (it can be video)
   const headline =
     post.meta_image ||
-    images[0] ||
+    post.firstImage ||
     (post.media_url && IMAGE_URL_RE.test(post.media_url)
       ? post.media_url
       : null);
@@ -269,9 +256,9 @@ function FeaturedSheet({ post }: { post: Post }) {
 
 // The chaos card — one page of the feed (also used for the pair under the
 // featured sheet).
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post }: { post: HomePost }) {
   const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
-  const { readingTime, previewText } = analyzeContent(post.content || "");
+  const { readingTime, previewText } = post;
   const preview = post.description || previewText;
   const c = chaosFor(post.id);
   const fresh = isFreshPost(post, Date.now());
@@ -340,7 +327,7 @@ function PostCard({ post }: { post: Post }) {
 }
 
 // The "also on the table" stack — the next few pages as a quick list.
-function FreshStack({ posts }: { posts: Post[] }) {
+function FreshStack({ posts }: { posts: HomePost[] }) {
   return (
     <div
       className="relative rounded-lg border border-line bg-card px-5 pb-3 pt-4 shadow-paper"
@@ -352,7 +339,7 @@ function FreshStack({ posts }: { posts: Post[] }) {
       <ol>
         {posts.map((post, i) => {
           const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
-          const { readingTime } = analyzeContent(post.content || "");
+          const { readingTime } = post;
           return (
             <li
               key={post.id}
@@ -398,11 +385,11 @@ export default function SketchbookHome({
   bannerImage,
   sketchCount,
 }: {
-  posts: Post[];
+  posts: HomePost[];
   bannerImage: string | null;
   sketchCount: number;
 }) {
-  const [filter, setFilter] = useState<"all" | Post["type"]>("all");
+  const [filter, setFilter] = useState<"all" | HomePost["type"]>("all");
 
   // The table seats the first six pages: one featured, two beside it,
   // three in the rail's stack. The feed below holds the rest.

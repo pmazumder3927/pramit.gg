@@ -12,11 +12,17 @@ const ENGAGEMENT_WEIGHT = 0.45;
 // Pinning nudges a post up a few slots; it no longer outranks everything.
 const PIN_BOOST = 0.15;
 
-export function postAgeDays(post: Post, now: number): number {
+export function postAgeDays(
+  post: Pick<Post, "created_at">,
+  now: number
+): number {
   return Math.max(0, (now - new Date(post.created_at).getTime()) / DAY_MS);
 }
 
-export function isFreshPost(post: Post, now: number): boolean {
+export function isFreshPost(
+  post: Pick<Post, "created_at">,
+  now: number
+): boolean {
   return postAgeDays(post, now) <= 21;
 }
 
