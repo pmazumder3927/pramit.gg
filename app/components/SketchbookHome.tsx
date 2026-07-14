@@ -418,94 +418,86 @@ export default function SketchbookHome({
 
   return (
     <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-10 md:pt-12">
-      {/* ===================== MASTHEAD ===================== */}
-      <section className="grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
-        <header data-avoid-lyrics className="rise d1">
-          <div className="flex items-center gap-2">
-            <span className="font-hand text-2xl -rotate-2 text-accent-rust">
-              welcome to the sketchbook
-            </span>
-            <Doodle
-              name="star"
-              tone="orange"
-              className="h-5 w-5"
-              strokeWidth={2}
-            />
-          </div>
-          <h1 className="mt-1 font-serif text-[clamp(2.5rem,6.2vw,4.7rem)] font-medium leading-[0.95] tracking-tight text-ink">
-            pramit mazumder<span className="text-accent-rust">.</span>
-          </h1>
-          <svg
-            className="mt-1.5 h-3.5 w-[min(34rem,86%)] overflow-visible"
-            viewBox="0 0 340 13"
-            preserveAspectRatio="none"
-            aria-hidden
-          >
-            <path
-              className="ink-draw"
-              d="M3 9 C90 3 190 12 264 6 C300 3 322 8 337 7"
-              fill="none"
-              stroke="rgb(var(--accent-orange))"
-              strokeWidth="2.6"
-              strokeLinecap="round"
-            />
-          </svg>
-          <p className="mt-3 max-w-[32ch] font-serif text-[clamp(1.1rem,1.9vw,1.4rem)] font-light italic leading-snug text-ink-soft">
-            a journal of interests, projects &amp;{" "}
-            <em className="text-accent-purple">lived experiences</em>
-          </p>
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-hand text-xl text-accent-purple">
-              currently —
-            </span>
-            {CURRENTLY.map((item, i) => (
-              <span key={item} className="text-sm text-ink-soft">
-                {item}
-                {i < CURRENTLY.length - 1 && (
-                  <span className="px-1.5 text-ink-faint">·</span>
-                )}
+      {/* ============ THE SPREAD: identity + pages | the desk's edge ============
+          one grid, so the rail (music → stack → collage) flows in a single
+          column with even gaps beside the name and the open pages. */}
+      <section className="grid gap-10 md:grid-cols-[1.55fr_0.85fr] md:items-start md:gap-14">
+        {/* left: identity, then the open pages */}
+        <div>
+          <header data-avoid-lyrics className="rise d1">
+            <div className="flex items-center gap-2">
+              <span className="font-hand text-2xl -rotate-2 text-accent-rust">
+                welcome to the sketchbook
               </span>
-            ))}
-          </div>
-        </header>
+              <Doodle
+                name="star"
+                tone="orange"
+                className="h-5 w-5"
+                strokeWidth={2}
+              />
+            </div>
+            <h1 className="mt-1 font-serif text-[clamp(2.3rem,4.5vw,4.15rem)] font-medium leading-[0.95] tracking-tight text-ink md:whitespace-nowrap">
+              pramit mazumder<span className="text-accent-rust">.</span>
+            </h1>
+            <svg
+              className="mt-1.5 h-3.5 w-[min(34rem,86%)] overflow-visible"
+              viewBox="0 0 340 13"
+              preserveAspectRatio="none"
+              aria-hidden
+            >
+              <path
+                className="ink-draw"
+                d="M3 9 C90 3 190 12 264 6 C300 3 322 8 337 7"
+                fill="none"
+                stroke="rgb(var(--accent-orange))"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            <p className="mt-3 max-w-[32ch] font-serif text-[clamp(1.1rem,1.9vw,1.4rem)] font-light italic leading-snug text-ink-soft">
+              a journal of interests, projects &amp;{" "}
+              <em className="text-accent-purple">lived experiences</em>
+            </p>
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-hand text-xl text-accent-purple">
+                currently —
+              </span>
+              {CURRENTLY.map((item, i) => (
+                <span key={item} className="text-sm text-ink-soft">
+                  {item}
+                  {i < CURRENTLY.length - 1 && (
+                    <span className="px-1.5 text-ink-faint">·</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </header>
 
-        {/* the music, at its old seat beside the name */}
-        <div className="rise d2 md:pt-4">
-          <NowSpinningCard />
+          {featured ? (
+            <div className="rise d2 mt-10" data-avoid-lyrics>
+              <FeaturedSheet post={featured} />
+              {pair.length > 0 && (
+                <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2">
+                  {pair.map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-12 font-hand text-2xl text-ink-faint">
+              nothing here yet — check back soon ✎
+            </p>
+          )}
         </div>
+
+        {/* right: the desk's edge, one continuous rail */}
+        <aside className="rise d2 flex flex-col gap-8 md:pt-4">
+          <NowSpinningCard />
+          {stack.length > 0 && <FreshStack posts={stack} />}
+          <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
+        </aside>
       </section>
-
-      {/* ===================== THE READING TABLE ===================== */}
-      {featured ? (
-        <section className="mt-9 grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
-          {/* the open pages */}
-          <div className="rise d2" data-avoid-lyrics>
-            <FeaturedSheet post={featured} />
-            {pair.length > 0 && (
-              <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2">
-                {pair.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* the desk's edge */}
-          <aside className="rise d3 flex flex-col gap-8">
-            {stack.length > 0 && <FreshStack posts={stack} />}
-            <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
-          </aside>
-        </section>
-      ) : (
-        <section className="mt-14 grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
-          <p className="font-hand text-2xl text-ink-faint">
-            nothing here yet — check back soon ✎
-          </p>
-          <aside className="rise d2 flex flex-col gap-8">
-            <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
-          </aside>
-        </section>
-      )}
 
       {/* ===================== EVERY PAGE (feed) ===================== */}
       {posts.length > 0 && (
