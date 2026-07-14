@@ -84,6 +84,9 @@ export default function PostContent({
   const sheetRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const nibRef = useRef<SVGSVGElement>(null);
+  const hairRef = useRef<HTMLDivElement>(null);
 
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -120,21 +123,22 @@ export default function PostContent({
     }
   }, [headings.length]);
 
-  // Reading progress → a single --read scalar (0..1) on <html>, read by the
-  // ink-fill margin rule + the nib + the sub-lg hairline. A rAF loop eases the
-  // value toward the true scroll position each frame so the nib glides (and
-  // trails like wet ink) instead of teleporting between discrete scroll events.
-  // No React re-render per frame, so the long essay never janks.
+  // Reading progress. A rAF loop eases a 0..1 scalar toward the true scroll
+  // position each frame so the nib glides (and trails like wet ink) instead of
+  // teleporting between discrete scroll events. The scalar is painted straight
+  // onto the three moving marks (ink fill, nib, sub-xl hairline) as inline
+  // transforms — not as a CSS variable on <html>, which would invalidate styles
+  // for the entire document every frame and made the marks stutter on phones.
   useEffect(() => {
     const el = sheetRef.current;
     if (!el) return;
-    const root = document.documentElement;
     const reduce = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
     let raf = 0;
     let running = false;
     let current = 0;
+    let railH = 0;
 
     const targetOf = () => {
       const rect = el.getBoundingClientRect();
@@ -145,13 +149,21 @@ export default function PostContent({
     };
 
     // the nib travels the margin rule, which is inset 24px (inset-y-6) top &
-    // bottom of the sheet — expose its pixel height so the nib can ride it on a
-    // GPU transform instead of animating `top`.
+    // bottom of the sheet — ride it on a GPU transform instead of animating
+    // `top`.
     const measureRail = () => {
-      root.style.setProperty(
-        "--rail-h",
-        `${Math.max(0, el.clientHeight - 48)}px`
-      );
+      railH = Math.max(0, el.clientHeight - 48);
+    };
+
+    const paint = (v: number) => {
+      const s = v.toFixed(4);
+      if (fillRef.current)
+        fillRef.current.style.transform = `scaleY(${s})`;
+      if (nibRef.current)
+        // -5.5px centers the 11px nib on its position along the rail
+        nibRef.current.style.transform = `translate3d(0, ${(v * railH - 5.5).toFixed(1)}px, 0)`;
+      if (hairRef.current)
+        hairRef.current.style.transform = `scaleX(${s})`;
     };
 
     const tick = () => {
@@ -160,7 +172,7 @@ export default function PostContent({
       current += (target - current) * (reduce ? 1 : 0.18);
       const settled = Math.abs(target - current) < 0.0006;
       if (settled) current = target;
-      root.style.setProperty("--read", current.toFixed(4));
+      paint(current);
       if (settled) {
         running = false;
         raf = 0;
@@ -183,15 +195,13 @@ export default function PostContent({
 
     measureRail();
     current = targetOf();
-    root.style.setProperty("--read", current.toFixed(4));
+    paint(current);
     window.addEventListener("scroll", start, { passive: true });
     window.addEventListener("resize", onResize, { passive: true });
     return () => {
       window.removeEventListener("scroll", start);
       window.removeEventListener("resize", onResize);
       if (raf) cancelAnimationFrame(raf);
-      root.style.removeProperty("--read");
-      root.style.removeProperty("--rail-h");
     };
   }, [post.content]);
 
@@ -255,7 +265,8 @@ export default function PostContent({
 
   return (
     <>
-      {hasToc && <ProgressHairline />}
+      {/* no hairline in the proof — the writing room has no header to ride */}
+      {hasToc && !preview && <ProgressHairline barRef={hairRef} />}
 
       <div className="mx-auto w-full max-w-[40rem] px-4 sm:max-w-[44rem] sm:px-6 xl:grid xl:max-w-[84rem] xl:grid-cols-[minmax(0,1fr)_minmax(0,46rem)_minmax(0,1fr)] xl:items-start xl:gap-x-12 xl:px-8 2xl:max-w-[92rem] 2xl:gap-x-16">
         {/* ---------- LEFT MARGIN: back-link + table of contents ---------- */}
@@ -288,7 +299,7 @@ export default function PostContent({
             <PaperClip className="-top-5 right-8 md:right-12" rotate={9} tone="ink" />
 
             {/* left margin rule — fills with wet ink as you read */}
-            <InkRule />
+            <InkRule fillRef={fillRef} nibRef={nibRef} />
 
             {/* Header */}
             <header className="mb-11 md:mb-12">
@@ -740,8 +751,16 @@ function BackLink() {
   );
 }
 
-// The left margin rule of the sheet, drawn in wet ink as you read.
-function InkRule() {
+// The left margin rule of the sheet, drawn in wet ink as you read. The nib
+// only rides it from md up — on a phone the rule sits too close to the text
+// for an arrow to sail past it gracefully.
+function InkRule({
+  fillRef,
+  nibRef,
+}: {
+  fillRef: React.RefObject<HTMLDivElement | null>;
+  nibRef: React.RefObject<SVGSVGElement | null>;
+}) {
   return (
     <div
       aria-hidden
@@ -749,21 +768,20 @@ function InkRule() {
     >
       <div className="absolute inset-0 bg-accent-rust/25" />
       <div
+        ref={fillRef}
         className="absolute inset-x-0 top-0 h-full origin-top will-change-transform"
         style={{
-          transform: "scaleY(var(--read,0))",
+          transform: "scaleY(0)",
           background:
             "linear-gradient(rgb(var(--accent-orange)), rgb(var(--accent-rust)))",
         }}
       />
       <svg
-        className="ink-nib absolute -left-[5px] top-0 h-[11px] w-[11px] text-accent-rust will-change-transform"
+        ref={nibRef}
+        className="ink-nib absolute -left-[5px] top-0 hidden h-[11px] w-[11px] text-accent-rust will-change-transform md:block"
         viewBox="0 0 12 12"
         fill="none"
-        style={{
-          transform:
-            "translate3d(0, calc(var(--read,0) * var(--rail-h,0px) - 50%), 0)",
-        }}
+        style={{ transform: "translate3d(0, -5.5px, 0)" }}
       >
         <path d="M2 2 L10 2 L6 11 Z" fill="currentColor" />
       </svg>
@@ -771,15 +789,20 @@ function InkRule() {
   );
 }
 
-function ProgressHairline() {
+// Below xl there's no margin to write progress into, so an inked line rides
+// the nav's own bottom hairline instead — flush against the header border,
+// never floating over the sheet.
+function ProgressHairline({
+  barRef,
+}: {
+  barRef: React.RefObject<HTMLDivElement | null>;
+}) {
   return (
-    <div
-      aria-hidden
-      className="fixed inset-x-0 top-[88px] z-30 h-[3px] bg-line/40 md:top-14 xl:hidden"
-    >
+    <div aria-hidden className="fixed inset-x-0 top-14 z-30 h-[2px] xl:hidden">
       <div
+        ref={barRef}
         className="h-full origin-left bg-accent-orange will-change-transform"
-        style={{ transform: "scaleX(var(--read,0))" }}
+        style={{ transform: "scaleX(0)" }}
       />
     </div>
   );
