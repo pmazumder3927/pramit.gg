@@ -4,8 +4,7 @@
 //   · CoverReveal — on song change, the new cover is brushed on over the old
 //     scape (a wipe), held, then washed down into the freshly-inked scape.
 import PaperSheet from "./PaperSheet";
-import SongScapeInk from "./SongScapeInk";
-import CoverReveal from "./CoverReveal";
+import ScapeLayers from "./ScapeLayers";
 
 export default function PaperBackground() {
   return (
@@ -23,13 +22,10 @@ export default function PaperBackground() {
           a deckle vignette that deepens away from the song's light. */}
       <PaperSheet />
 
-      {/* song-change repaint — the new cover, stroke-ified into dabs and brushed
-          corner-to-corner as a transient ground that slowly dries. Sits BELOW the
-          doodles so they ink on top of it. One-shot per switch (no reduced-motion). */}
-      <CoverReveal />
-
-      {/* now-playing backdrop — visitors' confessional doodles, inked (both themes) */}
-      <SongScapeInk />
+      {/* song-change repaint (CoverReveal) + the doodle scape (SongScapeInk),
+          loaded as an idle-time chunk — see ScapeLayers. Order preserved:
+          the repaint sits BELOW the doodles so they ink on top of it. */}
+      <ScapeLayers />
     </div>
   );
 }
