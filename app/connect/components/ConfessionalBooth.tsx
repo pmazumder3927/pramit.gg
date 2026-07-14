@@ -182,6 +182,11 @@ export default function ConfessionalBooth() {
           it stays. say hi, leave a burning rant or feedback, whatever u want
           dude.
         </p>
+        <p className="mt-3 max-w-md -rotate-1 font-hand text-lg leading-snug text-accent-purple">
+          psst — the faint drawings drifting behind every page of this site?
+          visitors drew them, right here. if the council approves, yours joins
+          them.
+        </p>
       </motion.div>
 
       <motion.div
@@ -304,8 +309,9 @@ export default function ConfessionalBooth() {
                   rotate={-1.5}
                   className="mx-auto mb-2 block max-w-3xl text-lg"
                 >
-                  2 · draw the council a little something (these will be
-                  publicly visible)
+                  2 · draw a little something — it&apos;ll float in the
+                  site&apos;s background with everyone else&apos;s (publicly
+                  visible)
                 </HandNote>
                 <div className="mb-6">
                   <DrawingCaptcha

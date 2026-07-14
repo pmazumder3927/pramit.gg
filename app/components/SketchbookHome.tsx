@@ -7,7 +7,13 @@ import { Post, analyzeContent } from "@/app/lib/supabase";
 import { isFreshPost } from "@/app/lib/rankPosts";
 import { POST_TYPE_META, POST_TYPE_FILTERS } from "@/app/lib/postTypes";
 import { useNowPlayingContext } from "@/app/components/NowPlayingContext";
-import { ChaosDecor, Tape, Stamp, Doodle } from "@/app/components/sketchbook";
+import {
+  ChaosDecor,
+  Tape,
+  Stamp,
+  Doodle,
+  PaperClip,
+} from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
 // evergreen, owner-editable
@@ -23,6 +29,21 @@ function fmtDate(iso: string) {
   } catch {
     return "";
   }
+}
+
+// A longer excerpt than analyzeContent's 150-char preview — the featured
+// sheet reads like the top of a real page, so it gets a real paragraph.
+function longPreview(content: string, max = 300): string {
+  const clean = content
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[#*`_~>]/g, "")
+    .replace(/\n+/g, " ")
+    .trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return cut.slice(0, lastSpace > 0 ? lastSpace : max) + "…";
 }
 
 function NowSpinningCard() {
@@ -154,12 +175,221 @@ function CollageCard({
         )}
       </div>
       <p className="mt-2.5 font-serif text-sm italic leading-snug text-ink-soft">
-        leave a little drawing if you please{" "}
+        painted nightly from visitors&apos; drawings — the same ones drifting
+        in the background{" "}
         <span className="text-accent-rust transition-colors group-hover:text-accent-orange">
           add yours →
         </span>
       </p>
     </Link>
+  );
+}
+
+// The open journal page: the freshest post at reading size, the thing the
+// sketchbook fell open to.
+const IMAGE_URL_RE = /\.(jpe?g|png|webp|gif|avif)(\?|$)/i;
+
+function FeaturedSheet({ post }: { post: Post }) {
+  const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
+  const { readingTime, images } = analyzeContent(post.content || "");
+  const preview = post.description || longPreview(post.content || "");
+  const fresh = isFreshPost(post, Date.now());
+  // the headline plate: the owner-picked cover, else the post's first
+  // image, else media_url when it's clearly an image (it can be video)
+  const headline =
+    post.meta_image ||
+    images[0] ||
+    (post.media_url && IMAGE_URL_RE.test(post.media_url)
+      ? post.media_url
+      : null);
+
+  return (
+    <Link
+      href={`/post/${post.slug}`}
+      data-avoid-lyrics
+      className="group relative block rounded-lg border border-line bg-card p-6 shadow-paper-lg transition-transform duration-300 hover:-translate-y-1 sm:p-9 sm:pt-8"
+      style={{ rotate: "-0.4deg" }}
+    >
+      <PaperClip className="-top-4 left-8" rotate={-4} tone="ink" />
+      <div className="mb-3.5 flex flex-wrap items-center gap-3">
+        {fresh ? (
+          <Stamp tone="orange" rotate={-3}>
+            fresh ink
+          </Stamp>
+        ) : post.is_pinned ? (
+          <Stamp tone="rust" rotate={-3}>
+            pinned
+          </Stamp>
+        ) : null}
+        <span
+          className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
+        >
+          {meta.label}
+        </span>
+        <span className="font-hand text-lg text-ink-faint">
+          {fmtDate(post.created_at)}
+        </span>
+      </div>
+      <h2 className="font-serif text-[clamp(1.8rem,3.6vw,2.7rem)] font-medium leading-[1.06] tracking-tight text-ink">
+        {post.title}
+      </h2>
+      {headline ? (
+        <div className="relative mt-5">
+          <Tape
+            tone="purple"
+            rotate={-6}
+            className="-top-2.5 left-8 z-10"
+            width={56}
+          />
+          <div className="overflow-hidden rounded-lg border border-ink/15">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={headline}
+              alt=""
+              className="aspect-[2/1] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      ) : null}
+      {preview ? (
+        <p className="mt-4 font-serif text-[1.04rem] font-light leading-relaxed text-ink-soft first-letter:float-left first-letter:pr-2.5 first-letter:pt-1 first-letter:text-[2.9em] first-letter:font-medium first-letter:leading-[0.78] first-letter:text-accent-rust">
+          {preview}
+        </p>
+      ) : null}
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-dashed border-line pt-4">
+        <span className="text-xs text-ink-faint">~ {readingTime} min read</span>
+        <span className="font-hand text-xl text-accent-rust transition-transform duration-200 group-hover:translate-x-1">
+          keep reading →
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// The chaos card — one page of the feed (also used for the pair under the
+// featured sheet).
+function PostCard({ post }: { post: Post }) {
+  const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
+  const { readingTime, previewText } = analyzeContent(post.content || "");
+  const preview = post.description || previewText;
+  const c = chaosFor(post.id);
+  const fresh = isFreshPost(post, Date.now());
+
+  return (
+    <div className="relative" style={{ transform: `rotate(${c.rotate}deg)` }}>
+      <Link
+        href={`/post/${post.slug}`}
+        className="sketch-card relative block overflow-visible p-5 pt-6"
+        style={paperTextureStyle(c.paper)}
+      >
+        <ChaosDecor chaos={c} />
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <span
+            className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
+          >
+            {meta.label}
+          </span>
+          <span className="flex items-center gap-2">
+            {fresh ? (
+              <Stamp tone="orange" rotate={4}>
+                fresh ink
+              </Stamp>
+            ) : post.is_pinned ? (
+              <Stamp tone="rust" rotate={-3}>
+                pinned
+              </Stamp>
+            ) : null}
+            <span className="font-hand text-lg text-ink-faint">
+              {fmtDate(post.created_at)}
+            </span>
+          </span>
+        </div>
+        <h3 className="relative inline font-serif text-[1.2rem] font-medium leading-snug text-ink">
+          {c.highlight && (
+            <span
+              aria-hidden
+              className="absolute -inset-x-1 bottom-0 -z-0 h-[0.55em] -rotate-1"
+              style={{
+                background: `rgb(var(--accent-${c.tone}) / 0.22)`,
+              }}
+            />
+          )}
+          <span className="relative">{post.title}</span>
+        </h3>
+        {preview ? (
+          <p className="mt-2 line-clamp-2 font-serif text-[0.92rem] italic leading-relaxed text-ink-soft">
+            {preview}
+          </p>
+        ) : null}
+        <div className="mt-4 flex items-center justify-between gap-2 border-t border-dashed border-line pt-3">
+          <div className="flex flex-wrap gap-2">
+            {(post.tags || []).slice(0, 2).map((t) => (
+              <span key={t} className="text-xs font-medium text-accent-purple">
+                #{t}
+              </span>
+            ))}
+          </div>
+          <span className="whitespace-nowrap text-xs text-ink-faint">
+            ~ {readingTime} min
+          </span>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+// The "also on the table" stack — the next few pages as a quick list.
+function FreshStack({ posts }: { posts: Post[] }) {
+  return (
+    <div
+      className="relative rounded-lg border border-line bg-card px-5 pb-3 pt-4 shadow-paper"
+      style={{ rotate: "0.6deg" }}
+    >
+      <span className="inline-block -rotate-1 font-hand text-xl text-accent-rust">
+        also on the table —
+      </span>
+      <ol>
+        {posts.map((post, i) => {
+          const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
+          const { readingTime } = analyzeContent(post.content || "");
+          return (
+            <li
+              key={post.id}
+              className={i > 0 ? "border-t border-dashed border-line" : ""}
+            >
+              <Link
+                href={`/post/${post.slug}`}
+                className="group block py-3 transition-transform duration-200 hover:translate-x-1"
+              >
+                <span className="font-serif text-[1.05rem] font-medium leading-snug text-ink transition-colors group-hover:text-accent-rust">
+                  {post.title}
+                </span>
+                <span className="mt-1.5 flex items-baseline gap-2.5">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
+                  >
+                    {meta.label}
+                  </span>
+                  <span className="font-hand text-base text-ink-faint">
+                    {fmtDate(post.created_at)}
+                  </span>
+                  <span className="text-xs text-ink-faint">
+                    ~ {readingTime} min
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+      <a
+        href="#feed"
+        className="mb-1 inline-block font-hand text-lg text-accent-purple transition-transform duration-200 hover:translate-x-1"
+      >
+        every page, below ↓
+      </a>
+    </div>
   );
 }
 
@@ -174,17 +404,23 @@ export default function SketchbookHome({
 }) {
   const [filter, setFilter] = useState<"all" | Post["type"]>("all");
 
+  // The table seats the first six pages: one featured, two beside it,
+  // three in the rail's stack. The feed below holds the rest.
+  const featured = posts[0];
+  const pair = posts.slice(1, 3);
+  const stack = posts.slice(3, 6);
+  const rest = posts.slice(6);
+
   const shown = useMemo(
-    () => (filter === "all" ? posts : posts.filter((p) => p.type === filter)),
-    [posts, filter],
+    () => (filter === "all" ? rest : posts.filter((p) => p.type === filter)),
+    [posts, rest, filter],
   );
 
   return (
-    <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-10 md:pt-16">
-      {/* ===================== TITLE PAGE ===================== */}
-      <section className="grid gap-12 md:grid-cols-[1.55fr_0.9fr] md:items-start md:gap-16">
-        {/* identity */}
-        <div className="rise d1">
+    <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-10 md:pt-12">
+      {/* ===================== MASTHEAD ===================== */}
+      <section className="grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
+        <header data-avoid-lyrics className="rise d1">
           <div className="flex items-center gap-2">
             <span className="font-hand text-2xl -rotate-2 text-accent-rust">
               welcome to the sketchbook
@@ -196,46 +432,29 @@ export default function SketchbookHome({
               strokeWidth={2}
             />
           </div>
-          <h1 className="mt-2 font-serif text-[clamp(2.6rem,6.5vw,4.4rem)] font-medium leading-[0.96] tracking-tight text-ink">
+          <h1 className="mt-1 font-serif text-[clamp(2.5rem,6.2vw,4.7rem)] font-medium leading-[0.95] tracking-tight text-ink">
             pramit mazumder<span className="text-accent-rust">.</span>
           </h1>
-          <p className="mt-5 font-serif text-[clamp(1.35rem,3vw,2rem)] font-light leading-[1.12] text-ink-soft">
-            a journal of interests, projects, &amp;{" "}
-            <span className="relative inline-block">
-              lived
-              <svg
-                className="absolute -bottom-2 left-0 h-3 w-[calc(100%+8px)] overflow-visible"
-                viewBox="0 0 200 18"
-                preserveAspectRatio="none"
-                aria-hidden
-              >
-                <path
-                  className="ink-draw"
-                  d="M3 11 C44 4 70 14 104 8 C140 2 168 13 197 6"
-                  fill="none"
-                  stroke="rgb(var(--accent-orange))"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>{" "}
-            <em className="italic text-accent-purple">experiences.</em>
+          <svg
+            className="mt-1.5 h-3.5 w-[min(34rem,86%)] overflow-visible"
+            viewBox="0 0 340 13"
+            preserveAspectRatio="none"
+            aria-hidden
+          >
+            <path
+              className="ink-draw"
+              d="M3 9 C90 3 190 12 264 6 C300 3 322 8 337 7"
+              fill="none"
+              stroke="rgb(var(--accent-orange))"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+          </svg>
+          <p className="mt-3 max-w-[32ch] font-serif text-[clamp(1.1rem,1.9vw,1.4rem)] font-light italic leading-snug text-ink-soft">
+            a journal of interests, projects &amp;{" "}
+            <em className="text-accent-purple">lived experiences</em>
           </p>
-          <p className="mt-6 max-w-md text-base leading-relaxed text-ink-faint">
-            the sights, songs, and ramblings of a life in progress
-          </p>
-
-          <div className="mt-7 flex flex-wrap gap-3.5">
-            <a href="#table" className="btn-sketch btn-sketch-solid">
-              read latest post →
-            </a>
-            <Link href="/connect" className="btn-sketch">
-              say hello
-            </Link>
-          </div>
-
-          {/* currently — a little personality */}
-          <div className="mt-10 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-dashed border-line pt-5">
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="font-hand text-xl text-accent-purple">
               currently —
             </span>
@@ -248,166 +467,117 @@ export default function SketchbookHome({
               </span>
             ))}
           </div>
-        </div>
+        </header>
 
-        {/* the desk — pinned cards */}
-        <aside className="rise d2 flex flex-col gap-7 sm:flex-row md:flex-col">
-          <div className="flex-1">
-            <NowSpinningCard />
-          </div>
-          <div className="flex-1">
-            <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
-          </div>
-        </aside>
+        {/* the music, at its old seat beside the name */}
+        <div className="rise d2 md:pt-4">
+          <NowSpinningCard />
+        </div>
       </section>
 
-      {/* ===================== THE TABLE (feed) ===================== */}
-      <section id="table" className="mt-20 scroll-mt-20 md:mt-24">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h2 className="font-serif text-3xl font-medium text-ink">
-              from the archives
-            </h2>
-            <span className="font-hand text-xl -rotate-2 text-accent-purple">
-              — {posts.length} {posts.length === 1 ? "page" : "pages"}
-            </span>
+      {/* ===================== THE READING TABLE ===================== */}
+      {featured ? (
+        <section className="mt-9 grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
+          {/* the open pages */}
+          <div className="rise d2" data-avoid-lyrics>
+            <FeaturedSheet post={featured} />
+            {pair.length > 0 && (
+              <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2">
+                {pair.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            )}
           </div>
-          {/* filter chips */}
-          <div className="flex flex-wrap gap-2.5">
-            {POST_TYPE_FILTERS.map((f) => {
-              const active = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`rounded-full border px-4 py-1.5 text-sm transition-all duration-200 ${
-                    active
-                      ? "border-ink bg-ink text-paper"
-                      : "border-line text-ink-soft hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
-        {shown.length === 0 ? (
-          <p className="mt-10 font-hand text-2xl text-ink-faint">
+          {/* the desk's edge */}
+          <aside className="rise d3 flex flex-col gap-8">
+            {stack.length > 0 && <FreshStack posts={stack} />}
+            <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
+          </aside>
+        </section>
+      ) : (
+        <section className="mt-14 grid gap-10 md:grid-cols-[1.5fr_0.9fr] md:items-start md:gap-14">
+          <p className="font-hand text-2xl text-ink-faint">
             nothing here yet — check back soon ✎
           </p>
-        ) : (
-          <div className="mt-9 grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((post) => {
-              const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.note;
-              const { readingTime, previewText } = analyzeContent(
-                post.content || "",
-              );
-              const preview = post.description || previewText;
-              const c = chaosFor(post.id);
-              const fresh = isFreshPost(post, Date.now());
-              return (
-                <div
-                  key={post.id}
-                  className="relative"
-                  style={{ transform: `rotate(${c.rotate}deg)` }}
-                >
-                  <Link
-                    href={`/post/${post.slug}`}
-                    className="sketch-card relative block overflow-visible p-5 pt-6"
-                    style={paperTextureStyle(c.paper)}
-                  >
-                    <ChaosDecor chaos={c} />
-                    <div className="mb-2.5 flex items-center justify-between gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
-                      >
-                        {meta.label}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        {fresh ? (
-                          <Stamp tone="orange" rotate={4}>
-                            fresh ink
-                          </Stamp>
-                        ) : post.is_pinned ? (
-                          <Stamp tone="rust" rotate={-3}>
-                            pinned
-                          </Stamp>
-                        ) : null}
-                        <span className="font-hand text-lg text-ink-faint">
-                          {fmtDate(post.created_at)}
-                        </span>
-                      </span>
-                    </div>
-                    <h3 className="relative inline font-serif text-[1.2rem] font-medium leading-snug text-ink">
-                      {c.highlight && (
-                        <span
-                          aria-hidden
-                          className="absolute -inset-x-1 bottom-0 -z-0 h-[0.55em] -rotate-1"
-                          style={{
-                            background: `rgb(var(--accent-${c.tone}) / 0.22)`,
-                          }}
-                        />
-                      )}
-                      <span className="relative">{post.title}</span>
-                    </h3>
-                    {preview ? (
-                      <p className="mt-2 line-clamp-2 font-serif text-[0.92rem] italic leading-relaxed text-ink-soft">
-                        {preview}
-                      </p>
-                    ) : null}
-                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-dashed border-line pt-3">
-                      <div className="flex flex-wrap gap-2">
-                        {(post.tags || []).slice(0, 2).map((t) => (
-                          <span
-                            key={t}
-                            className="text-xs font-medium text-accent-purple"
-                          >
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="whitespace-nowrap text-xs text-ink-faint">
-                        ~ {readingTime} min
-                      </span>
-                    </div>
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+          <aside className="rise d2 flex flex-col gap-8">
+            <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
+          </aside>
+        </section>
+      )}
 
-      {/* ===================== FOOTER ===================== */}
-      <footer className="mt-24 flex flex-wrap items-center justify-between gap-5 border-t-2 border-ink/80 pt-7">
-        <div>
-          <div className="font-hand text-2xl text-ink">— pramit ✦mazumder</div>
-          <div className="font-serif text-sm italic text-ink-faint">
-            made by hand, mostly.
+      {/* ===================== EVERY PAGE (feed) ===================== */}
+      {posts.length > 0 && (
+        <section id="feed" className="mt-16 scroll-mt-20 md:mt-20">
+          <div className="mb-8 flex items-center justify-center gap-3">
+            <Doodle name="star" tone="orange" className="h-4 w-4" strokeWidth={2} />
+            <Doodle
+              name="divider"
+              tone="purple"
+              className="h-5 w-40 md:w-56"
+              strokeWidth={2.5}
+            />
+            <Doodle name="star" tone="purple" className="h-4 w-4" strokeWidth={2} />
           </div>
-        </div>
-        <div className="flex flex-wrap gap-5 text-sm text-ink-soft">
-          <Link
-            href="/music"
-            className="transition-colors hover:text-accent-rust"
-          >
-            music
-          </Link>
-          <Link
-            href="/collage"
-            className="transition-colors hover:text-accent-rust"
-          >
-            collage
-          </Link>
-          <Link
-            href="/connect"
-            className="transition-colors hover:text-accent-rust"
-          >
-            connect
-          </Link>
-        </div>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 className="font-serif text-3xl font-medium text-ink">
+                every page
+              </h2>
+              <span className="font-hand text-xl -rotate-2 text-accent-purple">
+                — {posts.length} in the book
+              </span>
+            </div>
+            {/* filter chips */}
+            <div className="flex flex-wrap gap-2.5">
+              {POST_TYPE_FILTERS.map((f) => {
+                const active = filter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={`rounded-full border px-4 py-1.5 text-sm transition-all duration-200 ${
+                      active
+                        ? "border-ink bg-ink text-paper"
+                        : "border-line text-ink-soft hover:border-ink/40 hover:text-ink"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="mt-9 font-hand text-2xl text-ink-faint">
+              {filter === "all"
+                ? "that's the whole book so far ✎"
+                : "no pages of that kind yet ✎"}
+            </p>
+          ) : (
+            <div
+              data-avoid-lyrics
+              className="mt-9 grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {shown.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ===================== COLOPHON ===================== */}
+      <footer className="mt-24 flex flex-wrap items-center justify-center gap-3 border-t border-line pt-7 text-center">
+        <span className="font-hand text-xl text-ink-faint">
+          made by hand, mostly.
+        </span>
+        <span aria-hidden className="text-accent-orange">
+          ✦
+        </span>
+        <span className="text-xs tracking-wide text-ink-faint">2026</span>
       </footer>
     </main>
   );

@@ -49,10 +49,9 @@ export default function NoiseFrontier() {
       hint="drag the point · tune σᵥ"
       caption={
         <>
-          fig — your speed–accuracy frontier. the slope σᵥ is the single most
-          useful number in the profile: it sets the fastest you can flick before
-          neural noise, not skill, decides the outcome. where your operating
-          point sits relative to the frontier is the whole prescription.
+          fig — your speed–accuracy frontier. the slope σᵥ sets the fastest you
+          can flick before neural noise, not skill, decides the outcome. where
+          your point sits relative to it is what matters.
         </>
       }
     >
