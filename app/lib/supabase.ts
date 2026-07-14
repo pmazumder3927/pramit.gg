@@ -1,8 +1,8 @@
-import { createClient } from "@/utils/supabase/client";
 import type { PostType } from "./postTypes";
 
-// Export the client creation function
-export const supabase = createClient();
+// NOTE: the browser client lives in ./supabase-browser — keeping this module
+// free of @supabase/supabase-js keeps the types/helpers importable from
+// first-load client bundles at zero cost.
 
 export type CardSize =
   | "massive"
