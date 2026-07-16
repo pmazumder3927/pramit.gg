@@ -1,8 +1,9 @@
 import { MetadataRoute } from "next";
 import { createPublicClient } from "@/utils/supabase/server";
+import { siteConfig } from "@/app/lib/metadata";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://pramit.gg";
+  const baseUrl = siteConfig.url;
 
   // Get all published posts from database
   const supabase = createPublicClient();

@@ -3,7 +3,7 @@ import {
   type HomepageBanner,
 } from "@/app/lib/homepage-banner";
 import { createPublicClient } from "@/utils/supabase/server";
-import { createMetadata } from "@/app/lib/metadata";
+import { createMetadata, siteConfig } from "@/app/lib/metadata";
 
 import CollageExperience from "./CollageExperience";
 
@@ -13,6 +13,7 @@ export const metadata = createMetadata({
   title: "collage",
   description:
     "every sketch left in the confession booth gets painted into an image along with its peers",
+  image: siteConfig.ogImage,
   path: "/collage",
 });
 

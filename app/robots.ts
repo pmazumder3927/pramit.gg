@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
+import { siteConfig } from "@/app/lib/metadata";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = "https://pramit.gg";
+  const baseUrl = siteConfig.url;
   return {
     rules: {
       userAgent: "*",

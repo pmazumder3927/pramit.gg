@@ -6,6 +6,7 @@ export const metadata = createMetadata({
   title: "Connect",
   description:
     "Get in touch with Pramit Mazumder — links, contact card, and a confession booth. Best friends now.",
+  image: siteConfig.ogImage,
   path: "/connect",
 });
 
