@@ -67,6 +67,17 @@ const nextConfig = {
   // Generate ETags for caching
   generateEtags: true,
 
+  // Old URLs still indexed by search engines from previous site versions
+  async redirects() {
+    return [
+      {
+        source: "/about",
+        destination: "/connect",
+        permanent: true,
+      },
+    ];
+  },
+
   // Power headers for security and caching
   async headers() {
     return [

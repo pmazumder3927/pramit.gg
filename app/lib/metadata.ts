@@ -6,7 +6,9 @@ const siteConfig = {
   author: "Pramit Mazumder",
   description:
     "a living, evolving journal of interests, projects, and experiences",
-  url: "https://pramit.gg",
+  // www is the primary host (Vercel-recommended: CNAME routing + cookie
+  // isolation from *.pramit.gg side projects); apex 308s here.
+  url: "https://www.pramit.gg",
   // Default social card is now generated at /opengraph-image (see app/opengraph-image.tsx)
   ogImage: "/opengraph-image",
   creator: "@PramitMazumder",
