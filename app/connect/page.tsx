@@ -70,8 +70,18 @@ export default function Connect() {
       tone: "rust" as const,
       rotate: 1.5,
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+          />
         </svg>
       ),
     },
@@ -130,7 +140,13 @@ END:VCARD`;
                 <HandNote tone="rust" rotate={-4} className="text-3xl">
                   dear stranger,
                 </HandNote>
-                <Doodle name="arrow" tone="orange" className="h-6 w-12" strokeWidth={3} draw />
+                <Doodle
+                  name="arrow"
+                  tone="orange"
+                  className="h-6 w-12"
+                  strokeWidth={3}
+                  draw
+                />
               </div>
 
               <h1 className="relative mt-1 inline-block font-serif text-5xl font-medium tracking-tight text-ink md:text-7xl lg:text-8xl">
@@ -179,7 +195,7 @@ END:VCARD`;
                 <Polaroid
                   rotate={-2.5}
                   tone="orange"
-                  caption={<span>your local friend</span>}
+                  caption={<span>dashing really cool guy</span>}
                   className="w-full"
                 >
                   <div className="aspect-square w-full">
@@ -195,7 +211,12 @@ END:VCARD`;
 
                 {/* the name plate, clipped under the photo */}
                 <div className="relative mx-auto mt-5 max-w-[15rem] rotate-[1.2deg] rounded-[3px] border border-line bg-card px-4 py-3 shadow-paper">
-                  <PaperClip className="-right-2 -top-4" rotate={12} tone="ink" size={30} />
+                  <PaperClip
+                    className="-right-2 -top-4"
+                    rotate={12}
+                    tone="ink"
+                    size={30}
+                  />
                   <h2 className="font-serif text-xl font-medium leading-tight text-ink">
                     {contactInfo.name}
                   </h2>
@@ -233,8 +254,15 @@ END:VCARD`;
                     animate={{ opacity: 1, scale: 1, rotate: 3 }}
                     className="relative mx-auto mt-5 w-fit"
                   >
-                    <Tape tone="purple" rotate={-8} className="-top-3 left-1/2 -translate-x-1/2" />
-                    <QRCodeGenerator data="https://pramit.gg/connect" size={112} />
+                    <Tape
+                      tone="purple"
+                      rotate={-8}
+                      className="-top-3 left-1/2 -translate-x-1/2"
+                    />
+                    <QRCodeGenerator
+                      data="https://pramit.gg/connect"
+                      size={112}
+                    />
                     <p className="mt-1 text-center font-hand text-sm text-ink-faint">
                       scan to keep me
                     </p>
@@ -263,7 +291,8 @@ END:VCARD`;
                     </p>
                     <p className="text-ink-faint">
                       lately: reinforcement learning, robotics, bouldering,
-                      electronic music, and optimizing my life a little too much.
+                      electronic music, and optimizing my life a little too
+                      much.
                     </p>
                   </div>
                 </div>
@@ -274,7 +303,12 @@ END:VCARD`;
                     <HandNote tone="orange" rotate={-2} className="text-2xl">
                       find me elsewhere
                     </HandNote>
-                    <Doodle name="squiggle" tone="purple" className="h-4 w-16" strokeWidth={2.5} />
+                    <Doodle
+                      name="squiggle"
+                      tone="purple"
+                      className="h-4 w-16"
+                      strokeWidth={2.5}
+                    />
                   </div>
 
                   <div className="flex flex-wrap items-start gap-x-4 gap-y-5">
@@ -282,12 +316,26 @@ END:VCARD`;
                       <motion.a
                         key={link.name}
                         href={link.url}
-                        target={link.url.startsWith("http") ? "_blank" : "_self"}
-                        rel={link.url.startsWith("http") ? "noopener noreferrer" : ""}
+                        target={
+                          link.url.startsWith("http") ? "_blank" : "_self"
+                        }
+                        rel={
+                          link.url.startsWith("http")
+                            ? "noopener noreferrer"
+                            : ""
+                        }
                         initial={{ opacity: 0, y: 14 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.3 + index * 0.06 }}
-                        whileHover={{ y: -4, rotate: link.rotate > 0 ? link.rotate - 2 : link.rotate + 2, scale: 1.04 }}
+                        transition={{
+                          duration: 0.4,
+                          delay: 0.3 + index * 0.06,
+                        }}
+                        whileHover={{
+                          y: -4,
+                          rotate:
+                            link.rotate > 0 ? link.rotate - 2 : link.rotate + 2,
+                          scale: 1.04,
+                        }}
                         className="group relative inline-flex items-center gap-2.5 rounded-[5px] border-[1.6px] bg-card px-3.5 py-2 shadow-paper transition-shadow hover:shadow-paper-lg"
                         style={{
                           transform: `rotate(${link.rotate}deg)`,
@@ -300,7 +348,9 @@ END:VCARD`;
                           width={40}
                           className="-top-2.5 left-1/2 -translate-x-1/2"
                         />
-                        <span style={{ color: toneColor[link.tone] }}>{link.icon}</span>
+                        <span style={{ color: toneColor[link.tone] }}>
+                          {link.icon}
+                        </span>
                         <span className="flex flex-col leading-tight">
                           <span className="font-serif text-sm font-medium text-ink">
                             {link.name}
@@ -320,7 +370,12 @@ END:VCARD`;
 
         {/* ============ divider doodle ============ */}
         <div className="my-16 flex items-center justify-center gap-3 md:my-20">
-          <Doodle name="divider" tone="rust" className="h-5 w-44 md:w-64" strokeWidth={2.5} />
+          <Doodle
+            name="divider"
+            tone="rust"
+            className="h-5 w-44 md:w-64"
+            strokeWidth={2.5}
+          />
         </div>
 
         {/* ============ Confessional / leave a doodle ============ */}
@@ -336,9 +391,24 @@ END:VCARD`;
 
         {/* ============ divider doodle ============ */}
         <div className="my-16 flex items-center justify-center gap-3 md:my-20">
-          <Doodle name="star" tone="orange" className="h-4 w-4" strokeWidth={2} />
-          <Doodle name="divider" tone="purple" className="h-5 w-40 md:w-56" strokeWidth={2.5} />
-          <Doodle name="star" tone="purple" className="h-4 w-4" strokeWidth={2} />
+          <Doodle
+            name="star"
+            tone="orange"
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
+          <Doodle
+            name="divider"
+            tone="purple"
+            className="h-5 w-40 md:w-56"
+            strokeWidth={2.5}
+          />
+          <Doodle
+            name="star"
+            tone="purple"
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         </div>
 
         {/* ============ Turtle Gallery — the doodle wall ============ */}
