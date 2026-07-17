@@ -4,7 +4,7 @@
 This is a personal website built with Next.js 15, TypeScript, and Tailwind CSS. It features blog posts, music integration with Spotify, and social connections.
 
 ## Tech Stack
-- **Framework**: Next.js 15.4.1 with App Router
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.3.3
 - **Styling**: Tailwind CSS 3.4.0
 - **Database**: Supabase
