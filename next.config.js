@@ -88,11 +88,42 @@ const nextConfig = {
             key: "X-DNS-Prefetch-Control",
             value: "on",
           },
+          {
+            // Vercel's default HSTS lacks includeSubDomains/preload; with them
+            // (and an hstspreload.org submission) browsers skip the http:// hop
+            // when someone types the bare domain. All *.pramit.gg subdomains
+            // are Vercel-aliased and already HTTPS.
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
         ],
       },
       {
         // Cache static assets aggressively
         source: "/(.*)\\.(ico|png|jpg|jpeg|gif|webp|svg|woff|woff2)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        // Post-embedded playground iframes (static HTML in public/) — let the
+        // edge serve them instead of hitting the origin per iframe per reader.
+        source: "/playgrounds/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        // Self-hosted third-party assets: KaTeX lives under a version-pathed
+        // dir (bump the path on upgrade) and the font woff2s are frozen
+        // upstream files — both safe to mark immutable.
+        source: "/vendor/:path*",
         headers: [
           {
             key: "Cache-Control",

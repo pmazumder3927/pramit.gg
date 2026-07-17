@@ -21,13 +21,17 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Only the auth-gated surfaces need the session middleware; public pages,
+  // RSC prefetches, and the 5s now-playing polls skip the edge hop entirely.
+  // Keep this list in sync with AUTH_ROUTES above plus draft previews.
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/dashboard/:path*",
+    "/write/:path*",
+    "/api/auth/:path*",
+    "/api/dashboard/:path*",
+    "/api/upload/:path*",
+    "/api/write/:path*",
+    "/music/manage/:path*",
+    "/post/:id/preview",
   ],
 };
