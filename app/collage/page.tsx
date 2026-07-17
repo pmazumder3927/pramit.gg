@@ -25,14 +25,26 @@ type SketchPreview = {
   banner_id: string | null;
 };
 
-async function fetchSketchPreviews(): Promise<SketchPreview[]> {
+// The strip renders every banner it's handed and a new collage lands every
+// night, so cap the fetch or the page (and its image payload) grows without
+// bound. 12 keeps everything visible today with headroom.
+const BANNER_LIMIT = 12;
+// Safety bound on the sketch payload. Scoped to the rendered banners below, so
+// if it ever bites it trims the oldest walls instead of emptying them outright.
+const SKETCH_LIMIT = 60;
+
+async function fetchSketchPreviews(
+  bannerIds: string[],
+): Promise<SketchPreview[]> {
+  if (bannerIds.length === 0) return [];
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("turtle_drawings")
     .select("id, prompt, snapshot_url, created_at, banner_id")
     .not("snapshot_url", "is", null)
-    .not("banner_id", "is", null)
-    .order("created_at", { ascending: false });
+    .in("banner_id", bannerIds)
+    .order("created_at", { ascending: false })
+    .limit(SKETCH_LIMIT);
 
   if (error) {
     console.error("Sketch preview fetch error:", error);
@@ -44,10 +56,9 @@ async function fetchSketchPreviews(): Promise<SketchPreview[]> {
 
 export default async function CollagePage() {
   const supabase = createPublicClient();
-  const [banners, sketches] = await Promise.all([
-    fetchAllHomepageBanners(supabase),
-    fetchSketchPreviews(),
-  ]);
+  const banners = await fetchAllHomepageBanners(supabase, BANNER_LIMIT);
+  // Only the sketches behind the banners we actually render ship to the client.
+  const sketches = await fetchSketchPreviews(banners.map((b) => b.id));
 
   // Oldest → newest so the latest sits at the right end of the strip.
   const orderedBanners: HomepageBanner[] = [...banners].reverse();

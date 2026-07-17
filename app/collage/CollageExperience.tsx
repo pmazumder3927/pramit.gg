@@ -12,7 +12,6 @@ import {
   Doodle,
   TornEdge,
 } from "@/app/components/sketchbook";
-import DoodleTile from "@/app/components/DoodleTile";
 
 type Banner = {
   id: string;
@@ -242,7 +241,13 @@ export default function CollageExperience({
                       alt={`collage from ${dateLong}`}
                       fill
                       priority={isLatest}
-                      sizes="(min-width: 1024px) 1024px, 100vw"
+                      // The frame is max-w-3xl (768px) with p-4 + two 1px
+                      // borders, capped once the viewport clears 832px
+                      // (768 + md:px-8 gutters); below that the sheet tracks
+                      // the viewport minus gutters/padding/borders (76px at
+                      // the narrowest, slightly more mid-range — a small,
+                      // safe over-request).
+                      sizes="(min-width: 832px) 736px, calc(100vw - 76px)"
                       className="object-cover"
                     />
                   </motion.div>
@@ -502,12 +507,16 @@ function ThumbnailStrip({
                     style={{ borderTopColor: "rgb(var(--accent-orange))" }}
                   />
                 )}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                {/* width/height only pin the 3:2 intrinsic ratio — the
+                    h-full/w-full classes keep the exact in-flow box the raw
+                    <img> had inside this padded card. sizes matches the
+                    content box: w-24/sm:w-28 minus p-1.5 and the border. */}
+                <Image
                   src={banner.image_url}
                   alt={`collage ${i + 1}`}
-                  loading="lazy"
-                  decoding="async"
+                  width={150}
+                  height={100}
+                  sizes="(min-width: 640px) 100px, 84px"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -556,10 +565,9 @@ function SketchCard({ sketch }: { sketch: SketchPreview }) {
         width={48}
         className="-top-2.5 left-1/2 -translate-x-1/2"
       />
-      <DoodleTile
+      <SketchSnapshotTile
         snapshotUrl={sketch.snapshot_url}
         prompt={sketch.prompt}
-        className="border border-ink/10"
       />
       {sketch.prompt && (
         <figcaption
@@ -570,6 +578,41 @@ function SketchCard({ sketch }: { sketch: SketchPreview }) {
         </figcaption>
       )}
     </figure>
+  );
+}
+
+// next/image twin of DoodleTile's snapshot branch, so the snapshot PNGs go
+// through the image optimizer instead of shipping raw. On this page every
+// sketch arrives with a snapshot and WITHOUT strokes, so DoodleTile's
+// ground-picking always lands on the dark tablet — that ground (and its faint
+// inner edge) is mirrored verbatim here. Keep in sync with
+// app/components/DoodleTile.tsx if its dark ground ever changes.
+function SketchSnapshotTile({
+  snapshotUrl,
+  prompt,
+}: {
+  snapshotUrl: string | null;
+  prompt: string | null;
+}) {
+  return (
+    <div className="relative aspect-[3/2] overflow-hidden rounded-md border border-ink/10 bg-[#1a1410] bg-[radial-gradient(circle_at_top,_rgba(255,180,120,0.06),_transparent_60%)]">
+      {snapshotUrl && (
+        // The card is w-32/sm:w-40 with p-2, minus the figure + tile borders,
+        // so the tile's content box is ~108px / ~140px wide.
+        <Image
+          src={snapshotUrl}
+          alt={prompt ?? "doodle"}
+          fill
+          sizes="(min-width: 640px) 140px, 108px"
+          className="object-contain"
+        />
+      )}
+      {/* faint inner edge for a little depth */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-inset ring-white/5"
+      />
+    </div>
   );
 }
 
