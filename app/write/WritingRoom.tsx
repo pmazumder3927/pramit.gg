@@ -34,6 +34,9 @@ import {
   TornEdge,
 } from "@/app/components/sketchbook";
 import PostContent from "@/app/post/[id]/PostContent";
+// Imported from client code the shared renderer runs right here, live against
+// the draft — the reader-facing pages render it on the server instead.
+import PostMarkdown from "@/app/post/[id]/PostMarkdown";
 import { acceptsFile, markdownFor, useUpload } from "@/app/lib/use-upload";
 import {
   countWords,
@@ -1423,7 +1426,12 @@ export default function WritingRoom({
             </motion.div>
           </div>
           <main className="post-reading relative z-10 min-h-screen py-8 pt-14 md:py-16">
-            <PostContent key="proof" post={proofPost} preview />
+            <PostContent
+              key="proof"
+              post={proofPost}
+              body={<PostMarkdown content={proofPost.content} />}
+              preview
+            />
           </main>
         </motion.div>
       )}

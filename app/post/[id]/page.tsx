@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Post, stripWorkingCopy } from "@/app/lib/supabase";
 import PostContent, { type PostNav } from "./PostContent";
+import PostMarkdown from "./PostMarkdown";
 import { createPublicClient } from "@/utils/supabase/server";
 import { createMetadata, siteConfig } from "@/app/lib/metadata";
 import { articleSchema, breadcrumbSchema } from "@/app/lib/structured-data";
@@ -153,7 +154,15 @@ export default async function PostPage({ params }: PostPageProps) {
         ]}
       />
       <main className="post-reading relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
-        <PostContent key={post.id} post={post} prev={prev} next={next} />
+        {/* the body renders here on the server; the client shell only gets
+            the interactive chrome (TOC, progress ink, share, view count) */}
+        <PostContent
+          key={post.id}
+          post={post}
+          body={<PostMarkdown content={post.content} />}
+          prev={prev}
+          next={next}
+        />
       </main>
     </div>
   );

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Post } from "@/app/lib/supabase";
 import PostContent from "../PostContent";
+import PostMarkdown from "../PostMarkdown";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createMetadata } from "@/app/lib/metadata";
@@ -65,7 +66,11 @@ export default async function PreviewPostPage({ params }: PreviewPageProps) {
       </div>
 
       <main className="post-reading relative z-10 min-h-screen py-8 pt-16 md:py-16">
-        <PostContent key={post.id} post={post} />
+        <PostContent
+          key={post.id}
+          post={post}
+          body={<PostMarkdown content={post.content} />}
+        />
       </main>
     </div>
   );
