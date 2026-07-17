@@ -19,13 +19,6 @@ import { analyzeCover, planPaintingAsync, animatePainting, type PaintController 
 const HOLD = 1.6; // s the paint sits wet before it begins to dry
 const FADE = 8.5; // s slow dry-out (paint drying)
 
-// Backing-store budget (device px). The wash is a soft, semi-transparent
-// full-screen layer behind grain — nothing type-sharp lives on it — so on big
-// retina screens rendering at full 2× (7MP+ cleared and re-composited every
-// frame) buys nothing visible. Capping the pixel count is the single biggest
-// per-frame saving; small/hi-dpi phone windows come in under budget unchanged.
-const PIXEL_BUDGET = 4_500_000;
-
 function fnv(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -89,11 +82,11 @@ export default function CoverReveal() {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dpr = Math.min(
-      2,
-      window.devicePixelRatio || 1,
-      Math.max(1, Math.sqrt(PIXEL_BUDGET / (w * h))),
-    );
+    // full min(2, dpr) — a 1.5 cap was tried once for perf and visibly
+    // softened the strokes; the owner keeps the crispness (see memory:
+    // songscape-backdrop "dpr REGRESSION"). Perf comes from the sliced
+    // planner + frame-pressure shedding instead.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.style.transition = "none";
