@@ -14,7 +14,7 @@
 //               scroll progress; the whole piece sways gently; a different set of
 //               doodles is chosen per song.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
 import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette";
@@ -312,7 +312,9 @@ function useDiffuse(
     let last = -1;
     const tick = () => {
       const t = clamp01(ph.pos(performance.now() - recv) / duration);
-      if (Math.abs(t - last) > 0.0008) {
+      // every write restyles + repaints the whole fixed SVG, so step --t only
+      // when the diffuse scale would move ≥ ~0.2 device px (far below visible)
+      if (Math.abs(t - last) > 0.004) {
         el.style.setProperty("--t", t.toFixed(4));
         last = t;
       }
@@ -336,13 +338,19 @@ function useScrollSwirl(root: React.RefObject<SVGSVGElement | null>, reduced: bo
     let cur = 0;
     let raf = 0;
     let running = false;
+    let lastSet = -1;
     const measure = () => {
       const denom = Math.max(1, window.innerHeight * 1.3);
       target = Math.min(1, Math.max(0, window.scrollY / denom));
     };
     const loop = () => {
       cur += (target - cur) * 0.1;
-      el.style.setProperty("--scroll", cur.toFixed(4));
+      // each write restyles + repaints the whole fixed SVG; skip steps that
+      // would move the swirl less than a tenth of a pixel (the easing tail)
+      if (Math.abs(cur - lastSet) > 0.0015) {
+        el.style.setProperty("--scroll", cur.toFixed(4));
+        lastSet = cur;
+      }
       if (Math.abs(target - cur) > 0.0005) raf = requestAnimationFrame(loop);
       else running = false;
     };
@@ -404,6 +412,87 @@ const doodleV: Variants = {
   leave: { opacity: 0, y: -16, transition: { duration: 0.6, ease: "easeOut" } },
 };
 const DOODLE_GAP = 0.22; // s between doodles (assembly order); per-doodle write time is `wt`
+
+/* ---------------------------- doodle field ------------------------------ */
+// The scattered doodles, memoized: the now-playing context ticks every poll
+// (progress updates), re-rendering SongScapeInk — without the memo each tick
+// reconciles hundreds of <path>s, which lands exactly while the scape is
+// writing itself in. Only a real change (song, sketches, palette, theme,
+// layout) re-renders the field; every prop is referentially stable between those.
+const DoodleField = memo(function DoodleField({
+  songKey,
+  drops,
+  palette,
+  dark,
+  reduced,
+}: {
+  songKey: string;
+  drops: Stroke[];
+  palette: AlbumPalette;
+  dark: boolean;
+  reduced: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      <motion.g key={songKey} variants={container} initial="enter" animate="show" exit="leave">
+        {drops.map((d, i) => {
+          // the doodle wears the colour of the cover REGION it sits on,
+          // kept on-soul by blending with the warm/cool pole hue
+          const cell =
+            palette.grid[
+              Math.min(GRID - 1, Math.floor((d.oy / H) * GRID)) * GRID +
+                Math.min(GRID - 1, Math.floor((d.ox / W) * GRID))
+            ];
+          const hue = cell
+            ? mix(dropHue(palette, d.warmth), { r: cell.r, g: cell.g, b: cell.b }, 0.5)
+            : dropHue(palette, d.warmth);
+          const col = inkColor(palette, dark, hue);
+          const start = i * DOODLE_GAP; // assembly order
+          return (
+            // outer = exit lift (Motion); inner = scroll-swirl (CSS) — kept
+            // on separate elements so the two transforms never conflict.
+            <motion.g key={i} variants={doodleV}>
+              <g
+                className="ink-stroke-wrap"
+                style={{
+                  "--sdir": d.sdir.toFixed(2),
+                  "--depth": d.depth.toFixed(2),
+                  transformBox: "view-box",
+                  transformOrigin: `${d.ox.toFixed(1)}px ${d.oy.toFixed(1)}px`,
+                } as React.CSSProperties}
+              >
+                <g className="ink-stroke">
+                  {d.hairs.map((hr, k) => {
+                    const delay = start + hr.t0 * d.wt;
+                    const dur = Math.max(0.2, (hr.t1 - hr.t0) * d.wt);
+                    return (
+                      <path
+                        key={k}
+                        d={hr.d}
+                        pathLength={1}
+                        fill="none"
+                        stroke={cssRgb(col, hr.op * d.dim * (dark ? 0.92 : 0.96))}
+                        strokeWidth={hr.sw}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={reduced ? undefined : "ink-write"}
+                        style={
+                          reduced
+                            ? undefined
+                            : ({ "--wdur": `${dur.toFixed(2)}s`, "--wdelay": `${delay.toFixed(2)}s` } as React.CSSProperties)
+                        }
+                      />
+                    );
+                  })}
+                </g>
+              </g>
+            </motion.g>
+          );
+        })}
+      </motion.g>
+    </AnimatePresence>
+  );
+});
 
 /* ------------------------------ component ------------------------------ */
 export default function SongScapeInk() {
@@ -482,64 +571,13 @@ export default function SongScapeInk() {
         <g className="ink-sway">
           {/* playhead very gently spreads the ink as the song ages (--t) */}
           <g className="ink-diffuse">
-            <AnimatePresence>
-              <motion.g key={songKey} variants={container} initial="enter" animate="show" exit="leave">
-                {scape.drops.map((d, i) => {
-                  // the doodle wears the colour of the cover REGION it sits on,
-                  // kept on-soul by blending with the warm/cool pole hue
-                  const cell =
-                    palette.grid[
-                      Math.min(GRID - 1, Math.floor((d.oy / H) * GRID)) * GRID +
-                        Math.min(GRID - 1, Math.floor((d.ox / W) * GRID))
-                    ];
-                  const hue = cell
-                    ? mix(dropHue(palette, d.warmth), { r: cell.r, g: cell.g, b: cell.b }, 0.5)
-                    : dropHue(palette, d.warmth);
-                  const col = inkColor(palette, dark, hue);
-                  const start = i * DOODLE_GAP; // assembly order
-                  return (
-                    // outer = exit lift (Motion); inner = scroll-swirl (CSS) — kept
-                    // on separate elements so the two transforms never conflict.
-                    <motion.g key={i} variants={doodleV}>
-                      <g
-                        className="ink-stroke-wrap"
-                        style={{
-                          "--sdir": d.sdir.toFixed(2),
-                          "--depth": d.depth.toFixed(2),
-                          transformBox: "view-box",
-                          transformOrigin: `${d.ox.toFixed(1)}px ${d.oy.toFixed(1)}px`,
-                        } as React.CSSProperties}
-                      >
-                        <g className="ink-stroke">
-                          {d.hairs.map((hr, k) => {
-                            const delay = start + hr.t0 * d.wt;
-                            const dur = Math.max(0.2, (hr.t1 - hr.t0) * d.wt);
-                            return (
-                              <path
-                                key={k}
-                                d={hr.d}
-                                pathLength={1}
-                                fill="none"
-                                stroke={cssRgb(col, hr.op * d.dim * (dark ? 0.92 : 0.96))}
-                                strokeWidth={hr.sw}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className={reduced ? undefined : "ink-write"}
-                                style={
-                                  reduced
-                                    ? undefined
-                                    : ({ "--wdur": `${dur.toFixed(2)}s`, "--wdelay": `${delay.toFixed(2)}s` } as React.CSSProperties)
-                                }
-                              />
-                            );
-                          })}
-                        </g>
-                      </g>
-                    </motion.g>
-                  );
-                })}
-              </motion.g>
-            </AnimatePresence>
+            <DoodleField
+              songKey={songKey}
+              drops={scape.drops}
+              palette={palette}
+              dark={dark}
+              reduced={!!reduced}
+            />
           </g>
         </g>
 
