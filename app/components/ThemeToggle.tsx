@@ -10,7 +10,20 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true);
-    setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    // React 19 hydration reconciles <html>'s className, stripping the class the
+    // pre-paint script in layout.tsx added — re-derive and re-apply it here.
+    let next: Theme = "light";
+    try {
+      const stored = localStorage.getItem("theme");
+      if (
+        stored === "dark" ||
+        (!stored && matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        next = "dark";
+      }
+    } catch {}
+    document.documentElement.classList.toggle("dark", next === "dark");
+    setTheme(next);
   }, []);
 
   const toggle = () => {

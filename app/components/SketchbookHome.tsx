@@ -479,7 +479,9 @@ export default function SketchbookHome({
         </div>
 
         {/* right: the desk's edge, one continuous rail */}
-        <aside className="rise d2 flex flex-col gap-8 md:pt-4">
+        {/* min-w-0: let the fr track shrink so long track titles truncate
+            instead of blowing the grid past the viewport */}
+        <aside className="rise d2 flex min-w-0 flex-col gap-8 md:pt-4">
           <NowSpinningCard />
           {stack.length > 0 && <FreshStack posts={stack} />}
           <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />

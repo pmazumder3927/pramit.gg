@@ -311,19 +311,6 @@ export default function PostContent({
               <h1 className="mt-1 font-serif text-3xl font-medium leading-[1.04] tracking-tight text-ink sm:text-4xl md:text-5xl lg:text-6xl">
                 {post.title}
               </h1>
-
-              {post.tags.length > 0 && (
-                <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
-                  {post.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="font-hand text-xl text-accent-purple"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
             </header>
 
             {/* Media — taped into the page */}
@@ -409,6 +396,12 @@ export default function PostContent({
           <p className="font-hand text-lg text-ink-faint">
             — pramit <span className="text-accent-purple">✦</span> mazumder
           </p>
+
+          {post.tags.length > 0 && (
+            <p className="text-xs tracking-wide text-ink-faint">
+              filed under {post.tags.join(" · ")}
+            </p>
+          )}
 
           {/* a proof's location is the writing room — nothing to share yet */}
           {!preview && (
