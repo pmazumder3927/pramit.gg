@@ -5,7 +5,8 @@
 // dark) and styled to match the sketchbook look. Instrument text stays on the
 // readable sans/mono stacks; handwriting is reserved for the editorial caption.
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { track } from "@/app/lib/track";
 
 /** Theme-aware colors, pulled straight from the site's RGB-triplet CSS vars so
  *  every widget flips correctly between light and dark. `hit` is a data-viz
@@ -25,6 +26,25 @@ export const C = {
   hit: "#3aa76d",
   hitA: (a: number) => `rgba(58,167,109,${a})`,
 } as const;
+
+
+/** True once this widget's chunk has hydrated. The figures are SSR'd, so their
+ *  controls exist in the HTML long before they can respond — gate them so a
+ *  pre-hydration tap sees a disabled control instead of a dead one. */
+// One capture per pageview is plenty — the question the analytics need to
+// answer is "do readers touch the figures at all", not a per-click stream.
+let interactionNoted = false;
+function noteWidgetInteraction() {
+  if (interactionNoted) return;
+  interactionNoted = true;
+  track("widget_interacted", { path: window.location.pathname });
+}
+
+export function useHydrated() {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  return hydrated;
+}
 
 /** Card shell that matches the essay's figures — a sketch-card with a titled
  *  header, a hint chip, and a hand-written caption underneath. */
@@ -143,12 +163,17 @@ export function Toggle({
   children: React.ReactNode;
   accent?: string;
 }) {
+  const hydrated = useHydrated();
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        noteWidgetInteraction();
+        onClick();
+      }}
       aria-pressed={on}
-      className="min-h-8 rounded-full border px-3.5 py-1.5 font-sans text-sm font-medium leading-none transition-colors"
+      disabled={!hydrated}
+      className="min-h-8 rounded-full border px-3.5 py-1.5 font-sans text-sm font-medium leading-none transition-colors disabled:opacity-30"
       style={{
         borderColor: on ? accent : C.lineA(0.9),
         color: on ? accent : C.faint,
@@ -168,11 +193,16 @@ export function Btn({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  const hydrated = useHydrated();
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="min-h-8 rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-sans text-sm font-medium leading-none text-accent-orange transition-colors hover:bg-accent-orange/25"
+      onClick={() => {
+        noteWidgetInteraction();
+        onClick();
+      }}
+      disabled={!hydrated}
+      className="min-h-8 rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-sans text-sm font-medium leading-none text-accent-orange transition-colors hover:bg-accent-orange/25 disabled:opacity-30"
     >
       {children}
     </button>

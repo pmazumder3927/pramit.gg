@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FLICK_FIXTURE, type PhaseCode } from "./flickFixture";
-import { C, Stat, VizCard } from "./kit";
+import { C, Stat, VizCard, useHydrated } from "./kit";
 
 const f = FLICK_FIXTURE;
 const path = f.path;
@@ -104,6 +104,7 @@ const SLOWDOWN = 4; // real flick is 542 ms — play it back 4x slower to actual
 
 export default function FlickAnatomy() {
   const [time, setTime] = useState(0);
+  const hydrated = useHydrated();
   const [playing, setPlaying] = useState(true);
   const timeRef = useRef(0);
 
@@ -211,7 +212,8 @@ export default function FlickAnatomy() {
               onClick={() => setPlaying((v) => !v)}
               aria-label={playing ? "Pause replay" : "Play replay"}
               title={playing ? "Pause replay" : "Play replay"}
-              className="grid h-8 w-8 shrink-0 place-items-center border border-accent-orange/50 font-mono text-sm text-accent-orange"
+              disabled={!hydrated}
+              className="grid h-8 w-8 shrink-0 place-items-center border border-accent-orange/50 font-mono text-sm text-accent-orange disabled:opacity-30"
             >
               {playing ? "Ⅱ" : "▶"}
             </button>

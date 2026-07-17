@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HARNESS_FIXTURE } from "./openaimHarnessFixture";
-import { C, Stat, VizCard } from "./kit";
+import { C, Stat, VizCard, useHydrated } from "./kit";
 
 type Target = readonly [id: number, yaw: number, pitch: number, radius: number];
 type Frame = readonly [timeMs: number, targets: readonly Target[]];
@@ -75,6 +75,7 @@ function fmtMs(value: number | null) {
 export default function HarnessReplay() {
   const [clipId, setClipId] = useState("flick-advanced");
   const [time, setTime] = useState(0);
+  const hydrated = useHydrated();
   const [playing, setPlaying] = useState(true);
   const timeRef = useRef(0);
   const clip = clips.find((item) => item.id === clipId) ?? clips[0]!;
@@ -274,7 +275,8 @@ export default function HarnessReplay() {
               onClick={() => setPlaying((value) => !value)}
               aria-label={playing ? "Pause replay" : "Play replay"}
               title={playing ? "Pause replay" : "Play replay"}
-              className="grid h-8 w-8 shrink-0 place-items-center border border-accent-orange/50 font-mono text-sm text-accent-orange"
+              disabled={!hydrated}
+              className="grid h-8 w-8 shrink-0 place-items-center border border-accent-orange/50 font-mono text-sm text-accent-orange disabled:opacity-30"
             >
               {playing ? "Ⅱ" : "▶"}
             </button>
