@@ -258,6 +258,13 @@ interface LayerSpec {
   win1: number; // paint-time window (s)
 }
 
+export interface AvoidBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 export interface PaintOptions {
   dark?: boolean;
   seed?: number;
@@ -265,7 +272,70 @@ export interface PaintOptions {
   hold?: number;
   fade?: number;
   maxStrokes?: number;
+  /** rects (canvas css px) the paint flows AROUND — the page's readable
+   *  content. Strokes never seed inside them and deflect along their edges. */
+  avoid?: AvoidBox[];
 }
+
+/* ----------------------------- obstacles ------------------------------- */
+// The avoid rects, inflated by a margin and rasterized into a coarse cell mask
+// for O(1) hit tests along stroke growth. On a hit the containing box supplies
+// an edge tangent, so a stroke SLIDES along the content's border instead of
+// stopping dead — the paint squiggles around the words rather than leaving
+// stamped-out rectangles.
+function makeObstacles(boxes: AvoidBox[], w: number, h: number, margin: number) {
+  const cell = 8;
+  const gw = Math.max(1, Math.ceil(w / cell));
+  const gh = Math.max(1, Math.ceil(h / cell));
+  const mask = new Uint8Array(gw * gh);
+  const inflated = boxes.map((b) => ({
+    x0: b.x0 - margin,
+    y0: b.y0 - margin,
+    x1: b.x1 + margin,
+    y1: b.y1 + margin,
+  }));
+  for (const b of inflated) {
+    if (b.x1 < 0 || b.y1 < 0 || b.x0 > w || b.y0 > h) continue;
+    const cx0 = clamp(Math.floor(b.x0 / cell), 0, gw - 1);
+    const cy0 = clamp(Math.floor(b.y0 / cell), 0, gh - 1);
+    const cx1 = clamp(Math.ceil(b.x1 / cell), 0, gw - 1);
+    const cy1 = clamp(Math.ceil(b.y1 / cell), 0, gh - 1);
+    for (let cy = cy0; cy <= cy1; cy++)
+      mask.fill(1, cy * gw + cx0, cy * gw + cx1 + 1);
+  }
+  return {
+    hit(x: number, y: number): boolean {
+      // clamp INTO the grid rather than treating off-canvas as clear — strokes
+      // may run slightly off-screen, and content boxes touching a screen edge
+      // inflate past it; bailing here let those strokes sail through the words
+      const cx = clamp((x / cell) | 0, 0, gw - 1);
+      const cy = clamp((y / cell) | 0, 0, gh - 1);
+      return mask[cy * gw + cx] === 1;
+    },
+    // direction to continue with when (x,y) landed inside content: the tangent
+    // of the containing box's nearest edge, oriented with the heading and eased
+    // a touch outward so the stroke skims the boundary. Null when not resolvable.
+    slide(x: number, y: number, dx: number, dy: number): [number, number] | null {
+      for (const b of inflated) {
+        if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) continue;
+        const dl = x - b.x0,
+          dr = b.x1 - x,
+          dt = y - b.y0,
+          db = b.y1 - y;
+        const m = Math.min(dl, dr, dt, db);
+        const n: [number, number] =
+          m === dl ? [-1, 0] : m === dr ? [1, 0] : m === dt ? [0, -1] : [0, 1];
+        const s = -n[1] * dx + n[0] * dy >= 0 ? 1 : -1; // tangent that keeps the heading
+        const tx = -n[1] * s + n[0] * 0.35;
+        const ty = n[0] * s + n[1] * 0.35;
+        const l = Math.hypot(tx, ty) || 1;
+        return [tx / l, ty / l];
+      }
+      return null;
+    },
+  };
+}
+type Obstacles = ReturnType<typeof makeObstacles>;
 
 const colDist = (a: number[], b: number[]) =>
   Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
@@ -281,6 +351,9 @@ function growCenterline(
   maxSteps: number,
   step: number,
   colorThresh: number,
+  obstacles?: Obstacles | null,
+  jx = 0, // per-stroke wobble of the content boundary (jitters the sample
+  jy = 0, // point, so the avoided edge reads hand-rough, not ruled)
 ): number[] {
   const seedCol = colorAt(field, sx / scale, sy / scale);
   const walk = (sign: number): number[] => {
@@ -308,8 +381,19 @@ function growCenterline(
         dx /= l;
         dy /= l;
       }
-      const nx = x + dx * step,
+      let nx = x + dx * step,
         ny = y + dy * step;
+      // about to run into the page's content → slide along its edge instead;
+      // give up (end the stroke) only when cornered
+      if (obstacles && obstacles.hit(nx + jx, ny + jy)) {
+        const t = obstacles.slide(nx + jx, ny + jy, dx, dy);
+        if (!t) break;
+        dx = t[0];
+        dy = t[1];
+        nx = x + dx * step;
+        ny = y + dy * step;
+        if (obstacles.hit(nx + jx, ny + jy)) break;
+      }
       if (
         i > 0 &&
         colDist(colorAt(field, nx / scale, ny / scale), seedCol) > colorThresh
@@ -500,11 +584,20 @@ function* planPaintingGen(
     },
   ];
 
+  // content clearance per layer: a fixed halo + the brush's own half-spread
+  // (bristles fan out to ~R·0.675 from the centreline), so wide background
+  // strokes keep their bodies off the words, while fine strokes trace closer.
+  const AVOID_PAD = 10;
+  const avoid = opts.avoid && opts.avoid.length ? opts.avoid : null;
+
   const strokes: Stroke[] = [];
   for (let li = 0; li < layers.length && strokes.length < maxStrokes; li++) {
     const L = layers[li];
     const step = L.R * 0.55;
     const colorThresh = 70;
+    const obstacles = avoid
+      ? makeObstacles(avoid, w, h, AVOID_PAD + L.R * 0.8)
+      : null;
     const occ = makeOccupancy(L.dsep);
     // jittered seed grid, shuffled
     const seeds: [number, number][] = [];
@@ -529,6 +622,11 @@ function* planPaintingGen(
       if (occ.taken(sxp, syp)) continue;
       if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin)
         continue;
+      // per-stroke wobble of the content boundary — the rng draws happen only
+      // on the avoiding path, so a plan with no avoid rects stays bit-identical
+      const jx = obstacles ? (rng() - 0.5) * 14 : 0;
+      const jy = obstacles ? (rng() - 0.5) * 14 : 0;
+      if (obstacles && obstacles.hit(sxp + jx, syp + jy)) continue;
       const line = growCenterline(
         field,
         scale,
@@ -539,6 +637,9 @@ function* planPaintingGen(
         L.maxSteps,
         step,
         colorThresh,
+        obstacles,
+        jx,
+        jy,
       );
       const N = line.length / 2;
       if (N < 2) continue;

@@ -74,20 +74,45 @@ interface NowPlayingTrack {
   playedAtMs?: number | null;
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Throws on non-OK so SWR surfaces API failures as `error` (with retry)
+// instead of rendering a false "no tracks found" empty state.
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`spotify request failed: ${res.status}`);
+  return res.json();
+};
+
+// now-playing is different: even its error responses carry a settled
+// "nothing playing" JSON payload. Parse instead of throwing so a persistent
+// upstream failure resolves the panel rather than leaving the ghost interior
+// looking like it's loading forever.
+const nowPlayingFetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // Preload all Spotify data as soon as this module is imported on the client
 // (i.e. when Next.js prefetches the music page on link hover) so the SWR cache
 // is already warm by the time the component mounts. Guarded to the browser —
-// on the server these relative URLs can't be parsed and would throw.
+// on the server these relative URLs can't be parsed and would throw. The
+// catches only silence "unhandled rejection" noise when a preload fails before
+// the page mounts — SWR still consumes the original promise (and its error).
 if (typeof window !== "undefined") {
-  preload("/api/spotify/now-playing", fetcher);
-  preload("/api/spotify/recently-played", fetcher);
-  preload("/api/spotify/top-tracks", fetcher);
-  preload("/api/spotify/playlists", fetcher);
+  preload("/api/spotify/now-playing", nowPlayingFetcher).catch(() => {});
+  preload("/api/spotify/recently-played", fetcher).catch(() => {});
+  preload("/api/spotify/top-tracks", fetcher).catch(() => {});
+  preload("/api/spotify/playlists", fetcher).catch(() => {});
 }
 
-export default function MusicClient() {
+interface MusicClientProps {
+  /** Server-fetched payloads (ISR) — seed SWR so first paint has real data */
+  initialRecentlyPlayed?: { tracks: SpotifyTrack[] };
+  initialTopTracks?: { tracks: SpotifyTrack[] };
+  initialPlaylists?: { playlists: SpotifyPlaylist[] };
+}
+
+export default function MusicClient({
+  initialRecentlyPlayed,
+  initialTopTracks,
+  initialPlaylists,
+}: MusicClientProps = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
@@ -136,23 +161,38 @@ export default function MusicClient() {
 
   const { data: nowPlaying } = useSWR<NowPlayingTrack>(
     "/api/spotify/now-playing",
-    fetcher,
+    nowPlayingFetcher,
     { refreshInterval: 30000 },
   );
-  const { data: recentlyPlayed } = useSWR<{ tracks: SpotifyTrack[] }>(
+  const {
+    data: recentlyPlayed,
+    error: recentError,
+    isLoading: recentLoading,
+    mutate: mutateRecent,
+  } = useSWR<{ tracks: SpotifyTrack[] }>(
     "/api/spotify/recently-played",
     fetcher,
-    { refreshInterval: 60000 },
+    { refreshInterval: 60000, fallbackData: initialRecentlyPlayed },
   );
-  const { data: topTracks } = useSWR<{ tracks: SpotifyTrack[] }>(
+  const {
+    data: topTracks,
+    error: topError,
+    isLoading: topLoading,
+    mutate: mutateTop,
+  } = useSWR<{ tracks: SpotifyTrack[] }>(
     "/api/spotify/top-tracks",
     fetcher,
-    { refreshInterval: 300000 },
+    { refreshInterval: 300000, fallbackData: initialTopTracks },
   );
-  const { data: playlists } = useSWR<{ playlists: SpotifyPlaylist[] }>(
+  const {
+    data: playlists,
+    error: playlistsError,
+    isLoading: playlistsLoading,
+    mutate: mutatePlaylists,
+  } = useSWR<{ playlists: SpotifyPlaylist[] }>(
     "/api/spotify/playlists",
     fetcher,
-    { refreshInterval: 600000 },
+    { refreshInterval: 600000, fallbackData: initialPlaylists },
   );
 
   // Collapse on-loop runs so a song played 10× in a row is one row, not ten.
@@ -339,7 +379,14 @@ export default function MusicClient() {
                 </button>
               </div>
 
-              <p className="mt-3 -rotate-1 font-hand text-lg text-ink-faint">
+              {/* invisible (not removed) while the panel is open so nothing
+                  shifts — the button reads "maybe later" then, and the arrow
+                  pointing at it would lie */}
+              <p
+                className={`mt-3 -rotate-1 font-hand text-lg text-ink-faint ${
+                  showSuggest ? "invisible" : ""
+                }`}
+              >
                 ↑ suggest me a song
               </p>
             </motion.div>
@@ -365,15 +412,15 @@ export default function MusicClient() {
               )}
             </AnimatePresence>
 
-            {/* Now Playing */}
-            {nowPlaying && (
-              <ChaoticNowPlaying
-                nowPlaying={nowPlaying}
-                accentColor={nowPlayingColor}
-                mouseX={mouseX}
-                mouseY={mouseY}
-              />
-            )}
+            {/* Now Playing — the frame is always mounted so the tabs and
+                tracklist below never jump when the fetch lands; the panel's
+                interior inks itself in once the song arrives. */}
+            <ChaoticNowPlaying
+              nowPlaying={nowPlaying ?? null}
+              accentColor={nowPlayingColor}
+              mouseX={mouseX}
+              mouseY={mouseY}
+            />
 
             {/* Tabs */}
             <ChaoticTabs
@@ -394,19 +441,27 @@ export default function MusicClient() {
                 className="space-y-2.5 md:space-y-3"
                 style={{ x: trackPX, y: trackPY }}
               >
-                {recentTracks.map((track, index) => (
-                  <ChaoticTrackCard
-                    key={track.id + index}
-                    track={track}
-                    index={index}
-                    repeatCount={track.repeatCount}
-                  />
-                ))}
-                {recentTracks.length === 0 && (
-                  <EmptyState
-                    emoji="🎵"
-                    message="No recently played tracks found."
-                  />
+                {recentLoading && !recentlyPlayed ? (
+                  <PlaceholderTrackRows />
+                ) : recentError && !recentlyPlayed ? (
+                  <CrateNote onRetry={() => mutateRecent()} />
+                ) : (
+                  <>
+                    {recentTracks.map((track, index) => (
+                      <ChaoticTrackCard
+                        key={track.id + index}
+                        track={track}
+                        index={index}
+                        repeatCount={track.repeatCount}
+                      />
+                    ))}
+                    {recentTracks.length === 0 && (
+                      <EmptyState
+                        emoji="🎵"
+                        message="No recently played tracks found."
+                      />
+                    )}
+                  </>
                 )}
               </motion.div>
             </div>
@@ -419,16 +474,24 @@ export default function MusicClient() {
                 className="space-y-2.5 md:space-y-3"
                 style={{ x: trackPX, y: trackPY }}
               >
-                {topTracks?.tracks.map((track, index) => (
-                  <ChaoticTrackCard
-                    key={track.id}
-                    track={track}
-                    index={index}
-                    isTopTrack
-                  />
-                ))}
-                {(!topTracks || topTracks.tracks.length === 0) && (
-                  <EmptyState emoji="🏆" message="No top tracks found." />
+                {topLoading && !topTracks ? (
+                  <PlaceholderTrackRows />
+                ) : topError && !topTracks ? (
+                  <CrateNote onRetry={() => mutateTop()} />
+                ) : (
+                  <>
+                    {topTracks?.tracks.map((track, index) => (
+                      <ChaoticTrackCard
+                        key={track.id}
+                        track={track}
+                        index={index}
+                        isTopTrack
+                      />
+                    ))}
+                    {(!topTracks || topTracks.tracks.length === 0) && (
+                      <EmptyState emoji="🏆" message="No top tracks found." />
+                    )}
+                  </>
                 )}
               </motion.div>
             </div>
@@ -444,17 +507,27 @@ export default function MusicClient() {
                 className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
                 style={{ x: listPX, y: listPY }}
               >
-                {playlists?.playlists.map((playlist, index) => (
-                  <ChaoticPlaylistCard
-                    key={playlist.id}
-                    playlist={playlist}
-                    index={index}
-                  />
-                ))}
-                {(!playlists || playlists.playlists.length === 0) && (
+                {playlistsLoading && !playlists ? (
+                  <PlaceholderPlaylistCells />
+                ) : playlistsError && !playlists ? (
                   <div className="col-span-full">
-                    <EmptyState emoji="📀" message="No playlists found." />
+                    <CrateNote onRetry={() => mutatePlaylists()} />
                   </div>
+                ) : (
+                  <>
+                    {playlists?.playlists.map((playlist, index) => (
+                      <ChaoticPlaylistCard
+                        key={playlist.id}
+                        playlist={playlist}
+                        index={index}
+                      />
+                    ))}
+                    {(!playlists || playlists.playlists.length === 0) && (
+                      <div className="col-span-full">
+                        <EmptyState emoji="📀" message="No playlists found." />
+                      </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             </div>
@@ -483,6 +556,77 @@ function SheetHeading({ label, sub }: { label: string; sub: string }) {
       >
         {sub}
       </HandNote>
+    </div>
+  );
+}
+
+// Blank tracklist lines — the exact box of a loaded track card (same paddings,
+// art-stub square, dotted leader) drawn faint and dashed, like numbered rows
+// waiting to be inked in. No pulse, no shimmer — it's just paper. Only shows
+// when the server-seeded fallbackData is missing (the safety net).
+function PlaceholderTrackRows({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="rounded-[3px] border-2 border-dashed border-line/70 bg-paper-2/40 px-3 py-3 pl-4 opacity-70 md:px-5 md:py-4 md:pl-6"
+          style={{ transform: `rotate(${i % 2 === 0 ? -0.6 : 0.5}deg)` }}
+        >
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-7 flex-shrink-0 text-center font-hand text-2xl leading-none text-ink-faint md:w-9 md:text-3xl">
+              {(i + 1).toString().padStart(2, "0")}
+            </div>
+            <div className="h-12 w-12 flex-shrink-0 rounded-[2px] border border-dashed border-line bg-paper-2/60 md:h-14 md:w-14" />
+            <div className="min-w-0 flex-1 self-center border-b border-dotted border-line pb-1" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// Empty mixtape sleeves for the playlist wall — same card box (border, p-2,
+// min-height, artwork window) as a loaded small ChaoticPlaylistCard, faint.
+function PlaceholderPlaylistCells({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="relative flex flex-col rounded-[3px] border border-dashed border-line/80 bg-paper-2/40 p-2 opacity-70"
+          style={{
+            minHeight: "160px",
+            transform: `rotate(${i % 2 === 0 ? -0.8 : 0.7}deg)`,
+          }}
+        >
+          <div className="flex-1 rounded-[2px] border border-dashed border-line/70 bg-paper-2/60" />
+          <div className="px-1 pt-2">
+            <div className="h-5 w-2/3 border-b border-dashed border-line" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// In-idiom failure note with a retry — same jotted voice and dashed-underline
+// affordance as the suggest box's "the mailbox jammed" note.
+function CrateNote({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="py-14 text-center">
+      <p className="-rotate-1 font-hand text-2xl text-accent-rust">
+        the record crate is jammed
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-3 font-hand text-lg text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
+      >
+        try again
+      </button>
     </div>
   );
 }

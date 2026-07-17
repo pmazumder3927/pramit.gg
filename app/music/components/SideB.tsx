@@ -12,6 +12,7 @@ import {
   Tape,
   TornEdge,
 } from "@/app/components/sketchbook";
+import { track } from "@/app/lib/track";
 import CassetteReels from "@/app/music/components/CassetteReels";
 import MailedRack from "@/app/music/components/MailedRack";
 import SideBResultRow, {
@@ -196,8 +197,11 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
           note: note.trim() || undefined,
         }),
       });
-      if (res.ok) outcome = "filed";
-      else if (res.status === 409) outcome = "duplicate";
+      if (res.ok) {
+        outcome = "filed";
+        // fire at the true success point (before any unmount early-return)
+        track("suggestion_submitted", { has_note: note.trim().length > 0 });
+      } else if (res.status === 409) outcome = "duplicate";
       else outcome = "error";
     } catch {
       outcome = "error";
@@ -257,7 +261,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
               suggest me a song
             </h3>
             <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-              search spotify for a song recommendation for me. it will randoml
+              search spotify for a song recommendation for me. it will randomly
               enter my playlist one day and I will wonder if I have dementia.
             </p>
           </div>
@@ -368,7 +372,9 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                     <Stamp tone="ink" rotate={-3}>
                       a song for pramit
                     </Stamp>
-                    <CassetteReels spinning={previewingId !== null} />
+                    {/* reels also spin while digging through the crate — the
+                        visible "working on it" cue during a slow search */}
+                    <CassetteReels spinning={previewingId !== null || searching} />
                     <Stamp
                       tone="rust"
                       rotate={3}
@@ -418,7 +424,10 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                           onKeyDown={handleSearchKeys}
-                          disabled={busy}
+                          // never disabled: the search effect debounces and
+                          // aborts the in-flight request per keystroke, so
+                          // typing mid-search always searches the latest query
+                          // (a disabled input just eats clicks and reads dead)
                           placeholder="search a song — title, artist, lyric..."
                           autoComplete="off"
                           aria-label="search for a song to suggest"
@@ -533,7 +542,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                         }
                         disabled={busy}
                         placeholder="it reminds me of..."
-                        className="w-full rounded-[3px] border-[1.4px] border-line bg-paper-2/50 px-3 py-2 font-serif text-sm text-ink placeholder:text-ink-faint focus:border-accent-rust/50 focus:outline-none"
+                        className="w-full rounded-[3px] border-[1.4px] border-line bg-paper-2/50 px-3 py-2 font-serif text-base text-ink placeholder:text-ink-faint focus:border-accent-rust/50 focus:outline-none sm:text-sm"
                       />
                     </div>
                   )}

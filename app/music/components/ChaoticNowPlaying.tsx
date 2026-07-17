@@ -20,7 +20,9 @@ interface NowPlayingTrack {
 }
 
 interface ChaoticNowPlayingProps {
-  nowPlaying: NowPlayingTrack;
+  /** null while the client fetch is in flight — the panel frame still renders
+   *  (with a blank-liner interior) so nothing below it shifts when data lands */
+  nowPlaying: NowPlayingTrack | null;
   accentColor: string;
   mouseX: ReturnType<typeof useMotionValue<number>>;
   mouseY: ReturnType<typeof useMotionValue<number>>;
@@ -58,8 +60,9 @@ export function ChaoticNowPlaying({
 
   // nothing spinning, but the song is still ECHOING — replaying on a loop in
   // the scape, anchored to when it was last played. Keep time with it here.
-  const dur = nowPlaying.duration ?? 0;
-  const echoing = !nowPlaying.isPlaying && !!nowPlaying.playedAtMs && dur > 0;
+  const dur = nowPlaying?.duration ?? 0;
+  const echoing =
+    !!nowPlaying && !nowPlaying.isPlaying && !!nowPlaying.playedAtMs && dur > 0;
   const [now, setNow] = useState(0);
   useEffect(() => {
     if (!echoing) return;
@@ -68,9 +71,11 @@ export function ChaoticNowPlaying({
     return () => clearInterval(id);
   }, [echoing]);
   const echoProgress =
-    echoing && now ? (((now - (nowPlaying.playedAtMs ?? 0)) % dur) + dur) % dur : 0;
+    echoing && now
+      ? (((now - (nowPlaying?.playedAtMs ?? 0)) % dur) + dur) % dur
+      : 0;
 
-  const pct = nowPlaying.isPlaying
+  const pct = nowPlaying?.isPlaying
     ? nowPlaying.progress && dur
       ? (nowPlaying.progress / dur) * 100
       : 0
@@ -87,7 +92,9 @@ export function ChaoticNowPlaying({
       style={{ x: springX, y: springY }}
       className="relative mx-auto mb-16 max-w-3xl md:mb-24"
     >
-      {/* pop-art starburst badge — the single status label */}
+      {/* pop-art starburst badge — the single status label. Absolute, so it
+          pops in with the song without moving anything. */}
+      {nowPlaying && (
       <div className="absolute right-1 -top-7 z-30 h-[4.5rem] w-[4.5rem] rotate-6 md:-right-8 md:-top-10 md:h-28 md:w-28">
         <svg viewBox="-50 -50 100 100" className="h-full w-full" style={{ filter: "drop-shadow(2px 3px 0 rgb(var(--fg) / 0.5))" }}>
           <polygon points={BURST} fill={accentColor} stroke="rgb(var(--fg))" strokeWidth="2.5" strokeLinejoin="round" />
@@ -104,6 +111,7 @@ export function ChaoticNowPlaying({
           </span>
         </span>
       </div>
+      )}
 
       {/* the comic panel — hard offset shadow in the album's color */}
       <div
@@ -124,6 +132,7 @@ export function ChaoticNowPlaying({
           style={{ background: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)` }}
         />
 
+        {nowPlaying ? (
         <div className="relative z-10 flex flex-col items-center gap-7 md:flex-row md:items-center md:gap-10">
           {/* Album art — popped, thick frame, hard album-color shadow */}
           <div className="relative shrink-0 -rotate-2">
@@ -242,6 +251,51 @@ export function ChaoticNowPlaying({
             )}
           </div>
         </div>
+        ) : (
+        /* the blank panel — same flex frame, an empty sleeve where the art
+           goes, and blank liner lines set in the exact type sizes so the
+           ghost holds the loaded panel's height (echo layout: title, artist,
+           album, progress loop, spotify pill). Dashed, faint, no motion. */
+        <div className="relative z-10 flex flex-col items-center gap-7 md:flex-row md:items-center md:gap-10">
+          <div className="relative shrink-0 -rotate-2">
+            <div className="border-[3px] border-dashed border-ink/30 bg-paper-2/40">
+              <div className="h-40 w-40 md:h-48 md:w-48" />
+            </div>
+          </div>
+
+          <div className="flex w-full flex-1 flex-col text-center md:text-left">
+            <h2 className="font-serif text-3xl font-semibold leading-[0.98] tracking-tight md:text-[2.7rem]">
+              <span className="inline-block w-56 max-w-full border-b-2 border-dashed border-line align-baseline md:w-72">
+                &nbsp;
+              </span>
+            </h2>
+            <p className="mt-1.5 font-serif text-lg italic md:text-xl">
+              <span className="inline-block w-36 max-w-full border-b border-dashed border-line/80 align-baseline md:w-44">
+                &nbsp;
+              </span>
+            </p>
+            <p className="mt-0.5 font-mono text-xs uppercase tracking-[0.14em]">
+              <span className="inline-block w-24 max-w-full border-b border-dashed border-line/60 align-baseline">
+                &nbsp;
+              </span>
+            </p>
+
+            <div className="mt-5 space-y-1.5">
+              <div className="h-2.5 rounded-full border-2 border-dashed border-line bg-paper-2/50" />
+              <div className="flex justify-between font-mono text-xs text-ink-faint/50">
+                <span>-:--</span>
+                <span>-:--</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-center md:justify-start">
+              <span className="inline-flex items-center gap-2 rounded-full border-[2.5px] border-dashed border-line px-5 py-2 font-mono text-xs font-bold uppercase tracking-widest">
+                <span className="inline-block w-24">&nbsp;</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        )}
 
         <Doodle name="squiggle" tone="rust" className="absolute -bottom-3 right-8 h-4 w-24 opacity-70" strokeWidth={2.5} />
       </div>

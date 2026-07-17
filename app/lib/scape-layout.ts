@@ -40,33 +40,27 @@ export function visibleBox(): Box {
   };
 }
 
-// Measure the visible foreground content and map its screen rects into view-box
-// space, so the backdrop can steer clear of it. We walk TEXT NODES (not elements)
-// and measure each visible run with a Range — this captures text precisely no
-// matter how it's nested, including mixed-content like <h1>pramit mazumder<span>.
-// </span></h1> whose name lives in a bare text node an element scan would miss.
-// Plus interactive/media (buttons, links, inputs, images) which may be icon-only.
-// Backdrop content (aria-hidden) and opted-out chrome ([data-lyrics-ignore], e.g.
-// the post TOC) are skipped; [data-avoid-lyrics] force-includes anything missed.
-export function collectForeground(pad = 18): Box[] {
+// Measure the visible foreground content in raw viewport CSS px. We walk TEXT
+// NODES (not elements) and measure each visible run with a Range — this
+// captures text precisely no matter how it's nested, including mixed-content
+// like <h1>pramit mazumder<span>.</span></h1> whose name lives in a bare text
+// node an element scan would miss. Plus interactive/media (buttons, links,
+// inputs, images) which may be icon-only. Backdrop content (aria-hidden) and
+// opted-out chrome ([data-lyrics-ignore], e.g. the post TOC) are skipped;
+// [data-avoid-lyrics] force-includes anything missed. Used directly by the
+// canvas repaint (CoverReveal paints AROUND these rects); collectForeground
+// below maps them into the backdrop SVG's view-box space for doodles + lyrics.
+export function collectForegroundRects(): Box[] {
   if (typeof window === "undefined") return [];
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   if (!vw || !vh) return [];
-  const scale = Math.max(vw / VB_W, vh / VB_H); // slice = cover
-  const offX = (vw - VB_W * scale) / 2;
-  const offY = (vh - VB_H * scale) / 2;
 
   const boxes: Box[] = [];
   const push = (r: DOMRect) => {
     if (r.width < 6 || r.height < 6) return;
     if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) return; // offscreen
-    boxes.push({
-      x0: (r.left - offX) / scale - pad,
-      y0: (r.top - offY) / scale - pad,
-      x1: (r.right - offX) / scale + pad,
-      y1: (r.bottom - offY) / scale + pad,
-    });
+    boxes.push({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom });
   };
   const hidden = (el: Element | null): boolean => {
     if (!el) return true;
@@ -94,4 +88,22 @@ export function collectForeground(pad = 18): Box[] {
       if (!hidden(el)) push(el.getBoundingClientRect());
     });
   return boxes;
+}
+
+// The same foreground, mapped into the 1600×900 view-box space (inverting the
+// slice mapping) and padded — the space the doodles and lyrics lay out in.
+export function collectForeground(pad = 18): Box[] {
+  if (typeof window === "undefined") return [];
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (!vw || !vh) return [];
+  const scale = Math.max(vw / VB_W, vh / VB_H); // slice = cover
+  const offX = (vw - VB_W * scale) / 2;
+  const offY = (vh - VB_H * scale) / 2;
+  return collectForegroundRects().map((r) => ({
+    x0: (r.x0 - offX) / scale - pad,
+    y0: (r.y0 - offY) / scale - pad,
+    x1: (r.x1 - offX) / scale + pad,
+    y1: (r.y1 - offY) / scale + pad,
+  }));
 }

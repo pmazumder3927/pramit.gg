@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
 import { analyzeCover, planPaintingAsync, animatePainting, type PaintController } from "@/app/lib/painterly";
+import { collectForegroundRects } from "@/app/lib/scape-layout";
 
 const HOLD = 1.6; // s the paint sits wet before it begins to dry
 const FADE = 8.5; // s slow dry-out (paint drying)
@@ -104,10 +105,14 @@ export default function CoverReveal() {
         finish();
         return;
       }
+      // the paint flows AROUND the page's readable content (same measurement
+      // the lyrics use), squiggling along its edges instead of washing under
+      // the words. Measured at paint start — viewport px, like the canvas.
+      const avoid = collectForegroundRects();
       // plan in frame-budgeted slices — the stroke planner is the one big
       // synchronous block, and running it whole caused a visible hitch right
       // as the repaint (and the doodles' write-in) kicked off
-      plan = planPaintingAsync(an.rgb, an.AW, an.AH, w, h, { dark, seed: fnv(active.key) });
+      plan = planPaintingAsync(an.rgb, an.AW, an.AH, w, h, { dark, seed: fnv(active.key), avoid });
       plan.promise.then((painting) => {
         if (!alive || !painting) return;
         ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), () => {
