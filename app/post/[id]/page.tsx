@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Post, analyzeContent, stripWorkingCopy } from "@/app/lib/supabase";
+import { extractImageUrls, probeImageDims } from "@/app/lib/imageDims";
 import PostContent, { type PostNav } from "./PostContent";
 import PostMarkdown from "./PostMarkdown";
 import { createPublicClient } from "@/utils/supabase/server";
@@ -37,33 +38,71 @@ const fetchPost = cache(async (identifier: string): Promise<Post | null> => {
   }
 });
 
-// Adjacent published posts (one newer, one older) for end-of-entry navigation.
-const fetchNeighbors = cache(
-  async (
-    createdAt: string,
-  ): Promise<{ prev: PostNav | null; next: PostNav | null }> => {
+// Onward navigation: the adjacent newer entry, the adjacent older entry, and
+// the most tag-similar entry. Readers overwhelmingly arrive from topic-specific
+// link drops (robotics forums, HN) — analytics showed they scroll to the end of
+// the entry and still leave, so the footer's second card offers the most
+// kindred entry rather than the merely chronological one.
+type Onward = {
+  prev: PostNav | null;
+  next: PostNav | null;
+  kindred: PostNav | null;
+};
+
+type OnwardRow = { slug: string; title: string; type: string; tags?: string[] | null };
+
+const fetchOnward = cache(
+  async (slug: string, createdAt: string, tags: string[]): Promise<Onward> => {
     try {
       const supabase = createPublicClient();
-      const [{ data: newer }, { data: older }] = await Promise.all([
-        supabase
-          .from("posts")
-          .select("slug,title,type")
-          .eq("is_draft", false)
-          .gt("created_at", createdAt)
-          .order("created_at", { ascending: true })
-          .limit(1),
-        supabase
-          .from("posts")
-          .select("slug,title,type")
-          .eq("is_draft", false)
-          .lt("created_at", createdAt)
-          .order("created_at", { ascending: false })
-          .limit(1),
-      ]);
-      return { prev: newer?.[0] ?? null, next: older?.[0] ?? null };
+      const [{ data: newer }, { data: older }, { data: related }] =
+        await Promise.all([
+          supabase
+            .from("posts")
+            .select("slug,title,type")
+            .eq("is_draft", false)
+            .gt("created_at", createdAt)
+            .order("created_at", { ascending: true })
+            .limit(1),
+          supabase
+            .from("posts")
+            .select("slug,title,type")
+            .eq("is_draft", false)
+            .lt("created_at", createdAt)
+            .order("created_at", { ascending: false })
+            .limit(1),
+          tags.length
+            ? supabase
+                .from("posts")
+                .select("slug,title,type,tags")
+                .eq("is_draft", false)
+                .neq("slug", slug)
+                .overlaps("tags", tags)
+                .order("created_at", { ascending: false })
+                .limit(20)
+            : Promise.resolve({ data: [] as OnwardRow[] }),
+        ]);
+
+      const prev = (newer?.[0] as OnwardRow | undefined) ?? null;
+      const next = (older?.[0] as OnwardRow | undefined) ?? null;
+
+      const tagSet = new Set(tags);
+      const kindred =
+        ((related ?? []) as OnwardRow[])
+          .map((p) => ({
+            p,
+            overlap: (p.tags ?? []).filter((t) => tagSet.has(t)).length,
+          }))
+          // never duplicate the newer card sitting beside it
+          .filter((x) => x.overlap > 0 && x.p.slug !== prev?.slug)
+          .sort((a, b) => b.overlap - a.overlap)[0]?.p ?? null;
+
+      const pick = (p: OnwardRow | null) =>
+        p ? { slug: p.slug, title: p.title, type: p.type as Post["type"] } : null;
+      return { prev: pick(prev), next: pick(next), kindred: pick(kindred) };
     } catch (error) {
-      console.error("Error fetching neighbors:", error);
-      return { prev: null, next: null };
+      console.error("Error fetching onward posts:", error);
+      return { prev: null, next: null, kindred: null };
     }
   },
 );
@@ -136,7 +175,11 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  const { prev, next } = await fetchNeighbors(post.created_at);
+  const [{ prev, next, kindred }, imageDims] = await Promise.all([
+    fetchOnward(post.slug, post.created_at, post.tags ?? []),
+    // intrinsic sizes for inline images so the sheet doesn't reflow mid-read
+    probeImageDims(extractImageUrls(post.content || "")),
+  ]);
 
   const postUrl = `${siteConfig.url}/post/${post.slug}`;
   const schemaImage =
@@ -161,10 +204,11 @@ export default async function PostPage({ params }: PostPageProps) {
         <PostContent
           key={post.id}
           post={{ ...post, content: "" }}
-          body={<PostMarkdown content={post.content} />}
+          body={<PostMarkdown content={post.content} imageDims={imageDims} />}
           readingTime={analyzeContent(post.content || "").readingTime}
           prev={prev}
           next={next}
+          kindred={kindred}
         />
       </main>
     </div>

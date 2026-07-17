@@ -6,6 +6,7 @@
 // client references. The writing room imports this same component from its
 // client code, where it renders live against the draft as it's typed.
 import ReactMarkdown from "react-markdown";
+import Image from "next/image";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -13,6 +14,8 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
 import PlotlyGraph from "@/app/components/PlotlyGraph";
+import { canOptimizeImage } from "@/app/lib/optimizedHosts";
+import type { ImageDims } from "@/app/lib/imageDims";
 // Generic per-post custom-tag widgets (each post's pack is code-split; see
 // app/components/post-widgets.tsx). Keeps post-specific visuals out of here.
 import { postWidgetComponents, postWidgetTags } from "@/app/components/post-widgets";
@@ -40,7 +43,15 @@ function getLang(codeNode: any): string {
   return m ? m.replace("language-", "") : "";
 }
 
-export default function PostMarkdown({ content }: { content: string }) {
+export default function PostMarkdown({
+  content,
+  imageDims,
+}: {
+  content: string;
+  /** intrinsic sizes probed server-side (app/lib/imageDims) so inline images
+   *  reserve their box before loading; absent in the writing room's live proof */
+  imageDims?: Record<string, ImageDims>;
+}) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
@@ -116,20 +127,38 @@ export default function PostMarkdown({ content }: { content: string }) {
         },
         img: (props) => {
           const { src, alt } = props;
+          const url = typeof src === "string" ? src : "";
+          const altText = typeof alt === "string" ? alt : "";
+          const dims = imageDims?.[url];
           return (
             <span className="my-10 block md:my-12">
               <span className="block rounded-md border border-line bg-card p-3 shadow-paper dark:shadow-paper-lg">
                 <span className="block overflow-hidden rounded bg-paper-2 dark:[box-shadow:inset_0_1px_0_rgb(var(--fg)/0.06)]">
-                  {/* author images come from arbitrary hosts; a plain
-                      lazy <img> avoids next/image remotePatterns 500s */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={typeof src === "string" ? src : ""}
-                    alt={typeof alt === "string" ? alt : ""}
-                    loading="lazy"
-                    decoding="async"
-                    className="block h-auto w-full object-cover"
-                  />
+                  {dims && canOptimizeImage(url) ? (
+                    // known size + allowlisted host: reserve the box (no
+                    // mid-read reflow) and serve resized AVIF/WebP
+                    <Image
+                      src={url}
+                      alt={altText}
+                      width={dims.width}
+                      height={dims.height}
+                      sizes="(min-width: 640px) 42rem, 100vw"
+                      className="block h-auto w-full"
+                    />
+                  ) : (
+                    /* arbitrary hosts skip next/image (remotePatterns 500s);
+                       probed dimensions still reserve the box when known */
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={url}
+                      alt={altText}
+                      width={dims?.width}
+                      height={dims?.height}
+                      loading="lazy"
+                      decoding="async"
+                      className="block h-auto w-full object-cover"
+                    />
+                  )}
                 </span>
               </span>
               {alt ? (
@@ -289,6 +318,13 @@ export default function PostMarkdown({ content }: { content: string }) {
         em: ({ children }) => (
           <em className="italic text-ink">{children}</em>
         ),
+        // Raw iframes (playground embeds) boot lazily — a post with six
+        // scenes shouldn't spin up six documents before the reader arrives.
+        iframe: (props: any) => {
+          const { node, ...rest } = props;
+          // eslint-disable-next-line jsx-a11y/iframe-has-title
+          return <iframe loading="lazy" {...rest} />;
+        },
         "plotly-graph": (props: any) => {
           const { src, title, height } = props;
           return (

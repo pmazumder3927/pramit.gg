@@ -6,6 +6,11 @@ export const alt = "pramit.gg post";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// Cache the rendered card like the post itself — link unfurls during a spike
+// were paying a ~1s uncached render per crawler fetch. The explicit
+// Cache-Control on the ImageResponse below is what the CDN honors.
+export const revalidate = 300;
+
 const TYPE_LABEL: Record<string, string> = {
   musing: "a musing",
   journey: "a journey",
@@ -98,6 +103,11 @@ export default async function PostOgImage({
         </div>
       </div>
     ),
-    { ...size },
+    {
+      ...size,
+      headers: {
+        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+      },
+    },
   );
 }

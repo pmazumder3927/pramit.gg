@@ -11,12 +11,21 @@ import OwnerEditLink from "@/app/components/OwnerEditLink";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
 
-// Lazy load ReactPlayer - only loads when actually needed
+// Lazy load ReactPlayer - only loads when actually needed. The placeholder
+// keeps the journal voice (no stock spinner) at the same reserved height.
 const ReactPlayer = dynamic(() => import("react-player/lazy"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-40 bg-paper-2/60 rounded-xl animate-pulse flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-line border-t-accent-orange rounded-full animate-spin" />
+    <div className="flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 rounded-xl bg-paper-2/60">
+      <Doodle
+        name="squiggle"
+        tone="orange"
+        className="h-4 w-16 opacity-60"
+        strokeWidth={2.5}
+      />
+      <span className="font-hand text-lg text-ink-faint">
+        winding the tape…
+      </span>
     </div>
   ),
 });
@@ -36,6 +45,9 @@ interface PostContentProps {
   readingTime?: number;
   prev?: PostNav | null; // a newer entry
   next?: PostNav | null; // an older entry
+  /** the most tag-similar other entry — shown in place of the older-entry
+   *  card when it exists, since link-drop readers follow topics, not time */
+  kindred?: PostNav | null;
   /** the writing room's proof: no view tracking, no owner edit link */
   preview?: boolean;
 }
@@ -51,6 +63,7 @@ export default function PostContent({
   readingTime: readingTimeProp,
   prev,
   next,
+  kindred,
   preview = false,
 }: PostContentProps) {
   const tone: Tone = (POST_TYPE_META[post.type] ?? POST_TYPE_META.note).tone;
@@ -229,8 +242,11 @@ export default function PostContent({
   const onNavigate = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
       const el = document.getElementById(id);
-      if (!el) return;
+      if (!el) return; // fall through to native hash navigation
       e.preventDefault();
+      // light the clicked entry immediately — the smooth scroll takes a
+      // moment and a silent click reads as a dead link
+      setActiveId(id);
       el.scrollIntoView({
         behavior: prefersReducedMotion() ? "auto" : "smooth",
         block: "start",
@@ -409,16 +425,32 @@ export default function PostContent({
               <ShareControls title={post.title} />
             </div>
           )}
+
+          {!preview && (
+            <p className="mt-4 font-hand text-lg text-ink-faint">
+              follow along —{" "}
+              <a
+                href="/feed.xml"
+                className="text-accent-rust transition-colors hover:text-accent-orange"
+              >
+                the atom feed
+              </a>
+            </p>
+          )}
         </div>
 
-        {(prev || next) && (
+        {(prev || next || kindred) && (
           <div className="mx-auto mt-10 grid max-w-3xl gap-6 sm:grid-cols-2">
             {prev ? (
               <NavCard post={prev} dir="newer" />
             ) : (
               <span className="hidden sm:block" />
             )}
-            {next ? (
+            {/* readers arrive from topic-specific link drops — offer the most
+                kindred entry over the merely chronological one */}
+            {kindred ? (
+              <NavCard post={kindred} dir="kindred" />
+            ) : next ? (
               <NavCard post={next} dir="older" />
             ) : (
               <span className="hidden sm:block" />
@@ -674,7 +706,13 @@ function MarginMeta({
   );
 }
 
-function NavCard({ post, dir }: { post: PostNav; dir: "newer" | "older" }) {
+function NavCard({
+  post,
+  dir,
+}: {
+  post: PostNav;
+  dir: "newer" | "older" | "kindred";
+}) {
   const c = chaosFor(post.slug);
   return (
     <Link
@@ -683,7 +721,11 @@ function NavCard({ post, dir }: { post: PostNav; dir: "newer" | "older" }) {
       style={{ transform: `rotate(${c.rotate}deg)`, ...paperTextureStyle(c.paper) }}
     >
       <span className="font-hand text-lg text-accent-rust">
-        {dir === "newer" ? "← a newer entry" : "an older entry →"}
+        {dir === "newer"
+          ? "← a newer entry"
+          : dir === "kindred"
+            ? "more like this →"
+            : "an older entry →"}
       </span>
       <p className="mt-1 font-serif text-lg font-medium leading-snug text-ink line-clamp-2">
         {post.title}
