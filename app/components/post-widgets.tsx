@@ -2,15 +2,17 @@
 //
 // Blog posts can embed interactive/custom visuals as HTML custom tags (e.g.
 // <noise-frontier></noise-frontier>). This module is the single, generic bridge
-// the shared markdown renderer (app/post/[id]/PostContent.tsx) talks to — it
+// the shared markdown renderer (app/post/[id]/PostMarkdown.tsx) talks to — it
 // knows nothing about any specific post.
 //
-// To add figures for a NEW post: make a pack (a FigureDef[], ideally using
-// next/dynamic so its code is code-split) and add it to `packs`. PostContent
-// never needs to change, and because every component is a dynamic split point,
-// a post that doesn't use a tag never downloads its code. The writing room
-// reads the SAME catalog (label/blurb/kind) to make figures browsable and
-// insertable — see app/write/Figures.tsx.
+// To add figures for a NEW post: make a pack (a FigureDef[]) and add it to
+// `packs`. The renderer never needs to change, and a post that doesn't use a
+// tag never downloads its code — PROVIDED the pack's next/dynamic imports live
+// in a "use client" module (see openaim's FigureSlot). This catalog is read by
+// the server-rendered post body, and dynamic() evaluated in the RSC graph is
+// not a split point: the bundler folds every figure into the shared post
+// chunk. The writing room reads the SAME catalog (label/blurb/kind) to make
+// figures browsable and insertable — see app/write/Figures.tsx.
 
 import type { ComponentType, ReactElement } from "react";
 import { openaimFigures } from "@/app/components/openaim/registry";
