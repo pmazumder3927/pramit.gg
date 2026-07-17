@@ -108,7 +108,9 @@ export default function CoverReveal() {
       // the paint flows AROUND the page's readable content (same measurement
       // the lyrics use), squiggling along its edges instead of washing under
       // the words. Measured at paint start — viewport px, like the canvas.
-      const avoid = collectForegroundRects();
+      // Unlike the lyric pen, the wash also avoids lyric-opted-out chrome
+      // (the post TOC etc): true = include [data-lyrics-ignore] rects.
+      const avoid = collectForegroundRects(true);
       // plan in frame-budgeted slices — the stroke planner is the one big
       // synchronous block, and running it whole caused a visible hitch right
       // as the repaint (and the doodles' write-in) kicked off

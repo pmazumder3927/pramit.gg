@@ -45,12 +45,16 @@ export function visibleBox(): Box {
 // captures text precisely no matter how it's nested, including mixed-content
 // like <h1>pramit mazumder<span>.</span></h1> whose name lives in a bare text
 // node an element scan would miss. Plus interactive/media (buttons, links,
-// inputs, images) which may be icon-only. Backdrop content (aria-hidden) and
-// opted-out chrome ([data-lyrics-ignore], e.g. the post TOC) are skipped;
-// [data-avoid-lyrics] force-includes anything missed. Used directly by the
-// canvas repaint (CoverReveal paints AROUND these rects); collectForeground
-// below maps them into the backdrop SVG's view-box space for doodles + lyrics.
-export function collectForegroundRects(): Box[] {
+// inputs, images) which may be icon-only. Backdrop content (aria-hidden) is
+// always skipped; [data-avoid-lyrics] force-includes anything missed.
+//
+// [data-lyrics-ignore] (e.g. the post TOC) is an opt-out from LYRIC avoidance
+// specifically — the lyric pen may write across it. Consumers that must avoid
+// ALL readable text (the canvas repaint: CoverReveal paints AROUND these
+// rects) pass includeLyricOptOuts to measure that chrome too;
+// collectForeground below maps the lyric/doodle view (opt-outs skipped) into
+// the backdrop SVG's view-box space.
+export function collectForegroundRects(includeLyricOptOuts = false): Box[] {
   if (typeof window === "undefined") return [];
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -65,7 +69,7 @@ export function collectForegroundRects(): Box[] {
   const hidden = (el: Element | null): boolean => {
     if (!el) return true;
     if (el.closest('[aria-hidden="true"]')) return true; // the backdrop itself
-    if (el.closest("[data-lyrics-ignore]")) return true; // e.g. the post TOC
+    if (!includeLyricOptOuts && el.closest("[data-lyrics-ignore]")) return true; // e.g. the post TOC
     // NB: don't treat opacity:0 as hidden — content commonly fades IN from 0, and
     // measuring during that animation would let the backdrop land on it.
     return getComputedStyle(el).visibility === "hidden";
