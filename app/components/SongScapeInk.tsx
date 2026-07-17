@@ -21,6 +21,8 @@ import { useAlbumPalette, AlbumPalette, GRID } from "@/app/lib/use-album-palette
 import type { DrawingStroke } from "@/app/lib/drawing/types";
 import { useLyrics } from "./useLyrics";
 import SongScapeLyrics from "./SongScapeLyrics";
+import InkFontScope from "./InkFontScope";
+import { turtlesUrl } from "@/app/lib/turtleFresh";
 import { type Box, collectForeground, boxesOverlap, visibleBox } from "@/app/lib/scape-layout";
 import { makePlayhead } from "@/app/lib/scape-playhead";
 
@@ -375,23 +377,30 @@ function useScrollSwirl(root: React.RefObject<SVGSVGElement | null>, reduced: bo
 }
 
 /* ------------------------------ sketches ------------------------------- */
-// Fetch recent confessional-booth drawings once on mount.
+// Fetch recent confessional-booth drawings on mount, and again when a new one
+// is submitted (the endpoint is edge-cached; turtleFresh busts past it so a
+// visitor's own doodle joins the backdrop immediately).
 function useSketches(): DrawingStroke[][] {
   const [sketches, setSketches] = useState<DrawingStroke[][]>([]);
   useEffect(() => {
     let alive = true;
-    fetch("/api/turtles?limit=40")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!alive || !data?.turtles) return;
-        const out = (data.turtles as { strokes?: DrawingStroke[] }[])
-          .map((t) => t.strokes)
-          .filter((s): s is DrawingStroke[] => Array.isArray(s) && s.length > 0);
-        setSketches(out);
-      })
-      .catch(() => {});
+    const load = () => {
+      fetch(turtlesUrl("/api/turtles?limit=40"))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!alive || !data?.turtles) return;
+          const out = (data.turtles as { strokes?: DrawingStroke[] }[])
+            .map((t) => t.strokes)
+            .filter((s): s is DrawingStroke[] => Array.isArray(s) && s.length > 0);
+          setSketches(out);
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener("turtle:new", load);
     return () => {
       alive = false;
+      window.removeEventListener("turtle:new", load);
     };
   }, []);
   return sketches;
@@ -556,6 +565,8 @@ export default function SongScapeInk() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {/* lyric faces ride this lazy chunk; attaches --font-* vars to <html> */}
+      <InkFontScope />
       <svg
         ref={svgRef}
         className="h-full w-full"

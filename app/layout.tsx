@@ -1,15 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import {
-  Fraunces,
-  Caveat,
-  Work_Sans,
-  Ma_Shan_Zheng,
-  Nanum_Pen_Script,
-  Kalam,
-  Yuji_Syuku,
-  Noto_Sans_Egyptian_Hieroglyphs,
-} from "next/font/google";
-import localFont from "next/font/local";
+import { Fraunces, Caveat, Work_Sans } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "./lib/metadata";
 import NowPlaying from "./components/NowPlaying";
@@ -18,6 +8,7 @@ import SketchbookTabBar from "./components/SketchbookTabBar";
 import { NowPlayingProvider } from "./components/NowPlayingContext";
 import PaperBackground from "./components/PaperBackground";
 import PageTurnInk from "./components/PageTurnInk";
+import ChunkReload from "./components/ChunkReload";
 import AlbumThemeVars from "./components/AlbumThemeVars";
 import JsonLd from "./components/JsonLd";
 import { personSchema, websiteSchema } from "./lib/structured-data";
@@ -44,66 +35,11 @@ const workSans = Work_Sans({
   variable: "--font-work",
 });
 
-// Chinese brush-script handwriting for lyrics in CJK. preload:false (and no
-// subsets) so this large font is fetched lazily — only when a glyph that needs
-// it actually renders, i.e. when a Chinese song is playing. Latin still uses
-// Caveat; this only catches glyphs Caveat lacks, via the font stack.
-const maShanZheng = Ma_Shan_Zheng({
-  weight: "400",
-  display: "swap",
-  preload: false,
-  variable: "--font-cjk-hand",
-});
-
-// Korean pen-handwriting for lyrics, lazy-loaded like the Chinese face above.
-const nanumPen = Nanum_Pen_Script({
-  weight: "400",
-  display: "swap",
-  preload: false,
-  variable: "--font-kr-hand",
-});
-
-// Hindi (Devanagari) handwriting for lyrics; smaller than the CJK faces but
-// still lazy so it only loads when a Devanagari glyph renders.
-const kalam = Kalam({
-  weight: "400",
-  subsets: ["devanagari"],
-  display: "swap",
-  preload: false,
-  variable: "--font-hi-hand",
-});
-
-// Bengali handwriting for lyrics — self-hosted "BenSen Handwriting" (GPL w/ font
-// exception). Google's Bengali set has no true handwriting face (only the brush-
-// display Galada / calligraphic Tiro Bangla), so this is local. Lazy via
-// preload:false so it only loads when a Bengali song renders.
-const bensenHandwriting = localFont({
-  src: "./fonts/bensen-handwriting-regular.woff2",
-  weight: "400",
-  display: "swap",
-  preload: false,
-  variable: "--font-bn-hand",
-});
-
-// Japanese brush face (kana + kanji) for the confessional glyph challenge. Same
-// brush spirit as the Chinese Ma Shan Zheng above so CJK inscriptions look
-// cohesive. Lazy (preload:false, no subsets) — only fetched when a Japanese
-// glyph challenge actually renders on the connect page.
-const yujiSyuku = Yuji_Syuku({
-  weight: "400",
-  display: "swap",
-  preload: false,
-  variable: "--font-jp-hand",
-});
-
-// Egyptian hieroglyphs for the glyph challenge. Covers the full Unicode
-// hieroglyph block. Lazy like the faces above.
-const egyptianHieroglyphs = Noto_Sans_Egyptian_Hieroglyphs({
-  weight: "400",
-  display: "swap",
-  preload: false,
-  variable: "--font-egyptian",
-});
+// The niche script faces (CJK/JP/KR/HI/BN lyric hands, hieroglyphs) are NOT
+// declared here — their @font-face declarations alone were ~70KB gz of
+// render-blocking CSS on every page. They live in
+// app/components/InkFontScope.tsx, mounted by the lazy scape chunk and the
+// connect captcha, which attaches the same --font-* variables to <html>.
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -169,6 +105,16 @@ const themeScript = `
 })();
 `;
 
+// The Supabase storage origin serves post covers, the collage banner, and
+// inline post images — warm the connection alongside the Spotify CDN hints.
+const supabaseOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
+  } catch {
+    return null;
+  }
+})();
+
 export default function RootLayout({
   children,
 }: {
@@ -177,7 +123,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable} ${maShanZheng.variable} ${nanumPen.variable} ${kalam.variable} ${bensenHandwriting.variable} ${yujiSyuku.variable} ${egyptianHieroglyphs.variable}`}
+      className={`${fraunces.variable} ${caveat.variable} ${workSans.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -187,16 +133,35 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://mosaic.scdn.co" />
         <link rel="dns-prefetch" href="https://img.youtube.com" />
         <link rel="preconnect" href="https://i.scdn.co" crossOrigin="anonymous" />
+        {supabaseOrigin && (
+          <>
+            <link rel="dns-prefetch" href={supabaseOrigin} />
+            <link rel="preconnect" href={supabaseOrigin} />
+          </>
+        )}
       </head>
       <body className="grain min-h-screen">
+        {/* invisible until keyboard-focused; jumps past the chrome */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:block focus:rounded-md focus:border-2 focus:border-ink focus:bg-paper focus:px-4 focus:py-2 focus:font-hand focus:text-lg focus:text-ink"
+        >
+          skip to the page
+        </a>
         <PostHogProvider>
           <NowPlayingProvider>
+            <ChunkReload />
             <AlbumThemeVars />
             <PaperBackground />
             <PageTurnInk />
             <SketchbookNav />
-            {/* extra bottom space on mobile so content clears the fixed tab bar */}
-            <div className="relative z-10 pb-[calc(env(safe-area-inset-bottom)+4.25rem)] md:pb-0">
+            {/* extra bottom space on mobile so content clears the fixed tab
+                bar; --tabbar-h is kept current by SketchbookTabBar (it grows
+                when the now-playing ticket rides on the bar) */}
+            <div
+              id="main-content"
+              className="relative z-10 pb-[var(--tabbar-h,calc(env(safe-area-inset-bottom)+4.25rem))] md:pb-0"
+            >
               {children}
             </div>
             <NowPlaying />

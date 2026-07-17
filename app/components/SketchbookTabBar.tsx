@@ -225,12 +225,34 @@ function NowPlayingBanner() {
 export default function SketchbookTabBar() {
   const pathname = usePathname();
   const reduce = useReducedMotion();
+  const navRef = useRef<HTMLElement>(null);
 
   // the writing room has its own bottom bar — the site's steps aside
-  if (pathname.startsWith("/write")) return null;
+  const hidden = pathname.startsWith("/write");
+
+  // Publish the bar's real height (it grows when the now-playing ticket rides
+  // on it) so the layout's bottom clearance always matches — page bottoms must
+  // never sit under the paper strip.
+  useEffect(() => {
+    if (hidden) return;
+    const el = navRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const update = () =>
+      root.style.setProperty("--tabbar-h", `${el.offsetHeight}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--tabbar-h");
+    };
+  }, [hidden]);
+
+  if (hidden) return null;
 
   return (
-    <nav aria-label="Primary" data-avoid-lyrics className="fixed inset-x-0 bottom-0 z-50 md:hidden">
+    <nav ref={navRef} aria-label="Primary" data-avoid-lyrics className="fixed inset-x-0 bottom-0 z-50 md:hidden">
       <div
         className="relative border-t border-line bg-paper"
         // clip horizontally so the active tab's scribble ring can't spill past
