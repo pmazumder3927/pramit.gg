@@ -7,6 +7,7 @@ import { Doodle, HandNote, Tape } from "@/app/components/sketchbook";
 import DoodleTile from "@/app/components/DoodleTile";
 
 import { type DrawingStroke } from "@/app/lib/confessional-captcha";
+import { turtlesUrl } from "@/app/lib/turtleFresh";
 
 type DrawingRecord = {
   id: string;
@@ -26,7 +27,12 @@ export default function TurtleGallery() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/turtles", { cache: "no-store" });
+      // /api/turtles is edge-cached (s-maxage); after a submission the
+      // turtleFresh window cache-busts so the new sketch appears immediately,
+      // including on remounts within the cache TTL.
+      const response = await fetch(turtlesUrl("/api/turtles"), {
+        cache: "no-store",
+      });
       if (!response.ok) {
         throw new Error("Failed to load drawings.");
       }

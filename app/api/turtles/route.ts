@@ -29,5 +29,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ turtles: data ?? [] }, { status: 200 });
+  return NextResponse.json(
+    { turtles: data ?? [] },
+    {
+      status: 200,
+      // Public gallery data that only changes when someone finishes a doodle.
+      // Serve from the edge and refresh in the background — the backdrop was
+      // paying a ~700ms Supabase round trip on every single pageview.
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600",
+      },
+    }
+  );
 }
