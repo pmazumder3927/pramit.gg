@@ -1,8 +1,10 @@
 import Link from "next/link";
+import NotFoundTracker from "@/app/components/NotFoundTracker";
 
 export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
+      <NotFoundTracker />
       <div className="text-center">
         <h2 className="font-serif text-7xl md:text-8xl font-medium text-ink mb-2">404</h2>
         <h3 className="font-hand text-3xl -rotate-1 text-accent-purple mb-4">this page wandered off</h3>
