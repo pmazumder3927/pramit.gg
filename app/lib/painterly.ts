@@ -620,7 +620,7 @@ function* planPaintingGen(
       : null;
     // fine strokes are the visible squiggle and dodge most; broad strokes
     // carry the cover's forms and cross more often
-    const dodgeP = L.R > unit * 0.05 ? 0.62 : 0.9;
+    const dodgeP = L.R > unit * 0.05 ? 0.5 : 0.8;
     const occ = makeOccupancy(L.dsep);
     // jittered seed grid, shuffled
     const seeds: [number, number][] = [];
@@ -647,23 +647,28 @@ function* planPaintingGen(
         continue;
       const seedCol = colorAt(field, sxp / scale, syp / scale);
       // per-stroke: does this one dodge the words, and with what boundary
-      // wobble? Ink-likeness raises the odds to a certainty and widens the
-      // clearance to the full bristle fan. (the rng draws happen only on the
-      // avoiding path, so a plan with no avoid rects stays bit-identical)
+      // wobble? Ink-likeness raises the dodging odds and widens the dodgers'
+      // clearance to the full bristle fan — but never to certainty: the
+      // ink-like strokes that DO cross press ghost-light (alpha scaled down
+      // below), so the cover's forms survive the text column instead of
+      // leaving a moat, while the type stays readable under the faint pass.
+      // (the rng draws happen only on the avoiding path, so a plan with no
+      // avoid rects stays bit-identical)
       let obst: Obstacles | null = null;
+      let inkGhost = 0;
       let jx = 0;
       let jy = 0;
       if (obstNear) {
         const Y = 0.299 * seedCol[0] + 0.587 * seedCol[1] + 0.114 * seedCol[2];
         // how close this pigment sits to the text ink: dark ink by day,
         // pale ink by night (ramps chosen so multiply/screen buildup under a
-        // few overlapping strokes keeps the type at a readable contrast; they
-        // saturate to certainty well before the genuinely harmful range)
+        // few overlapping strokes keeps the type at a readable contrast)
         const inkLike = dark ? smoothstep(115, 200, Y) : 1 - smoothstep(100, 190, Y);
-        const dodge = rng() < dodgeP + (1 - dodgeP) * inkLike;
+        const dodge = rng() < dodgeP + (1 - dodgeP) * inkLike * 0.55;
         jx = (rng() - 0.5) * 18;
         jy = (rng() - 0.5) * 18;
         if (dodge) obst = inkLike >= 0.5 ? obstFar : obstNear;
+        else inkGhost = inkLike;
       }
       if (obst && obst.hit(sxp + jx, syp + jy)) continue;
       const line = growCenterline(
@@ -695,7 +700,19 @@ function* planPaintingGen(
       const mid = (N >> 1) * 2;
       const cxN = line[mid] / w;
       const cyN = line[mid + 1] / h;
-      const bristles = buildBristles(line, L.R, seedCol, L.alpha, dark, rng);
+      // an ink-like stroke that actually runs over the words presses
+      // ghost-light — the whole mark lightens, like the hand easing off where
+      // the writing lives. Tested against the fan-wide mask: the bristles
+      // spread ~R·0.675 past the centreline, so a line that merely skims the
+      // halo can still lay hairs on the type and must ghost too.
+      let alpha = L.alpha;
+      if (inkGhost > 0.2 && obstFar) {
+        let crosses = false;
+        for (let p = 0; p < N && !crosses; p++)
+          crosses = obstFar.hit(line[p * 2], line[p * 2 + 1]);
+        if (crosses) alpha *= 1 - 0.72 * inkGhost;
+      }
+      const bristles = buildBristles(line, L.R, seedCol, alpha, dark, rng);
       if (!bristles.length) continue;
       const sweep =
         ((sxCorner ? 1 - cxN : cxN) + (syCorner ? 1 - cyN : cyN)) / 2;
