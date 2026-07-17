@@ -14,10 +14,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
-import { analyzeCover, planPainting, animatePainting, type PaintController } from "@/app/lib/painterly";
+import { analyzeCover, planPaintingAsync, animatePainting, type PaintController } from "@/app/lib/painterly";
 
 const HOLD = 1.6; // s the paint sits wet before it begins to dry
 const FADE = 8.5; // s slow dry-out (paint drying)
+
+// Backing-store budget (device px). The wash is a soft, semi-transparent
+// full-screen layer behind grain — nothing type-sharp lives on it — so on big
+// retina screens rendering at full 2× (7MP+ cleared and re-composited every
+// frame) buys nothing visible. Capping the pixel count is the single biggest
+// per-frame saving; small/hi-dpi phone windows come in under budget unchanged.
+const PIXEL_BUDGET = 4_500_000;
 
 function fnv(str: string): number {
   let h = 2166136261;
@@ -76,12 +83,17 @@ export default function CoverReveal() {
     if (!canvas) return;
     let alive = true;
     let ctrl: PaintController | null = null;
+    let plan: ReturnType<typeof planPaintingAsync> | null = null;
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
     const finish = () => setActive((a) => (a && a.id === active.id ? null : a));
 
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const dpr = Math.min(
+      2,
+      window.devicePixelRatio || 1,
+      Math.max(1, Math.sqrt(PIXEL_BUDGET / (w * h))),
+    );
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.style.transition = "none";
@@ -99,13 +111,19 @@ export default function CoverReveal() {
         finish();
         return;
       }
-      const painting = planPainting(an.rgb, an.AW, an.AH, w, h, { dark, seed: fnv(active.key) });
-      ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), () => {
-        if (!alive) return;
-        // paint laid down → let it dry: a long slow fade after a held beat
-        canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
-        canvas.style.opacity = "0";
-        unmountTimer.current = setTimeout(finish, (HOLD + FADE) * 1000 + 400);
+      // plan in frame-budgeted slices — the stroke planner is the one big
+      // synchronous block, and running it whole caused a visible hitch right
+      // as the repaint (and the doodles' write-in) kicked off
+      plan = planPaintingAsync(an.rgb, an.AW, an.AH, w, h, { dark, seed: fnv(active.key) });
+      plan.promise.then((painting) => {
+        if (!alive || !painting) return;
+        ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), () => {
+          if (!alive) return;
+          // paint laid down → let it dry: a long slow fade after a held beat
+          canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
+          canvas.style.opacity = "0";
+          unmountTimer.current = setTimeout(finish, (HOLD + FADE) * 1000 + 400);
+        });
       });
     };
     img.onerror = () => alive && finish();
@@ -113,6 +131,7 @@ export default function CoverReveal() {
 
     return () => {
       alive = false;
+      plan?.cancel();
       ctrl?.cancel();
       if (unmountTimer.current) clearTimeout(unmountTimer.current);
     };

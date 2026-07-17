@@ -82,13 +82,16 @@ function blurF32(
   return out;
 }
 
-// Build the flow field from analysis-resolution RGBA pixels.
-export function buildField(
+// Build the flow field from analysis-resolution RGBA pixels. Generator so the
+// sliced planner can breathe between the analysis stages (Sobel, the three
+// tensor blurs, the field resolve each cost a few ms); buildField below drains
+// it for synchronous callers.
+function* buildFieldGen(
   rgb: Uint8ClampedArray,
   AW: number,
   AH: number,
   seed: number,
-): Field {
+): Generator<void, Field, void> {
   const N = AW * AH;
   const L = new Float32Array(N);
   for (let i = 0; i < N; i++) {
@@ -128,9 +131,13 @@ export function buildField(
     F[i] = gx[i] * gy[i];
     G[i] = gy[i] * gy[i];
   }
+  yield;
   const Eb = blurF32(E, AW, AH, 3);
+  yield;
   const Fb = blurF32(F, AW, AH, 3);
+  yield;
   const Gb = blurF32(G, AW, AH, 3);
+  yield;
 
   const rng = mulberry32(seed);
   const baseAng = rng() * TAU;
@@ -167,6 +174,18 @@ export function buildField(
     }
   }
   return { AW, AH, cos, sin, anis, rgb };
+}
+
+export function buildField(
+  rgb: Uint8ClampedArray,
+  AW: number,
+  AH: number,
+  seed: number,
+): Field {
+  const g = buildFieldGen(rgb, AW, AH, seed);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
 }
 
 // bilinear field direction at analysis coords (interpolate the VECTOR, not the angle)
@@ -418,20 +437,31 @@ function buildBristles(
 }
 
 /* --------------------------- plan a painting --------------------------- */
-// rgb = analysis RGBA at AW×AH (cover already cropped to the frame's aspect).
-export function planPainting(
+// The planner core is a generator: it yields at cheap checkpoints (between
+// layers and every batch of seeds) so callers choose their scheduling.
+// planPainting drains it synchronously (dev harness); planPaintingAsync slices
+// it across frames so a song change never blocks the main thread mid-frame.
+function* planPaintingGen(
   rgb: Uint8ClampedArray,
   AW: number,
   AH: number,
   w: number,
   h: number,
   opts: PaintOptions = {},
-): Painting {
+): Generator<void, Painting, void> {
   const dark = !!opts.dark;
   const seed = opts.seed ?? 1;
   const speed = opts.speed ?? 900;
   const maxStrokes = opts.maxStrokes ?? 2600;
-  const field = buildField(rgb, AW, AH, seed);
+  // drain the field analysis, yielding at each of its stage boundaries
+  // (manual loop — `yield*` needs a newer TS target than this project's)
+  const fieldGen = buildFieldGen(rgb, AW, AH, seed);
+  let fieldStep = fieldGen.next();
+  while (!fieldStep.done) {
+    yield;
+    fieldStep = fieldGen.next();
+  }
+  const field = fieldStep.value;
   const scale = w / AW;
   const rng = mulberry32(seed ^ 0x9e3779b9);
 
@@ -488,8 +518,13 @@ export function planPainting(
       const j = (rng() * (i + 1)) | 0;
       [seeds[i], seeds[j]] = [seeds[j], seeds[i]];
     }
+    let sinceYield = 0;
     for (const [sxp, syp] of seeds) {
       if (strokes.length >= maxStrokes) break;
+      if (++sinceYield >= 48) {
+        sinceYield = 0;
+        yield;
+      }
       if (sxp < 0 || syp < 0 || sxp > w || syp > h) continue;
       if (occ.taken(sxp, syp)) continue;
       if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin)
@@ -537,7 +572,59 @@ export function planPainting(
   return { strokes, paintDur, w, h };
 }
 
+// Drain the planner in one go. Identical output to the async path (same seed →
+// same painting); used by the dev harness where a blocking plan is fine.
+export function planPainting(
+  rgb: Uint8ClampedArray,
+  AW: number,
+  AH: number,
+  w: number,
+  h: number,
+  opts: PaintOptions = {},
+): Painting {
+  const g = planPaintingGen(rgb, AW, AH, w, h, opts);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+// Run the planner in frame-budgeted slices (~budgetMs of work per frame) so
+// the plan never stalls a frame. Resolves null if cancelled mid-plan.
+export function planPaintingAsync(
+  rgb: Uint8ClampedArray,
+  AW: number,
+  AH: number,
+  w: number,
+  h: number,
+  opts: PaintOptions = {},
+  budgetMs = 6,
+): { promise: Promise<Painting | null>; cancel: () => void } {
+  const g = planPaintingGen(rgb, AW, AH, w, h, opts);
+  let cancelled = false;
+  const promise = new Promise<Painting | null>((resolve) => {
+    const slice = () => {
+      if (cancelled) {
+        resolve(null);
+        return;
+      }
+      const t0 = performance.now();
+      let r = g.next();
+      while (!r.done && performance.now() - t0 < budgetMs) r = g.next();
+      if (r.done) resolve(r.value);
+      else requestAnimationFrame(slice);
+    };
+    requestAnimationFrame(slice);
+  });
+  return {
+    promise,
+    cancel: () => {
+      cancelled = true;
+    },
+  };
+}
+
 /* ------------------------------ animate -------------------------------- */
+// (caller sets the constant lineCap/lineJoin once — not per bristle)
 function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke, p: number) {
   for (const b of s.bristles) {
     const n = b.pts.length / 2;
@@ -545,8 +632,6 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke, p: number) {
     const cnt = p >= 1 ? n : Math.max(2, Math.ceil(p * n));
     ctx.strokeStyle = b.color;
     ctx.lineWidth = b.w;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
     ctx.beginPath();
     ctx.moveTo(b.pts[0], b.pts[1]);
     // quadratic smoothing through midpoints → organic curve
@@ -579,12 +664,18 @@ export function animatePainting(
   dry.height = Math.max(1, Math.round(h * dpr));
   const dctx = dry.getContext("2d")!;
   dctx.scale(dpr, dpr);
+  // constant stroke state, set once instead of per bristle
+  dctx.lineCap = ctx.lineCap = "round";
+  dctx.lineJoin = ctx.lineJoin = "round";
 
   let raf = 0;
   let t0 = -1;
   let idx = 0;
   let active: Stroke[] = [];
   let cancelled = false;
+  let prevT = -1;
+  let slow = 0; // consecutive over-budget frames
+  let wasWet = false; // did the LAST frame leave wet strokes on the canvas?
 
   const frame = () => {
     if (cancelled) return;
@@ -592,25 +683,45 @@ export function animatePainting(
     if (t0 < 0) t0 = tn;
     const t = (tn - t0) / 1000;
 
+    // Watch the real frame cadence. When frames run long two in a row, bake the
+    // oldest wet strokes early (they complete instantly instead of finishing
+    // their last fraction) — invisible among hundreds of marks, and it sheds
+    // exactly the per-frame redraw work that was causing the stutter. Never
+    // triggers while the machine keeps up.
+    if (prevT >= 0 && tn - prevT > 28) slow++;
+    else slow = Math.max(0, slow - 1);
+    prevT = tn;
+    if (slow >= 2 && active.length > 24) {
+      const shed = Math.ceil(active.length * 0.15);
+      for (let i = 0; i < shed; i++) drawStroke(dctx, active[i], 1);
+      active.splice(0, shed);
+      slow = 0;
+    }
+
+    let baked = false;
     while (idx < strokes.length && strokes[idx].start <= t)
       active.push(strokes[idx++]);
     if (active.length) {
       const still: Stroke[] = [];
       for (const s of active) {
-        if (t >= s.start + s.dur)
+        if (t >= s.start + s.dur) {
           drawStroke(dctx, s, 1); // finished → bake into dry
-        else still.push(s);
+          baked = true;
+        } else still.push(s);
       }
       active = still;
     }
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(dry, 0, 0, w, h);
-    for (const s of active) drawStroke(ctx, s, (t - s.start) / s.dur);
-
-    if (idx >= strokes.length && active.length === 0) {
+    // Repaint only when something moved: wet strokes advanced, a stroke baked,
+    // or wet marks from last frame need replacing with their dry state.
+    if (active.length || baked || wasWet) {
       ctx.clearRect(0, 0, w, h);
       ctx.drawImage(dry, 0, 0, w, h);
+      for (const s of active) drawStroke(ctx, s, (t - s.start) / s.dur);
+    }
+    wasWet = active.length > 0;
+
+    if (idx >= strokes.length && active.length === 0) {
       onDone();
       return;
     }
