@@ -35,6 +35,7 @@ import {
   glyphFontStack,
   type GlyphScript,
 } from "@/app/lib/confessional-glyphs";
+import { ensureInkFonts } from "@/app/components/InkFontScope";
 import { BRUSH_ORDER } from "@/app/lib/drawing/brushes";
 import { renderScene, renderStroke } from "@/app/lib/drawing/paint";
 import { randomSeed } from "@/app/lib/drawing/rng";
@@ -144,12 +145,79 @@ const GLYPH_LANG: Record<GlyphScript, string> = {
   egyptian: "",
 };
 
+// ── Captcha attempt instrumentation ─────────────────────────────────────────
+// The booth unmounts this component while the council judges (the form is
+// swapped out for the verdict view), so the attempt counter lives at module
+// scope. The booth alone holds the actual verdict (the /api/confessional
+// response) and emits the captcha_result / confession_submitted events; it
+// reads and resets the counter through the exports below.
+let captchaAttempts = 0;
+
+function markAttemptSubmitted() {
+  captchaAttempts += 1;
+}
+
+/** Drawings submitted for judgment since the last accepted confession. */
+export function getCaptchaAttempts(): number {
+  return captchaAttempts;
+}
+
+/** Reset after an accepted confession so the next one counts from zero. */
+export function resetCaptchaAttempts() {
+  captchaAttempts = 0;
+}
+
+// ── Tofu guard ───────────────────────────────────────────────────────────────
+// Never hand the visitor a challenge glyph the loaded faces can't actually
+// draw — a missing/failed webfont renders tofu boxes, and visitors mash "new
+// prompt" trying to escape them. Resolves the script's font stack down to the
+// concrete next/font family names (the stack is written in terms of CSS
+// variables, which FontFaceSet cannot read), kicks off their load — faces load
+// lazily and the reference glyph hasn't rendered yet at this point — then asks
+// the FontFaceSet whether the glyph is covered by loaded faces. Errs on the
+// side of showing the glyph: this must never hard-block the flow.
+async function glyphIsRenderable(glyph: {
+  script: GlyphScript;
+  glyph: string;
+}): Promise<boolean> {
+  if (typeof document === "undefined" || !document.fonts) return true;
+  try {
+    await document.fonts.ready;
+    const families = glyphFontStack(glyph.script)
+      .split(",")
+      .map((part) => {
+        const match = part.trim().match(/^var\((--[\w-]+)\)$/);
+        if (!match) return "";
+        return getComputedStyle(document.documentElement)
+          .getPropertyValue(match[1])
+          .trim();
+      })
+      .filter(Boolean);
+    if (families.length === 0) return true;
+    const font = `16px ${families.join(", ")}`;
+    try {
+      await document.fonts.load(font, glyph.glyph);
+    } catch {
+      // A face failed to load — fall through so check() reports it unloaded.
+    }
+    return document.fonts.check(font, glyph.glyph);
+  } catch {
+    return true;
+  }
+}
 
 const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   function DrawingCaptcha(
     { disabled = false, refreshKey = 0, onChange }: DrawingCaptchaProps,
     ref,
   ) {
+  // The glyph faces (--font-jp-hand, --font-egyptian, ...) are declared in
+  // InkFontScope, not the root layout — attach their variables before the
+  // first challenge's renderability check resolves them off <html>.
+  useEffect(() => {
+    ensureInkFonts();
+  }, []);
+
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const liveRef = useRef<HTMLCanvasElement | null>(null);
@@ -262,12 +330,23 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
     setIsLoading(true);
     setLoadError(null);
     try {
-      const response = await fetch("/api/confessional", {
-        method: "GET",
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error("Could not load the challenge.");
-      const data = (await response.json()) as CaptchaResponse;
+      let data: CaptchaResponse | null = null;
+      // Tofu guard: re-roll (bounded) when the served glyph isn't renderable
+      // by the loaded fonts, then show whatever came back last so the flow
+      // never hard-blocks.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetch("/api/confessional", {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Could not load the challenge.");
+        data = (await response.json()) as CaptchaResponse;
+        const nextGlyph =
+          data.challenge.kind === "glyph" ? data.challenge.glyph ?? null : null;
+        if (!nextGlyph) break;
+        if (await glyphIsRenderable(nextGlyph)) break;
+      }
+      if (!data) throw new Error("Could not load the challenge.");
       setChallengeResponse(data);
     } catch (error) {
       console.error("Captcha load error:", error);
@@ -361,7 +440,12 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
   useImperativeHandle(
     ref,
     () => ({
-      getSnapshot: async () => composeSnapshot(committedRef.current),
+      getSnapshot: async () => {
+        // The parent only rasterizes right before submitting, so this marks
+        // the start of a graded attempt.
+        markAttemptSubmitted();
+        return composeSnapshot(committedRef.current);
+      },
     }),
     [],
   );
@@ -696,7 +780,10 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
     return "crosshair";
   }, [disabled, brushId]);
 
-  if (isLoading) {
+  // Only the very first load collapses to the placeholder. A "new prompt"
+  // reload keeps the whole editor mounted and instead dims the prompt area
+  // below, so the button responds instantly instead of appearing dead.
+  if (isLoading && !challengeResponse) {
     return (
       <div className="rounded-xl border-[1.4px] border-dashed border-line bg-card p-6">
         <p
@@ -741,7 +828,11 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
         {/* Header — the council's request, in mystical voice */}
         <header className="relative flex shrink-0 items-start justify-between gap-4 px-5 pb-2.5 pt-4 sm:px-6 sm:pt-5">
           {glyph ? (
-            <div className="flex min-w-0 flex-col gap-1">
+            <div
+              className={`flex min-w-0 flex-col gap-1 transition-opacity duration-150 ${
+                isLoading ? "opacity-30" : ""
+              }`}
+            >
               {/* Spoken task for screen readers; the visible glyph is
                   aria-hidden so a bare/unknown codepoint isn't announced. */}
               <span className="sr-only">
@@ -800,7 +891,11 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
               </p>
             </div>
           ) : (
-            <div className="flex min-w-0 flex-col gap-1">
+            <div
+              className={`flex min-w-0 flex-col gap-1 transition-opacity duration-150 ${
+                isLoading ? "opacity-30" : ""
+              }`}
+            >
               <p
                 className={`${councilSerif.className} flex items-center gap-2 text-sm italic text-ink-soft sm:text-base`}
                 style={{ fontWeight: 300 }}
@@ -846,7 +941,10 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
               <HeaderIcon
                 label="new prompt"
                 onClick={reload}
-                disabled={disabled}
+                disabled={disabled || isLoading}
+                disabledTitle={
+                  isLoading ? "summoning the council..." : undefined
+                }
               >
                 <RefreshIcon />
               </HeaderIcon>
@@ -1137,7 +1235,11 @@ function Toolbar({
           />
         ) : null}
 
-        <div className="relative z-10 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
+        {/* py-1.5 with the canceling -my-1.5 gives the buttons' expanded hit
+            halos room inside this overflow-x-auto scroller — without it they
+            would be clipped to the 32px row (and would add vertical
+            scrollable overflow). Nothing visible changes. */}
+        <div className="relative z-10 -my-1.5 flex items-center gap-1 overflow-x-auto px-1 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
         <ToolGroup>
           {TOOL_MODES.map((mode) => (
             <IconBtn
@@ -1173,6 +1275,9 @@ function Toolbar({
             open={popover === "color"}
             onClick={() => togglePopover("color")}
             disabled={disabled || brushId === "eraser"}
+            disabledTitle={
+              brushId === "eraser" ? "the eraser has no color" : undefined
+            }
           >
             <span
               className="block h-3.5 w-3.5 rounded-full ring-1 ring-line"
@@ -1213,7 +1318,9 @@ function Toolbar({
             label="undo"
             onClick={onUndo}
             disabled={disabled || !canUndo}
+            disabledTitle="nothing to undo"
             shortcut="⌘Z"
+            repeatOnHold
           >
             <UndoIcon />
           </IconBtn>
@@ -1221,6 +1328,7 @@ function Toolbar({
             label="redo"
             onClick={onRedo}
             disabled={disabled || !canRedo}
+            disabledTitle="nothing to redo"
             shortcut="⇧⌘Z"
           >
             <RedoIcon />
@@ -1229,6 +1337,7 @@ function Toolbar({
             label="clear"
             onClick={onClear}
             disabled={disabled || !canClear}
+            disabledTitle="nothing to clear"
             danger
           >
             <TrashIcon />
@@ -1528,13 +1637,18 @@ function SliderRow({
 
 // ── Buttons / atoms ─────────────────────────────────────────────────────────
 
+const HOLD_REPEAT_DELAY_MS = 350;
+const HOLD_REPEAT_INTERVAL_MS = 130;
+
 function IconBtn({
   label,
   shortcut,
   active,
   onClick,
   disabled,
+  disabledTitle,
   danger,
+  repeatOnHold,
   children,
 }: {
   label: string;
@@ -1542,18 +1656,85 @@ function IconBtn({
   active?: boolean;
   onClick: () => void;
   disabled?: boolean;
+  // Why the button is unavailable — shown as the tooltip while disabled.
+  disabledTitle?: string;
   danger?: boolean;
+  // Press-and-hold repeats the action (used by undo).
+  repeatOnHold?: boolean;
   children: React.ReactNode;
 }) {
+  const actionRef = useRef(onClick);
+  useEffect(() => {
+    actionRef.current = onClick;
+  }, [onClick]);
+
+  const holdRef = useRef<{
+    delay: ReturnType<typeof setTimeout> | null;
+    repeat: ReturnType<typeof setInterval> | null;
+  }>({ delay: null, repeat: null });
+
+  const stopHold = useCallback(() => {
+    const hold = holdRef.current;
+    if (hold.delay) clearTimeout(hold.delay);
+    if (hold.repeat) clearInterval(hold.repeat);
+    hold.delay = null;
+    hold.repeat = null;
+  }, []);
+
+  // Stop repeating the moment the button disables (e.g. the history runs dry
+  // mid-hold — a disabled button stops emitting pointer events, so pointerup
+  // would never reach us) and on unmount.
+  useEffect(() => {
+    if (disabled) stopHold();
+  }, [disabled, stopHold]);
+  useEffect(() => stopHold, [stopHold]);
+
+  // Hold-to-repeat: the initial action fires on pointerdown, so the click
+  // that follows pointerup must be swallowed or a plain tap would act twice.
+  // Pointer-generated clicks carry detail > 0; keyboard activation (Enter /
+  // Space) fires click with detail === 0 and still acts once.
+  const beginHold = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    stopHold();
+    actionRef.current();
+    holdRef.current.delay = setTimeout(() => {
+      holdRef.current.repeat = setInterval(
+        () => actionRef.current(),
+        HOLD_REPEAT_INTERVAL_MS,
+      );
+    }, HOLD_REPEAT_DELAY_MS);
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (repeatOnHold && event.detail > 0) return;
+    actionRef.current();
+  };
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
+      onPointerDown={repeatOnHold ? beginHold : undefined}
+      onPointerUp={repeatOnHold ? stopHold : undefined}
+      onPointerLeave={repeatOnHold ? stopHold : undefined}
+      onPointerCancel={repeatOnHold ? stopHold : undefined}
+      onContextMenu={
+        repeatOnHold ? (event) => event.preventDefault() : undefined
+      }
       disabled={disabled}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      title={
+        disabled && disabledTitle
+          ? disabledTitle
+          : shortcut
+            ? `${label} (${shortcut})`
+            : label
+      }
       aria-label={label}
       aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 active:scale-90 disabled:opacity-30 ${
+      className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 before:absolute before:-inset-x-px before:-inset-y-1.5 before:content-[''] active:scale-90 disabled:cursor-not-allowed disabled:opacity-30 [&_svg]:pointer-events-none ${
+        repeatOnHold ? "touch-none" : ""
+      } ${
         active
           ? "bg-accent-orange/15 text-accent-orange shadow-[inset_0_0_0_1px_rgba(255,107,61,0.4)]"
           : danger
@@ -1571,12 +1752,15 @@ function PopoverButton({
   open,
   onClick,
   disabled,
+  disabledTitle,
   children,
 }: {
   label: string;
   open: boolean;
   onClick: () => void;
   disabled?: boolean;
+  // Why the button is unavailable — shown as the tooltip while disabled.
+  disabledTitle?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -1584,10 +1768,10 @@ function PopoverButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={disabled && disabledTitle ? disabledTitle : label}
       aria-label={label}
       aria-pressed={open}
-      className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors duration-150 active:scale-95 disabled:opacity-30 ${
+      className={`relative flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors duration-150 before:absolute before:-inset-x-px before:-inset-y-1.5 before:content-[''] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 [&_svg]:pointer-events-none ${
         open
           ? "bg-paper-2/80 text-ink shadow-[inset_0_0_0_1px_rgb(var(--line))]"
           : "text-ink-soft hover:bg-paper-2/70 hover:text-ink"
@@ -1602,11 +1786,14 @@ function HeaderIcon({
   label,
   onClick,
   disabled,
+  disabledTitle,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  // Why the button is unavailable — shown as the tooltip while disabled.
+  disabledTitle?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -1614,9 +1801,9 @@ function HeaderIcon({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={disabled && disabledTitle ? disabledTitle : label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft transition-colors duration-150 active:scale-90 hover:bg-paper-2/70 hover:text-ink disabled:opacity-30"
+      className="relative flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft transition-colors duration-150 before:absolute before:-inset-x-0.5 before:-inset-y-1.5 before:content-[''] active:scale-90 hover:bg-paper-2/70 hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 [&_svg]:pointer-events-none"
     >
       {children}
     </button>

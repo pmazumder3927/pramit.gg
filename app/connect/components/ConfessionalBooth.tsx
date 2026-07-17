@@ -6,7 +6,11 @@ import { useRef, useState } from "react";
 import type { ConfessionalCaptchaSubmission } from "@/app/lib/confessional-captcha";
 import DrawingCaptcha, {
   type DrawingCaptchaHandle,
+  getCaptchaAttempts,
+  resetCaptchaAttempts,
 } from "@/app/connect/components/DrawingCaptcha";
+import { markTurtlesFresh } from "@/app/lib/turtleFresh";
+import { track } from "@/app/lib/track";
 import CatCouncil from "@/app/connect/components/CatCouncil";
 import {
   Doodle,
@@ -107,14 +111,27 @@ export default function ConfessionalBooth() {
 
       if (response.ok) {
         approved = true;
+        track("captcha_result", {
+          passed: true,
+          attempts: getCaptchaAttempts(),
+        });
+        track("confession_submitted", {
+          captcha_attempts: getCaptchaAttempts(),
+        });
+        resetCaptchaAttempts();
       } else {
         const data = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
         rejectionNote =
           data?.error ?? "the council did not accept your drawing.";
+        track("captcha_result", {
+          passed: false,
+          attempts: getCaptchaAttempts(),
+        });
       }
     } catch (error) {
+      // network failure, not a verdict — deliberately no captcha_result
       console.error("Error submitting message:", error);
       rejectionNote = "the council was unreachable. Try again.";
     }
@@ -124,6 +141,8 @@ export default function ConfessionalBooth() {
     if (approved) {
       setVerdictMessage(approvalNote ?? "your whisper has been recorded.");
       setPhase("approve");
+      // open the cache-bust window BEFORE listeners refetch on the event
+      markTurtlesFresh();
       window.dispatchEvent(new CustomEvent("turtle:new"));
 
       await sleep(VERDICT_HOLD_MS);
