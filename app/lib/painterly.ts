@@ -584,10 +584,13 @@ function* planPaintingGen(
     },
   ];
 
-  // content clearance per layer: a fixed halo + the brush's own half-spread
-  // (bristles fan out to ~R·0.675 from the centreline), so wide background
-  // strokes keep their bodies off the words, while fine strokes trace closer.
-  const AVOID_PAD = 10;
+  // Content avoidance is deliberately LOOSE — the painting must still read as
+  // the cover, with the strokes only ROUGHLY parting around the words. Small
+  // clearance (a thin halo, capped so wide brushes' bodies still swing over
+  // the text edges), and only MOST strokes dodge: the rest paint straight
+  // through, so the cover's forms persist across the text column instead of
+  // leaving it a blank hole.
+  const AVOID_PAD = 5;
   const avoid = opts.avoid && opts.avoid.length ? opts.avoid : null;
 
   const strokes: Stroke[] = [];
@@ -596,8 +599,11 @@ function* planPaintingGen(
     const step = L.R * 0.55;
     const colorThresh = 70;
     const obstacles = avoid
-      ? makeObstacles(avoid, w, h, AVOID_PAD + L.R * 0.8)
+      ? makeObstacles(avoid, w, h, Math.min(20, AVOID_PAD + L.R * 0.3))
       : null;
+    // fine strokes are the visible squiggle and dodge most; broad strokes
+    // carry the cover's forms and cross more often
+    const dodgeP = L.R > unit * 0.05 ? 0.62 : 0.9;
     const occ = makeOccupancy(L.dsep);
     // jittered seed grid, shuffled
     const seeds: [number, number][] = [];
@@ -622,11 +628,13 @@ function* planPaintingGen(
       if (occ.taken(sxp, syp)) continue;
       if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin)
         continue;
-      // per-stroke wobble of the content boundary — the rng draws happen only
-      // on the avoiding path, so a plan with no avoid rects stays bit-identical
-      const jx = obstacles ? (rng() - 0.5) * 14 : 0;
-      const jy = obstacles ? (rng() - 0.5) * 14 : 0;
-      if (obstacles && obstacles.hit(sxp + jx, syp + jy)) continue;
+      // per-stroke: does this one dodge the words, and with what boundary
+      // wobble? (the rng draws happen only on the avoiding path, so a plan
+      // with no avoid rects stays bit-identical)
+      const dodge = obstacles ? rng() < dodgeP : false;
+      const jx = obstacles ? (rng() - 0.5) * 18 : 0;
+      const jy = obstacles ? (rng() - 0.5) * 18 : 0;
+      if (dodge && obstacles!.hit(sxp + jx, syp + jy)) continue;
       const line = growCenterline(
         field,
         scale,
@@ -637,7 +645,7 @@ function* planPaintingGen(
         L.maxSteps,
         step,
         colorThresh,
-        obstacles,
+        dodge ? obstacles : null,
         jx,
         jy,
       );
