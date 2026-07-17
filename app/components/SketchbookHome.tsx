@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import type { HomePost } from "@/app/lib/homePosts";
 import { isFreshPost } from "@/app/lib/rankPosts";
 import { POST_TYPE_META, POST_TYPE_FILTERS } from "@/app/lib/postTypes";
@@ -14,6 +15,7 @@ import {
   PaperClip,
 } from "@/app/components/sketchbook";
 import { chaosFor, paperTextureStyle } from "@/app/lib/chaos";
+import { canOptimizeImage } from "@/app/lib/optimizedHosts";
 
 // evergreen, owner-editable
 const CURRENTLY = [
@@ -42,7 +44,7 @@ function NowSpinningCard() {
   return (
     <Link
       href="/music"
-      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1"
+      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
       style={{ rotate: "1.2deg" }}
     >
       <Tape tone="orange" rotate={-6} className="-top-3 left-6" width={64} />
@@ -127,7 +129,7 @@ function CollageCard({
   return (
     <Link
       href="/collage"
-      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1"
+      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
       style={{ rotate: "-1.4deg" }}
     >
       <Tape tone="purple" rotate={6} className="-top-3 right-6" width={64} />
@@ -142,12 +144,14 @@ function CollageCard({
       <div className="relative aspect-[16/10] overflow-hidden rounded-lg border border-ink/15 bg-paper-2">
         {bannerImage ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/* the raw collage PNG runs 3MB+ — next/image resizes it to the
+                ~340px card it actually paints into */}
+            <Image
               src={bannerImage}
               alt="last night's collage"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
+              fill
+              sizes="(min-width: 768px) 340px, 100vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <span className="absolute bottom-1.5 left-1.5 rounded-full bg-paper/85 px-2.5 py-0.5 font-hand text-sm text-ink backdrop-blur-sm">
               last painting
@@ -194,7 +198,7 @@ function FeaturedSheet({ post }: { post: HomePost }) {
     <Link
       href={`/post/${post.slug}`}
       data-avoid-lyrics
-      className="group relative block rounded-lg border border-line bg-card p-6 shadow-paper-lg transition-transform duration-300 hover:-translate-y-1 sm:p-9 sm:pt-8"
+      className="group relative block rounded-lg border border-line bg-card p-6 shadow-paper-lg transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99] sm:p-9 sm:pt-8"
       style={{ rotate: "-0.4deg" }}
     >
       <PaperClip className="-top-4 left-8" rotate={-4} tone="ink" />
@@ -228,14 +232,28 @@ function FeaturedSheet({ post }: { post: HomePost }) {
             className="-top-2.5 left-8 z-10"
             width={56}
           />
-          <div className="overflow-hidden rounded-lg border border-ink/15">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={headline}
-              alt=""
-              className="aspect-[2/1] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-              loading="lazy"
-            />
+          <div className="relative aspect-[2/1] overflow-hidden rounded-lg border border-ink/15">
+            {/* first image on the page (desktop LCP) — load it eagerly, and
+                let next/image resize when the host allows it */}
+            {canOptimizeImage(headline) ? (
+              <Image
+                src={headline}
+                alt=""
+                fill
+                priority
+                sizes="(min-width: 768px) 600px, 100vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={headline}
+                alt=""
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                loading="eager"
+                fetchPriority="high"
+              />
+            )}
           </div>
         </div>
       ) : null}
@@ -267,7 +285,7 @@ function PostCard({ post }: { post: HomePost }) {
     <div className="relative" style={{ transform: `rotate(${c.rotate}deg)` }}>
       <Link
         href={`/post/${post.slug}`}
-        className="sketch-card relative block overflow-visible p-5 pt-6"
+        className="sketch-card relative block overflow-visible p-5 pt-6 transition-transform active:scale-[0.99]"
         style={paperTextureStyle(c.paper)}
       >
         <ChaosDecor chaos={c} />
@@ -347,7 +365,7 @@ function FreshStack({ posts }: { posts: HomePost[] }) {
             >
               <Link
                 href={`/post/${post.slug}`}
-                className="group block py-3 transition-transform duration-200 hover:translate-x-1"
+                className="group block py-3 transition-transform duration-200 hover:translate-x-1 active:translate-x-1"
               >
                 <span className="font-serif text-[1.05rem] font-medium leading-snug text-ink transition-colors group-hover:text-accent-rust">
                   {post.title}
@@ -518,7 +536,8 @@ export default function SketchbookHome({
                   <button
                     key={f.key}
                     onClick={() => setFilter(f.key)}
-                    className={`rounded-full border px-4 py-1.5 text-sm transition-all duration-200 ${
+                    /* before: pads the touch target to ~44px without growing the chip */
+                    className={`relative rounded-full border px-4 py-1.5 text-sm transition-all duration-200 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] ${
                       active
                         ? "border-ink bg-ink text-paper"
                         : "border-line text-ink-soft hover:border-ink/40 hover:text-ink"

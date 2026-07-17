@@ -26,7 +26,10 @@ async function fetchPosts(): Promise<HomePost[]> {
     return rankPosts((data || []).map(stripWorkingCopy)).map(trimPostForHome);
   } catch (error) {
     console.error("Error fetching posts server-side:", error);
-    return [];
+    // Fail the render instead of returning [] — a transient Supabase error
+    // during ISR regeneration would otherwise cache a postless homepage.
+    // Throwing keeps the last good snapshot being served.
+    throw error;
   }
 }
 
