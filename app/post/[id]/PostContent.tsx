@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Post, analyzeContent } from "@/app/lib/supabase";
 import { POST_TYPE_META } from "@/app/lib/postTypes";
 import Link from "next/link";
-import { formatDistanceToNow, format } from "date-fns";
+import { stampDate, timeAgo } from "@/app/lib/dates";
 import { useViewCount, ViewCount } from "./ViewCountTracker";
 import OwnerEditLink from "@/app/components/OwnerEditLink";
 import { Doodle, Stamp, TornEdge, PaperClip, Tape } from "@/app/components/sketchbook";
@@ -286,12 +286,10 @@ export default function PostContent({
                   {post.type}
                 </Stamp>
                 <Stamp tone="ink" rotate={3}>
-                  {format(new Date(post.created_at), "dd MMM ''yy")}
+                  {stampDate(post.created_at)}
                 </Stamp>
                 <span className="font-hand text-lg text-ink-faint">
-                  {formatDistanceToNow(new Date(post.created_at), {
-                    addSuffix: true,
-                  })}
+                  {timeAgo(post.created_at)}
                 </span>
                 {/* reading-time + reads live in the right margin on lg+ */}
                 <span className="font-hand text-lg text-ink-faint xl:hidden">

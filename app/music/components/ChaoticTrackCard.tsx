@@ -3,7 +3,7 @@
 import { memo, useState, useMemo } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
-import { formatDistanceToNow } from "date-fns";
+import { timeAgo } from "@/app/lib/dates";
 import { hexToRgb } from "../lib/chaotic-styles";
 import { useAlbumColor } from "../lib/use-album-color";
 import { chaosFor, paperTextureStyle, range, chance, pick } from "@/app/lib/chaos";
@@ -322,7 +322,7 @@ function ChaoticTrackCardImpl({
               ) : null}
               {track.playedAt && (
                 <span className="hidden font-hand text-sm md:block">
-                  {repeatCount > 1 ? `looped ${repeatCount}×` : formatDistanceToNow(new Date(track.playedAt), { addSuffix: true })}
+                  {repeatCount > 1 ? `looped ${repeatCount}×` : timeAgo(track.playedAt)}
                 </span>
               )}
               {track.popularity && !track.playedAt && (
