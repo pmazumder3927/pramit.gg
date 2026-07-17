@@ -590,6 +590,15 @@ function* planPaintingGen(
   // the text edges), and only MOST strokes dodge: the rest paint straight
   // through, so the cover's forms persist across the text column instead of
   // leaving it a blank hole.
+  //
+  // The exception is CONTRAST-AWARE: a stroke over the words only hurts when
+  // its pigment sits near the text ink (dark paint under dark type by day,
+  // pale paint under pale type by night — that's when the page went
+  // unreadable until the wash dried). Each stroke knows its colour before it
+  // paints, so ink-like strokes dodge almost always and with a clearance wide
+  // enough for their whole bristle fan, while far-from-ink strokes cross
+  // freely — they physically can't cost legibility, and they're what keeps
+  // the cover alive across the text column.
   const AVOID_PAD = 5;
   const avoid = opts.avoid && opts.avoid.length ? opts.avoid : null;
 
@@ -598,8 +607,16 @@ function* planPaintingGen(
     const L = layers[li];
     const step = L.R * 0.55;
     const colorThresh = 70;
-    const obstacles = avoid
+    // two clearances: the thin halo for harmless strokes (bodies graze the
+    // words — the rough look), and a fan-wide one for ink-like strokes so
+    // none of their bristles can land on the type
+    const obstNear = avoid
       ? makeObstacles(avoid, w, h, Math.min(20, AVOID_PAD + L.R * 0.3))
+      : null;
+    // fan reach = spread/2 ≈ R·0.675, plus the ±9px boundary jitter — the
+    // margin must cover both or ink-like bristles still graze the type
+    const obstFar = avoid
+      ? makeObstacles(avoid, w, h, Math.min(70, 8 + L.R * 0.7))
       : null;
     // fine strokes are the visible squiggle and dodge most; broad strokes
     // carry the cover's forms and cross more often
@@ -628,13 +645,27 @@ function* planPaintingGen(
       if (occ.taken(sxp, syp)) continue;
       if (L.edgeMin > 0 && anisAt(field, sxp / scale, syp / scale) < L.edgeMin)
         continue;
+      const seedCol = colorAt(field, sxp / scale, syp / scale);
       // per-stroke: does this one dodge the words, and with what boundary
-      // wobble? (the rng draws happen only on the avoiding path, so a plan
-      // with no avoid rects stays bit-identical)
-      const dodge = obstacles ? rng() < dodgeP : false;
-      const jx = obstacles ? (rng() - 0.5) * 18 : 0;
-      const jy = obstacles ? (rng() - 0.5) * 18 : 0;
-      if (dodge && obstacles!.hit(sxp + jx, syp + jy)) continue;
+      // wobble? Ink-likeness raises the odds to a certainty and widens the
+      // clearance to the full bristle fan. (the rng draws happen only on the
+      // avoiding path, so a plan with no avoid rects stays bit-identical)
+      let obst: Obstacles | null = null;
+      let jx = 0;
+      let jy = 0;
+      if (obstNear) {
+        const Y = 0.299 * seedCol[0] + 0.587 * seedCol[1] + 0.114 * seedCol[2];
+        // how close this pigment sits to the text ink: dark ink by day,
+        // pale ink by night (ramps chosen so multiply/screen buildup under a
+        // few overlapping strokes keeps the type at a readable contrast; they
+        // saturate to certainty well before the genuinely harmful range)
+        const inkLike = dark ? smoothstep(115, 200, Y) : 1 - smoothstep(100, 190, Y);
+        const dodge = rng() < dodgeP + (1 - dodgeP) * inkLike;
+        jx = (rng() - 0.5) * 18;
+        jy = (rng() - 0.5) * 18;
+        if (dodge) obst = inkLike >= 0.5 ? obstFar : obstNear;
+      }
+      if (obst && obst.hit(sxp + jx, syp + jy)) continue;
       const line = growCenterline(
         field,
         scale,
@@ -645,7 +676,7 @@ function* planPaintingGen(
         L.maxSteps,
         step,
         colorThresh,
-        dodge ? obstacles : null,
+        obst,
         jx,
         jy,
       );
@@ -664,7 +695,6 @@ function* planPaintingGen(
       const mid = (N >> 1) * 2;
       const cxN = line[mid] / w;
       const cyN = line[mid + 1] / h;
-      const seedCol = colorAt(field, sxp / scale, syp / scale);
       const bristles = buildBristles(line, L.R, seedCol, L.alpha, dark, rng);
       if (!bristles.length) continue;
       const sweep =
