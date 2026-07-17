@@ -3,7 +3,6 @@
 import { motion } from "motion/react";
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
-import QRCode from "qrcode";
 
 interface QRCodeGeneratorProps {
   data?: string;
@@ -22,7 +21,9 @@ export default function QRCodeGenerator({
   const generateQRCode = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Generate actual QR code using the qrcode library
+      // The generator already runs async behind the spinner, so the qrcode
+      // library can arrive the same way instead of riding the page bundle.
+      const QRCode = (await import("qrcode")).default;
       const qrCodeDataUrl = await QRCode.toDataURL(data, {
         width: size,
         margin: 1,
