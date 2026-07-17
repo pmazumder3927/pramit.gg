@@ -31,6 +31,9 @@ interface PostContentProps {
    *  here — so server pages keep the markdown pipeline out of this bundle,
    *  while the writing room can hand in a live client-rendered proof. */
   body: React.ReactNode;
+  /** precomputed by server pages so the raw markdown needn't ship as a prop;
+   *  the writing room omits it and it's derived from the live draft instead */
+  readingTime?: number;
   prev?: PostNav | null; // a newer entry
   next?: PostNav | null; // an older entry
   /** the writing room's proof: no view tracking, no owner edit link */
@@ -45,6 +48,7 @@ const prefersReducedMotion = () =>
 export default function PostContent({
   post,
   body,
+  readingTime: readingTimeProp,
   prev,
   next,
   preview = false,
@@ -52,7 +56,8 @@ export default function PostContent({
   const tone: Tone = (POST_TYPE_META[post.type] ?? POST_TYPE_META.note).tone;
   const isAudio = !!post.media_url && /soundcloud\.com/.test(post.media_url);
   const views = useViewCount(post.id, post.view_count || 0, !preview);
-  const { readingTime } = analyzeContent(post.content || "");
+  const readingTime =
+    readingTimeProp ?? analyzeContent(post.content || "").readingTime;
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);

@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { Post, stripWorkingCopy } from "@/app/lib/supabase";
+import { Post, analyzeContent, stripWorkingCopy } from "@/app/lib/supabase";
 import PostContent, { type PostNav } from "./PostContent";
 import PostMarkdown from "./PostMarkdown";
 import { createPublicClient } from "@/utils/supabase/server";
@@ -155,11 +155,14 @@ export default async function PostPage({ params }: PostPageProps) {
       />
       <main className="post-reading relative z-10 min-h-screen py-8 sm:py-10 md:py-16">
         {/* the body renders here on the server; the client shell only gets
-            the interactive chrome (TOC, progress ink, share, view count) */}
+            the interactive chrome (TOC, progress ink, share, view count) —
+            the raw markdown never ships, so content is blanked from the
+            serialized post */}
         <PostContent
           key={post.id}
-          post={post}
+          post={{ ...post, content: "" }}
           body={<PostMarkdown content={post.content} />}
+          readingTime={analyzeContent(post.content || "").readingTime}
           prev={prev}
           next={next}
         />
