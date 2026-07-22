@@ -141,8 +141,8 @@ export async function generateMetadata({
 
   if (!post) {
     return createMetadata({
-      title: "Post Not Found",
-      description: "The requested post could not be found.",
+      title: "post not found",
+      description: "the requested post could not be found",
       noIndex: true,
     });
   }

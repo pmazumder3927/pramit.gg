@@ -458,7 +458,7 @@ export default function MusicClient({
                     {recentTracks.length === 0 && (
                       <EmptyState
                         emoji="🎵"
-                        message="No recently played tracks found."
+                        message="no recently played tracks found"
                       />
                     )}
                   </>
@@ -489,7 +489,7 @@ export default function MusicClient({
                       />
                     ))}
                     {(!topTracks || topTracks.tracks.length === 0) && (
-                      <EmptyState emoji="🏆" message="No top tracks found." />
+                      <EmptyState emoji="🏆" message="no top tracks found" />
                     )}
                   </>
                 )}
@@ -501,7 +501,7 @@ export default function MusicClient({
             <div className={selectedTab === "playlists" ? "" : "hidden"}>
               <SheetHeading
                 label="my playlists"
-                sub="curated personally, constantly"
+                sub="curated by me"
               />
               <motion.div
                 className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(140px,auto)] md:auto-rows-[minmax(160px,auto)]"
@@ -524,7 +524,7 @@ export default function MusicClient({
                     ))}
                     {(!playlists || playlists.playlists.length === 0) && (
                       <div className="col-span-full">
-                        <EmptyState emoji="📀" message="No playlists found." />
+                        <EmptyState emoji="📀" message="no playlists found" />
                       </div>
                     )}
                   </>

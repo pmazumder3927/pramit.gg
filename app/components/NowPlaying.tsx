@@ -182,7 +182,7 @@ export default function NowPlaying() {
                   </div>
                 ) : listenAlong.status === "premium_required" ? (
                   <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-                    spotify premium needed to sync — open below instead
+                    spotify premium needed to sync
                   </p>
                 ) : (
                   <button

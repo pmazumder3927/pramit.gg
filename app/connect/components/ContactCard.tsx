@@ -24,7 +24,7 @@ EMAIL:${contactInfo.email}
 URL:${contactInfo.website}
 TITLE:${contactInfo.title}
 ORG:pramit.gg
-NOTE:Living journal of interests, projects, and experiences
+NOTE:the blog of the one really cool guy with a blog
 END:VCARD`;
 
     return new Blob([vCard], { type: "text/vcard;charset=utf-8" });
@@ -212,7 +212,7 @@ END:VCARD`;
         transition={{ duration: 0.6, delay: 0.3 }}
         className="text-center font-hand text-lg text-ink-faint"
       >
-        <p>download to instantly add me to your contacts on any device</p>
+        <p>download to add me to your contacts</p>
       </motion.div>
     </div>
   );

@@ -9,7 +9,7 @@ export default function NotFound() {
         <h2 className="font-serif text-7xl md:text-8xl font-medium text-ink mb-2">404</h2>
         <h3 className="font-hand text-3xl -rotate-1 text-accent-purple mb-4">this page wandered off</h3>
         <p className="text-ink-soft mb-8 max-w-md mx-auto">
-          the page you&apos;re looking for doesn&apos;t exist or has been moved.
+          this page don&apos;t exist
         </p>
         <Link href="/" className="btn-sketch btn-sketch-solid">
           <svg

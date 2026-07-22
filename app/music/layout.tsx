@@ -3,7 +3,7 @@ import { createMetadata, siteConfig } from "@/app/lib/metadata";
 export const metadata = createMetadata({
   title: "Music",
   description:
-    "Discover Pramit Mazumder's musical journey — current listening habits, favorite tracks, and musical inspirations.",
+    "see what i'm listening to rn",
   image: siteConfig.ogImage,
   path: "/music",
 });

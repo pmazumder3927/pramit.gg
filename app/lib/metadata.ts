@@ -5,7 +5,7 @@ const siteConfig = {
   // Used for the Person / author entity (knowledge-graph disambiguation)
   author: "Pramit Mazumder",
   description:
-    "a living, evolving journal of interests, projects, and experiences",
+    "the sights and ramblings of a life in progress",
   // www is the primary host (Vercel-recommended: CNAME routing + cookie
   // isolation from *.pramit.gg side projects); apex 308s here.
   url: "https://www.pramit.gg",

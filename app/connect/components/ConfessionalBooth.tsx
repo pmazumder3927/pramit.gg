@@ -328,9 +328,7 @@ export default function ConfessionalBooth() {
                   rotate={-1.5}
                   className="mx-auto mb-2 block max-w-3xl text-lg"
                 >
-                  2 · draw a little something — it&apos;ll float in the
-                  site&apos;s background with everyone else&apos;s (publicly
-                  visible)
+                  2 · draw a little something
                 </HandNote>
                 <div className="mb-6">
                   <DrawingCaptcha

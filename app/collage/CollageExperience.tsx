@@ -380,8 +380,8 @@ export default function CollageExperience({
             />
             <p className="font-serif text-base italic text-ink-soft mb-6 leading-relaxed">
               every faint drawing floating behind the pages of this site was
-              left by a visitor. leave a sketch and yours drifts into the
-              background too — then gets painted into tonight&apos;s collage.
+              left by a visitor. leave a sketch and yours will also be forever
+              imprinted in this very mid website background.
             </p>
             <Link href="/connect" className="btn-sketch btn-sketch-solid group">
               leave a sketch

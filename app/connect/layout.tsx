@@ -5,7 +5,7 @@ import { personSchema } from "@/app/lib/structured-data";
 export const metadata = createMetadata({
   title: "Connect",
   description:
-    "Get in touch with Pramit Mazumder — links, contact card, and a confession booth. Best friends now.",
+    "connect with the one really cool guy with a blog",
   image: siteConfig.ogImage,
   path: "/connect",
 });

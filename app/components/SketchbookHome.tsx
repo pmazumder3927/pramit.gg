@@ -26,8 +26,18 @@ const CURRENTLY = [
 
 // "jun '26" — same output date-fns' format(…, "MMM ''yy") gave, without the lib
 const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
 ];
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -53,7 +63,11 @@ function NowSpinningCard() {
           className="font-hand text-xl"
           style={{ color: "rgb(var(--album-rgb))" }}
         >
-          {playing ? "now spinning" : echoing ? "last tune · echoing" : "last tune"}
+          {playing
+            ? "now spinning"
+            : echoing
+              ? "last tune · echoing"
+              : "last tune"}
         </span>
         <span className="eq-bars">
           <span
@@ -166,7 +180,7 @@ function CollageCard({
         )}
       </div>
       <p className="mt-2.5 font-serif text-sm italic leading-snug text-ink-soft">
-        painted nightly from visitors&apos; drawings — the same ones drifting
+        generated (just adds a background im sorry) from visitors&apos; drawings
         in the background{" "}
         <span className="text-accent-rust transition-colors group-hover:text-accent-orange">
           add yours →
@@ -460,8 +474,8 @@ export default function SketchbookHome({
               />
             </svg>
             <p className="mt-3 max-w-[32ch] font-serif text-[clamp(1.1rem,1.9vw,1.4rem)] font-light italic leading-snug text-ink-soft">
-              a journal of interests, projects &amp;{" "}
-              <em className="text-accent-purple">lived experiences</em>
+              the sights and ramblings of{" "}
+              <em className="text-accent-purple">a life in progress</em>
             </p>
             <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="font-hand text-xl text-accent-purple">
@@ -510,14 +524,24 @@ export default function SketchbookHome({
       {posts.length > 0 && (
         <section id="feed" className="mt-16 scroll-mt-20 md:mt-20">
           <div className="mb-8 flex items-center justify-center gap-3">
-            <Doodle name="star" tone="orange" className="h-4 w-4" strokeWidth={2} />
+            <Doodle
+              name="star"
+              tone="orange"
+              className="h-4 w-4"
+              strokeWidth={2}
+            />
             <Doodle
               name="divider"
               tone="purple"
               className="h-5 w-40 md:w-56"
               strokeWidth={2.5}
             />
-            <Doodle name="star" tone="purple" className="h-4 w-4" strokeWidth={2} />
+            <Doodle
+              name="star"
+              tone="purple"
+              className="h-4 w-4"
+              strokeWidth={2}
+            />
           </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -572,7 +596,7 @@ export default function SketchbookHome({
       {/* ===================== COLOPHON ===================== */}
       <footer className="mt-24 flex flex-wrap items-center justify-center gap-3 border-t border-line pt-7 text-center">
         <span className="font-hand text-xl text-ink-faint">
-          made by hand, mostly.
+          made by caffeine and me
         </span>
         <span aria-hidden className="text-accent-orange">
           ✦

@@ -72,10 +72,10 @@ export default function SocialLinks() {
           come along
         </span>
         <h2 className="font-serif text-2xl md:text-3xl font-medium text-ink mb-4">
-          follow the journey
+          follow the one really cool guy with a blog
         </h2>
         <p className="mx-auto max-w-md font-serif text-sm italic text-ink-soft">
-          stay connected across platforms where i share different facets of life
+          stay connected
         </p>
       </motion.div>
 
@@ -148,7 +148,7 @@ export default function SocialLinks() {
         transition={{ duration: 0.6, delay: 0.6 }}
         className="mt-12 text-center font-hand text-lg text-ink-faint"
       >
-        <p>each platform shows a different angle of the same story</p>
+        <p>i don&apos;t know which one of these ill actually be using at the time</p>
       </motion.div>
     </div>
   );
