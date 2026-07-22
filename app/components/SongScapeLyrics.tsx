@@ -476,7 +476,8 @@ function fitRow(text: string, size: number, rot: number) {
 // (no recently-played data) we freeze on whatever was last shown.
 function useActiveLine(
   track: SpotifyTrack | null,
-  lines: LyricLine[]
+  lines: LyricLine[],
+  reduced: boolean
 ): { idx: number; loop: number; mode: PlayheadMode } {
   const [cur, setCur] = useState({ idx: -1, loop: 0 });
   const playing = !!track?.isPlaying;
@@ -516,10 +517,12 @@ function useActiveLine(
       return lo;
     };
 
-    if (ph.mode === "still") {
-      // No clock to follow: FREEZE on whatever was last shown so the lyrics
-      // that went with the song stay on screen; only seek from a real position
-      // on a cold start (we've shown nothing yet).
+    if (ph.mode === "still" || reduced) {
+      // No clock to follow (or motion is turned off): FREEZE on whatever was
+      // last shown so the lyrics that went with the song stay on screen; only
+      // seek from a real position on a cold start (we've shown nothing yet).
+      // Under reduced-motion we never start the RAF playhead, so the page
+      // stops continually rewriting itself.
       const ms = ph.pos(0);
       setCur((c) => (c.idx >= 0 ? c : ms > 0 ? { idx: findIdx(ms), loop: 0 } : c));
       return;
@@ -538,7 +541,7 @@ function useActiveLine(
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [lines, ph, duration]);
+  }, [lines, ph, duration, reduced]);
 
   return { ...cur, mode: ph.mode };
 }
@@ -563,7 +566,7 @@ export default function SongScapeLyrics({
   doodleBoxes: Box[];
   vis: Box; // the on-screen slice of the view-box (lines stay inside it)
 }) {
-  const { idx, loop, mode } = useActiveLine(track, lines);
+  const { idx, loop, mode } = useActiveLine(track, lines, reduced);
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const inscriptionsRef = useRef<Inscription[]>([]);
   const colRef = useRef<Column | null>(null);
@@ -616,10 +619,10 @@ export default function SongScapeLyrics({
           return (
             <motion.g
               key={insc.key}
-              initial={{ opacity: 0, y: 6 }}
+              initial={reduced ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: ageOpacity[age] ?? 0.12, y: -age * 12 }}
-              exit={{ opacity: 0, y: -44 }}
-              transition={{ duration: 0.9, ease: "easeOut" }}
+              exit={reduced ? undefined : { opacity: 0, y: -44 }}
+              transition={reduced ? { duration: 0 } : { duration: 0.9, ease: "easeOut" }}
             >
               <g
                 style={{
