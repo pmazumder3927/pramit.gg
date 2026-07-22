@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   createConfessionalCaptchaChallenge,
+  resolveGallerySnapshot,
   verifyConfessionalCaptchaSubmission,
 } from "@/app/lib/confessional-captcha-server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -69,53 +70,59 @@ export async function POST(request: NextRequest) {
     const turtleId = randomUUID();
     let snapshotUrl: string | null = null;
 
+    // Prefer the client's raster (it carries the real brush texture) but only
+    // when it decodes and is within budget. resolveGallerySnapshot then keeps
+    // it if it has transparency, or re-renders a transparent PNG from the
+    // strokes if the browser baked an opaque background. Either way we upload a
+    // gallery-safe snapshot, so a light-ink doodle can never land as a blank
+    // white rectangle.
+    let clientPng: Buffer | null = null;
     if (typeof captcha?.snapshot === "string") {
-      console.log(
-        `[confessional] received snapshot (${captcha.snapshot.length} chars)`,
-      );
-      const buffer = decodePngDataUrl(captcha.snapshot);
-      if (!buffer) {
+      const decoded = decodePngDataUrl(captcha.snapshot);
+      if (!decoded) {
         console.warn(
           `[confessional] snapshot decode failed (prefix: ${captcha.snapshot.slice(
             0,
             48,
           )})`,
         );
-      } else if (buffer.byteLength > SNAPSHOT_MAX_BYTES) {
+      } else if (decoded.byteLength > SNAPSHOT_MAX_BYTES) {
         console.warn(
-          `[confessional] snapshot rejected: ${buffer.byteLength} bytes exceeds ${SNAPSHOT_MAX_BYTES}`,
+          `[confessional] snapshot rejected: ${decoded.byteLength} bytes exceeds ${SNAPSHOT_MAX_BYTES}`,
         );
       } else {
-        const path = `${SNAPSHOT_PREFIX}/${turtleId}.png`;
-        const { error: uploadError } = await supabase.storage
-          .from(SNAPSHOT_BUCKET)
-          .upload(path, buffer, {
-            contentType: "image/png",
-            cacheControl: "public, max-age=31536000, immutable",
-            upsert: false,
-          });
-
-        if (uploadError) {
-          // Non-fatal — the strokes still render via the SVG fallback.
-          console.error("[confessional] snapshot upload error:", uploadError);
-        } else {
-          const { data: publicUrl } = supabase.storage
-            .from(SNAPSHOT_BUCKET)
-            .getPublicUrl(path);
-          snapshotUrl = publicUrl?.publicUrl ?? null;
-          console.log(
-            `[confessional] snapshot uploaded (${buffer.byteLength} bytes) → ${snapshotUrl}`,
-          );
-        }
+        clientPng = decoded;
       }
-    } else {
-      console.log(
-        `[confessional] no snapshot in payload (captcha keys: ${
-          captcha && typeof captcha === "object"
-            ? Object.keys(captcha).join(",")
-            : "none"
-        })`,
-      );
+    }
+
+    try {
+      const buffer = await resolveGallerySnapshot(clientPng, captcha.strokes);
+      const path = `${SNAPSHOT_PREFIX}/${turtleId}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from(SNAPSHOT_BUCKET)
+        .upload(path, buffer, {
+          contentType: "image/png",
+          cacheControl: "public, max-age=31536000, immutable",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        // Non-fatal — the strokes still render via the SVG fallback.
+        console.error("[confessional] snapshot upload error:", uploadError);
+      } else {
+        const { data: publicUrl } = supabase.storage
+          .from(SNAPSHOT_BUCKET)
+          .getPublicUrl(path);
+        snapshotUrl = publicUrl?.publicUrl ?? null;
+        console.log(
+          `[confessional] snapshot uploaded (${buffer.byteLength} bytes, ${
+            clientPng ? "client" : "server-rendered"
+          }) → ${snapshotUrl}`,
+        );
+      }
+    } catch (snapshotError) {
+      // Never fail the confession over the gallery snapshot.
+      console.error("[confessional] snapshot render/upload error:", snapshotError);
     }
 
     // Don't fail the confession if the gallery insert fails.

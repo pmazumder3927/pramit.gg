@@ -343,12 +343,59 @@ export async function verifyConfessionalCaptchaSubmission(
 async function renderStrokesToDataUrl(
   strokes: DrawingStroke[],
 ): Promise<string> {
-  const svg = strokesToSvg(strokes);
+  // The grader reads the strokes against a dark ground so light dark-mode ink
+  // (#f5f5f5) stays legible to the vision model.
+  const svg = strokesToSvg(strokes, "#0a0814");
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
   return `data:image/png;base64,${png.toString("base64")}`;
 }
 
-function strokesToSvg(strokes: DrawingStroke[]) {
+/**
+ * Rasterize the strokes to a TRANSPARENT PNG for the public gallery. DoodleTile
+ * picks a contrasting tile ground per doodle and composites the strokes over it,
+ * so the snapshot must keep its transparency — no baked background. This is the
+ * server-authoritative snapshot: we render it from the strokes rather than
+ * trusting the client's canvas.toDataURL(), which on some mobile browsers bakes
+ * an opaque (usually white) background and turns light-ink doodles into a blank
+ * rectangle in the gallery.
+ */
+export async function renderStrokesToGalleryPng(
+  strokes: DrawingStroke[],
+): Promise<Buffer> {
+  const svg = strokesToSvg(strokes, null);
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/**
+ * Decide what to store as a doodle's gallery snapshot. Prefers the client's
+ * raster (it carries the real brush texture) but discards it and re-renders
+ * from the strokes when it is fully opaque — a strokes-only snapshot always has
+ * transparent regions, so a fully-opaque upload means the browser baked a
+ * background that would mask DoodleTile's contrast ground.
+ */
+export async function resolveGallerySnapshot(
+  clientPng: Buffer | null,
+  strokes: DrawingStroke[],
+): Promise<Buffer> {
+  if (clientPng) {
+    try {
+      const stats = await sharp(clientPng).stats();
+      if (!stats.isOpaque) return clientPng;
+      console.warn(
+        "[confessional] client snapshot is fully opaque — re-rendering from strokes",
+      );
+    } catch (error) {
+      console.warn("[confessional] client snapshot unreadable by sharp:", error);
+    }
+  }
+  return renderStrokesToGalleryPng(strokes);
+}
+
+function strokesToSvg(
+  strokes: DrawingStroke[],
+  // Ground fill behind the strokes; pass null for a transparent PNG.
+  background: string | null,
+) {
   const paths = strokes
     .map((stroke) => {
       const points = Array.isArray(stroke?.points) ? stroke.points : [];
@@ -376,9 +423,12 @@ function strokesToSvg(strokes: DrawingStroke[]) {
     .filter(Boolean)
     .join("");
 
+  const bg = background
+    ? `\n  <rect width="100%" height="100%" fill="${background}"/>`
+    : "";
+
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${DRAWING_CANVAS_WIDTH}" height="${DRAWING_CANVAS_HEIGHT}" viewBox="0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}">
-  <rect width="100%" height="100%" fill="#0a0814"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="${DRAWING_CANVAS_WIDTH}" height="${DRAWING_CANVAS_HEIGHT}" viewBox="0 0 ${DRAWING_CANVAS_WIDTH} ${DRAWING_CANVAS_HEIGHT}">${bg}
   ${paths}
 </svg>`;
 }
@@ -405,6 +455,20 @@ type Grading = {
   imageDetail: ImageDetail;
 };
 
+// Overriding rejection that applies to EVERY challenge kind, regardless of how
+// lenient the target-matching rules are. The graders are deliberately generous
+// about botched, illegible attempts — which is exactly the gap a troll uses to
+// slip an obscene doodle past a hard glyph ("it's a sincere finger-attempt").
+// This clause is stated first and marked as overriding so leniency never wins
+// over it. The gallery is public, so obscene submissions must never pass even
+// if they happen to gesture at the target's shape.
+const OBSCENITY_OVERRIDE =
+  "OVERRIDING RULE (takes precedence over every acceptance rule below): reject " +
+  "(matches: false) if the drawing depicts sexually explicit content — genitalia, " +
+  "a phallus, sexual acts — or is hateful (slurs, hate symbols) or graphically " +
+  "violent/gory. This holds even when the marks could otherwise be read as a " +
+  'sincere attempt at the target. Set the reason to "obscene".\n\n';
+
 function buildFreeformGrading(prompt: string, level: number): Grading {
   // Higher tiers (multi-element scenes, specific text/counts, recursive
   // composition) deserve credit for capturing the *spirit* — humans cannot
@@ -416,6 +480,7 @@ function buildFreeformGrading(prompt: string, level: number): Grading {
 
   const systemPrompt =
     "You verify captcha sketches. The user was asked to draw a specific subject and you must decide if the sketch depicts that subject.\n\n" +
+    OBSCENITY_OVERRIDE +
     grading +
     "\n\nReject (matches: false) when ANY of these apply:\n" +
     "- The drawing is blank or near-blank (a single dot, a tiny mark, almost nothing on the canvas).\n" +
@@ -442,6 +507,7 @@ function buildGlyphGrading(glyph: ChallengeGlyph): Grading {
   // who plainly did not engage with the character at all. When in doubt, accept.
   const systemPrompt =
     "You verify a captcha where the user was shown a single, intentionally intricate writing-system character (an ornate Chinese hanzi, a Japanese kanji, or an Egyptian hieroglyph) for a moment and asked to copy it freehand with their finger.\n\n" +
+    OBSCENITY_OVERRIDE +
     "These characters are deliberately too hard to reproduce accurately, and the whole point is that people BOTCH them. Your job is to judge whether the person made a sincere attempt to copy the character — NOT whether the result is legible or 'correct'. An illegible, wonky, wrong-but-earnest scribble that gestures at the character's complexity should PASS. Default to accepting; only reject someone who clearly did not engage with the character.\n\n" +
     "Accept (matches: true) generously, including when:\n" +
     "- The marks are a tangled, messy, or unrecognizable attempt that nonetheless has roughly the busy, multi-stroke density of the target character.\n" +
