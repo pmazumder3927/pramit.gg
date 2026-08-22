@@ -124,20 +124,36 @@ export async function getTopTracks(): Promise<{
 let cachedPlaylists: SpotifyPlaylistPayload[] | null = null;
 let cacheTimestamp = 0;
 
-// Fetch the admin-defined manual order. Playlists absent from this map fall
-// back to follower ranking. Returns an empty map on any error so the page
-// degrades gracefully to follower order.
-async function getManualOrder(): Promise<Map<string, number>> {
+// The manager's view of each playlist: where the owner pinned it, and whether
+// it belongs on the public page at all. Graveyard mirrors are role='graveyard'
+// and never public — before this existed, "2026 graveyard" sat at position 5 of
+// /music because Spotify reported it public and nothing filtered by role.
+// Returns empty on any error so the page degrades to follower order.
+async function getPlaylistShelf(): Promise<{
+  order: Map<string, number>;
+  excluded: Set<string>;
+}> {
   try {
     const admin = createAdminClient();
     const { data } = await admin
-      .from("spotify_playlist_order")
-      .select("playlist_id, position");
-    return new Map(
-      (data || []).map((row: any) => [row.playlist_id as string, row.position as number])
-    );
+      .from("music_playlists")
+      .select("playlist_id, sort_position, role, hidden");
+    const order = new Map<string, number>();
+    const excluded = new Set<string>();
+    for (const row of (data || []) as any[]) {
+      // Graveyard mirrors never belong here. The visitor-suggestion playlist
+      // does — it's public on purpose — unless the owner hides it.
+      if (row.role === "graveyard" || row.hidden) {
+        excluded.add(row.playlist_id as string);
+        continue;
+      }
+      if (row.sort_position !== null) {
+        order.set(row.playlist_id as string, row.sort_position as number);
+      }
+    }
+    return { order, excluded };
   } catch {
-    return new Map();
+    return { order: new Map(), excluded: new Set() };
   }
 }
 
@@ -146,12 +162,13 @@ async function getManualOrder(): Promise<Map<string, number>> {
 // dropped by the limit.
 function applyManualOrder<T extends { id: string; followers: number }>(
   playlists: T[],
-  orderMap: Map<string, number>
+  shelf: { order: Map<string, number>; excluded: Set<string> }
 ): T[] {
   return [...playlists]
+    .filter((playlist) => !shelf.excluded.has(playlist.id))
     .sort((a, b) => {
-      const aPos = orderMap.get(a.id);
-      const bPos = orderMap.get(b.id);
+      const aPos = shelf.order.get(a.id);
+      const bPos = shelf.order.get(b.id);
       if (aPos !== undefined && bPos !== undefined) return aPos - bPos;
       if (aPos !== undefined) return -1;
       if (bPos !== undefined) return 1;
@@ -173,8 +190,8 @@ export async function getPlaylists(): Promise<{
 
   // Return cached data if still valid (manual order still applied fresh)
   if (cachedPlaylists && now - cacheTimestamp < PLAYLISTS_CACHE_DURATION * 1000) {
-    const orderMap = await getManualOrder();
-    return { playlists: applyManualOrder(cachedPlaylists, orderMap) };
+    const shelf = await getPlaylistShelf();
+    return { playlists: applyManualOrder(cachedPlaylists, shelf) };
   }
 
   const access_token = await getAccessToken();
@@ -253,7 +270,7 @@ export async function getPlaylists(): Promise<{
   cachedPlaylists = playlistsWithFollowers;
   cacheTimestamp = now;
 
-  const orderMap = await getManualOrder();
+  const shelf = await getPlaylistShelf();
 
-  return { playlists: applyManualOrder(playlistsWithFollowers, orderMap) };
+  return { playlists: applyManualOrder(playlistsWithFollowers, shelf) };
 }

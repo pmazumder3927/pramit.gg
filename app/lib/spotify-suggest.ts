@@ -8,12 +8,12 @@ import { getAccessToken } from "@/app/lib/spotify";
 // A visitor picks a track (Spotify typeahead) and it gets dropped into the
 // owner's real playlist literally named "beloved user suggestions". Mirrors
 // the graveyard playlist mechanism (owner token + spotifyFetch + a playlist
-// id cached in spotify_review_sync_state, keyed by scope).
+// id cached in music_settings).
 
 const PLAYLIST_NAME = "beloved user suggestions";
 const PLAYLIST_DESCRIPTION =
   "songs left for me by visitors of pramit.gg. thank you, beloved strangers.";
-const PLAYLIST_SCOPE = "beloved_suggestions_playlist";
+const PLAYLIST_SETTING = "suggestions_playlist";
 
 export type SuggestTrack = {
   id: string;
@@ -149,7 +149,7 @@ let ensureInFlight: Promise<string> | null = null;
 
 /**
  * Find-or-create the "beloved user suggestions" playlist, caching its id in
- * spotify_review_sync_state (same singleton-settings table the graveyard uses).
+ * music_settings (the manager's singleton key/value store).
  */
 async function ensureSuggestionsPlaylist(): Promise<string> {
   if (ensureInFlight) return ensureInFlight;
@@ -158,12 +158,12 @@ async function ensureSuggestionsPlaylist(): Promise<string> {
     const supabase = createAdminClient();
 
     const { data: cached } = await supabase
-      .from("spotify_review_sync_state")
-      .select("metadata")
-      .eq("scope", PLAYLIST_SCOPE)
-      .single();
+      .from("music_settings")
+      .select("value")
+      .eq("key", PLAYLIST_SETTING)
+      .maybeSingle();
 
-    const cachedId = (cached?.metadata as { id?: string } | null)?.id;
+    const cachedId = (cached?.value as { id?: string } | null)?.id;
     if (cachedId) return cachedId;
 
     // Not cached — reuse an existing playlist of that name if the owner already
@@ -189,9 +189,9 @@ async function ensureSuggestionsPlaylist(): Promise<string> {
       playlistId = created.id;
     }
 
-    await supabase.from("spotify_review_sync_state").upsert(
-      { scope: PLAYLIST_SCOPE, metadata: { id: playlistId } },
-      { onConflict: "scope" }
+    await supabase.from("music_settings").upsert(
+      { key: PLAYLIST_SETTING, value: { id: playlistId } },
+      { onConflict: "key" }
     );
 
     return playlistId;
