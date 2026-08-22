@@ -10,11 +10,17 @@
 //              screen at night), so the doodles ink ON TOP of the drying paint.
 //   · once   : one-shot per switch, and once on first load when the song
 //              resolves. Skipped only under reduced-motion.
+//   · thread : the whole render — planner and every frame of the wet front —
+//              happens on a WORKER against an OffscreenCanvas. This layer used
+//              to paint on the main thread at the exact moment the page was
+//              busiest (hydration, doodles, lyrics, covers decoding) and the
+//              site stuttered right through the first wash. Browsers without
+//              OffscreenCanvas fall back to painting here, as before.
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { useNowPlayingContext } from "./NowPlayingContext";
-import { analyzeCover, planPaintingAsync, animatePainting, type PaintController } from "@/app/lib/painterly";
+import { paintInWorker } from "@/app/lib/painter-client";
 import { collectForegroundRects } from "@/app/lib/scape-layout";
 
 const HOLD = 1.6; // s the paint sits wet before it begins to dry
@@ -27,6 +33,16 @@ function fnv(str: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+function loadCover(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 export default function CoverReveal() {
@@ -70,14 +86,13 @@ export default function CoverReveal() {
     setActive({ url: albumUrl, key: songKey, id: cycle.current });
   }, [songKey, albumUrl, reduced]);
 
-  // run the painting for the active cycle (load → analyse → animate → dry)
+  // run the painting for the active cycle (load → hand off → paint → dry)
   useEffect(() => {
     if (!active || reduced) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     let alive = true;
-    let ctrl: PaintController | null = null;
-    let plan: ReturnType<typeof planPaintingAsync> | null = null;
+    let dispose: (() => void) | null = null;
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
     const finish = () => setActive((a) => (a && a.id === active.id ? null : a));
 
@@ -85,23 +100,28 @@ export default function CoverReveal() {
     const h = window.innerHeight;
     // full min(2, dpr) — a 1.5 cap was tried once for perf and visibly
     // softened the strokes; the owner keeps the crispness (see memory:
-    // songscape-backdrop "dpr REGRESSION"). Perf comes from the sliced
-    // planner + frame-pressure shedding instead.
+    // songscape-backdrop "dpr REGRESSION"). Perf comes from painting off the
+    // main thread instead.
     const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // set BEFORE the canvas is handed to the worker — once transferred, its
+    // size belongs to the worker and cannot be touched from here
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.style.transition = "none";
     canvas.style.opacity = String(dark ? 0.55 : 0.72);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
+    // paint laid down → let it dry: a long slow fade after a held beat
+    const dry = () => {
       if (!alive) return;
-      const an = analyzeCover(img, img.naturalWidth || 640, img.naturalHeight || 640, w, h, 240);
-      if (!an) {
+      canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
+      canvas.style.opacity = "0";
+      unmountTimer.current = setTimeout(finish, (HOLD + FADE) * 1000 + 400);
+    };
+
+    void (async () => {
+      const img = await loadCover(active.url);
+      if (!alive) return;
+      if (!img) {
         finish();
         return;
       }
@@ -110,29 +130,55 @@ export default function CoverReveal() {
       // the words. Measured at paint start — viewport px, like the canvas.
       // Unlike the lyric pen, the wash also avoids lyric-opted-out chrome
       // (the post TOC etc): true = include [data-lyrics-ignore] rects.
-      const avoid = collectForegroundRects(true);
+      const opts = { dark, seed: fnv(active.key), avoid: collectForegroundRects(true) };
+
+      const handle = await paintInWorker(canvas, img, { w, h, dpr, ...opts });
+      if (!alive) {
+        handle?.dispose();
+        return;
+      }
+      if (handle) {
+        // the worker owns the canvas for the rest of the cycle; keep it alive
+        // through the dry-out so the placeholder holds the painted frame
+        dispose = handle.dispose;
+        if ((await handle.done) === "painted") dry();
+        else if (alive) finish();
+        return;
+      }
+
+      // No OffscreenCanvas worker → paint here, as this layer always used to.
+      // The engine only loads on this path, so the main thread never even
+      // parses it when the worker is available.
+      const { analyzeCover, planPaintingAsync, animatePainting } = await import(
+        "@/app/lib/painterly"
+      );
+      if (!alive) return;
+      const ctx = canvas.getContext("2d");
+      const an = ctx
+        ? analyzeCover(img, img.naturalWidth || 640, img.naturalHeight || 640, w, h, 240)
+        : null;
+      if (!ctx || !an) {
+        finish();
+        return;
+      }
+      ctx.scale(dpr, dpr);
       // plan in frame-budgeted slices — the stroke planner is the one big
       // synchronous block, and running it whole caused a visible hitch right
       // as the repaint (and the doodles' write-in) kicked off
-      plan = planPaintingAsync(an.rgb, an.AW, an.AH, w, h, { dark, seed: fnv(active.key), avoid });
-      plan.promise.then((painting) => {
-        if (!alive || !painting) return;
-        ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), () => {
-          if (!alive) return;
-          // paint laid down → let it dry: a long slow fade after a held beat
-          canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
-          canvas.style.opacity = "0";
-          unmountTimer.current = setTimeout(finish, (HOLD + FADE) * 1000 + 400);
-        });
-      });
-    };
-    img.onerror = () => alive && finish();
-    img.src = active.url;
+      const plan = planPaintingAsync(an.rgb, an.AW, an.AH, w, h, opts);
+      let ctrl: { cancel: () => void } | null = null;
+      dispose = () => {
+        plan.cancel();
+        ctrl?.cancel();
+      };
+      const painting = await plan.promise;
+      if (!alive || !painting) return;
+      ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), dry);
+    })();
 
     return () => {
       alive = false;
-      plan?.cancel();
-      ctrl?.cancel();
+      dispose?.();
       if (unmountTimer.current) clearTimeout(unmountTimer.current);
     };
   }, [active, reduced, dark]);
@@ -141,7 +187,11 @@ export default function CoverReveal() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {/* keyed per cycle AND per sheet: a canvas can only be handed to a worker
+          once, so every (re)paint — a new song, or a theme flip mid-wash —
+          gets a fresh element rather than reusing a transferred one */}
       <canvas
+        key={`${active.id}-${dark ? "night" : "day"}`}
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
         style={{ mixBlendMode: dark ? "screen" : "multiply" }}
