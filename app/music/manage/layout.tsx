@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { createMetadata } from "@/app/lib/metadata";
 import { createClient } from "@/utils/supabase/server";
-import { MusicManagerShell } from "@/app/music/components/MusicManagerShell";
+import { ManagerShell } from "./components/ManagerShell";
 
 export const metadata = createMetadata({
-  title: "its 3 am",
-  description:
-    "Late-night music curation — review, sequence, and shape playlists.",
+  title: "it's 3am",
+  description: "Tending the library: sorting, shaping, letting go.",
   noIndex: true,
 });
 
@@ -20,9 +19,7 @@ export default async function MusicManageLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/api/auth/login");
-  }
+  if (!user) redirect("/api/auth/login");
 
-  return <MusicManagerShell>{children}</MusicManagerShell>;
+  return <ManagerShell>{children}</ManagerShell>;
 }

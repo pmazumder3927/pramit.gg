@@ -1,5 +1,5 @@
-import { MusicManagerHome } from "@/app/music/components/MusicManagerHome";
+import { Desk } from "./components/Desk";
 
 export default function MusicManagePage() {
-  return <MusicManagerHome />;
+  return <Desk />;
 }
