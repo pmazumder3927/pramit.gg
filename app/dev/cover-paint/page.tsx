@@ -13,7 +13,9 @@ const HOLD = 1.6;
 const FADE = 8.5;
 
 export default function CoverPaintPreview() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const groupRef = useRef<HTMLDivElement | null>(null);
+  const dryRef = useRef<HTMLCanvasElement | null>(null);
+  const wetRef = useRef<HTMLCanvasElement | null>(null);
   const ctrlRef = useRef<PaintController | null>(null);
   const [dark, setDark] = useState(true);
   const [url, setUrl] = useState("/me.jpg");
@@ -22,21 +24,26 @@ export default function CoverPaintPreview() {
   const seedRef = useRef(1);
 
   const paint = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const group = groupRef.current;
+    const dryCanvas = dryRef.current;
+    const wetCanvas = wetRef.current;
+    if (!group || !dryCanvas || !wetCanvas) return;
     ctrlRef.current?.cancel();
     seedRef.current += 1;
 
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    canvas.style.transition = "none";
-    canvas.style.opacity = String(dark ? 0.55 : 0.72);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
+    const dryDpr = Math.min(2, window.devicePixelRatio || 1);
+    const wetDpr = Math.min(1, dryDpr);
+    const w = dryCanvas.clientWidth;
+    const h = dryCanvas.clientHeight;
+    dryCanvas.width = Math.round(w * dryDpr);
+    dryCanvas.height = Math.round(h * dryDpr);
+    wetCanvas.width = Math.round(w * wetDpr);
+    wetCanvas.height = Math.round(h * wetDpr);
+    group.style.transition = "none";
+    group.style.opacity = String(dark ? 0.55 : 0.72);
+    const dctx = dryCanvas.getContext("2d");
+    const wctx = wetCanvas.getContext("2d");
+    if (!dctx || !wctx) return;
 
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -50,10 +57,15 @@ export default function CoverPaintPreview() {
       const painting = planPainting(an.rgb, an.AW, an.AH, w, h, { dark, seed: seedRef.current, speed });
       const planMs = Math.round(performance.now() - t);
       setInfo(`${painting.strokes.length} strokes · plan ${planMs}ms · paint ${painting.paintDur.toFixed(1)}s · dry ${FADE}s`);
-      ctrlRef.current = animatePainting(ctx, painting, dpr, () => performance.now(), () => {
-        canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
-        canvas.style.opacity = "0";
-      });
+      ctrlRef.current = animatePainting(
+        { dry: dctx, dryDpr, wet: wctx, wetDpr },
+        painting,
+        () => performance.now(),
+        () => {
+          group.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
+          group.style.opacity = "0";
+        },
+      );
     };
     img.onerror = () => setInfo("image failed to load");
     img.src = url;
@@ -83,9 +95,12 @@ export default function CoverPaintPreview() {
             <path d="M840 470 q35 -65 95 -22 q45 33 0 86 q-55 55 -98 0 q-26 -38 3 -64" />
           </g>
         </svg>
-        <canvas ref={canvasRef}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 1,
-            mixBlendMode: dark ? "screen" : "multiply" }} />
+        <div ref={groupRef}
+          style={{ position: "absolute", inset: 0, zIndex: 1, isolation: "isolate",
+            mixBlendMode: dark ? "screen" : "multiply" }}>
+          <canvas ref={dryRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+          <canvas ref={wetRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", padding: "12px 16px" }}>
