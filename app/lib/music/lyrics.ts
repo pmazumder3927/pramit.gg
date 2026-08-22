@@ -45,36 +45,82 @@ const SCRIPTS: Array<[RegExp, string]> = [
   [/[\u0400-\u04ff]/g, "Russian"],
 ];
 
-// Enough to separate the romance languages from English without a dependency.
-const WORD_MARKERS: Array<[RegExp, string]> = [
-  [/\b(que|para|como|porque|siempre|nunca|coraz\u00f3n|amor|noche)\b/i, "Spanish"],
-  [/\b(voc\u00ea|n\u00e3o|cora\u00e7\u00e3o|saudade|ent\u00e3o|tamb\u00e9m)\b/i, "Portuguese"],
-  [/\b(je|tu|nous|c'est|pour|avec|toujours|jamais)\b/i, "French"],
-  [/\b(ich|nicht|und|das|mit|immer|dich)\b/i, "German"],
-];
+// Latin-script lyrics get scored against small stopword sets. A single keyword
+// is not enough evidence: "Excuses" is a Punjabi song whose romanised lyrics
+// happen to contain "tu", and calling that French would put it in the wrong
+// stretch of a playlist. A language has to win by a clear margin or we say we
+// don't know, which the sequencer handles fine.
+const STOPWORDS: Record<string, string[]> = {
+  English: [
+    "the", "and", "you", "that", "with", "for", "was", "are", "this", "just",
+    "know", "like", "don't", "i'm", "your", "what", "when", "all", "but", "not",
+  ],
+  Spanish: [
+    "que", "para", "como", "porque", "siempre", "nunca", "corazón", "amor",
+    "noche", "todo", "más", "por", "con", "una", "los", "las", "eres", "quiero",
+  ],
+  Portuguese: [
+    "você", "não", "coração", "saudade", "então", "também", "mais", "meu",
+    "minha", "estou", "quando", "porque", "tudo", "isso",
+  ],
+  French: [
+    "je", "tu", "nous", "c'est", "pour", "avec", "toujours", "jamais", "mais",
+    "dans", "elle", "moi", "toi", "être", "faire", "veux", "peux",
+  ],
+  German: [
+    "ich", "nicht", "und", "das", "mit", "immer", "dich", "der", "die", "aber",
+    "wenn", "auch", "mich", "kann", "wir",
+  ],
+  Italian: [
+    "che", "non", "sono", "questo", "perché", "sempre", "amore", "cuore",
+    "come", "della", "quando", "anche", "voglio",
+  ],
+};
+
+const ROMANCE_FLOOR = 4;
+const ENGLISH_FLOOR = 6;
+
+function scoreStopwords(text: string): Array<[string, number]> {
+  const words = text.toLowerCase().match(/[a-zà-ÿ']+/g) || [];
+  const seen = new Set(words);
+  return Object.entries(STOPWORDS)
+    .map(([name, list]) => {
+      const hits = list.reduce(
+        (sum, word) => sum + (seen.has(word) ? 1 : 0),
+        0
+      );
+      return [name, hits] as [string, number];
+    })
+    .sort((a, b) => b[1] - a[1]);
+}
 
 /**
  * A stray kanji in an English rap verse shouldn't make the song Chinese, so a
  * script has to carry a real share of the letters before it counts. Japanese
  * wins over Chinese when kana are present, since Japanese lyrics carry kanji
- * too.
+ * too. Latin-script lyrics fall through to stopword scoring, and return null
+ * rather than a guess when nothing wins clearly — a romanised Punjabi song is
+ * not English, and pretending otherwise puts it in the wrong stretch.
  */
-function detectLanguage(text: string): string {
+function detectLanguage(text: string): string | null {
   const letters = (text.match(/[^\s\d.,!?"'()\[\]{}\-—–:;/\\|*&%$#@+=~`^<>]/g) || [])
     .length;
-  if (letters === 0) return "English";
+  if (letters === 0) return null;
 
   let best: { name: string; share: number } | null = null;
   for (const [pattern, name] of SCRIPTS) {
     const share = (text.match(pattern) || []).length / letters;
-    if (share >= 0.1 && (!best || share > best.share)) best = { name, share };
-    // kana settle the han ambiguity outright
     if (name === "Japanese" && share >= 0.03) return "Japanese";
+    if (share >= 0.1 && (!best || share > best.share)) best = { name, share };
   }
   if (best) return best.name;
 
-  const marked = WORD_MARKERS.find(([pattern]) => pattern.test(text));
-  return marked ? marked[1] : "English";
+  const [top, runnerUp] = scoreStopwords(text);
+  if (!top) return null;
+  const floor = top[0] === "English" ? ENGLISH_FLOOR : ROMANCE_FLOOR;
+  if (top[1] < floor) return null;
+  if (runnerUp && runnerUp[1] > 0 && top[1] < runnerUp[1] * 2) return null;
+  return top[0];
 }
 
 function parseTimestamps(synced: string): number[] {
@@ -91,6 +137,8 @@ function parseTimestamps(synced: string): number[] {
 export type LyricFeature = {
   track_id: string;
   status: "ok" | "instrumental" | "missing";
+  /** kept so the embedding pass can re-read it without hitting LRCLIB again */
+  text: string | null;
   language: string | null;
   word_count: number | null;
   line_count: number | null;
@@ -111,6 +159,7 @@ async function lookup(track: {
   const base: LyricFeature = {
     track_id: track.track_id,
     status: "missing",
+    text: null,
     language: null,
     word_count: null,
     line_count: null,
@@ -166,6 +215,7 @@ async function lookup(track: {
   return {
     ...base,
     status: words > 0 ? "ok" : "instrumental",
+    text: plain ? plain.slice(0, 6000) : null,
     language: words > 0 ? detectLanguage(plain || synced) : null,
     word_count: words,
     line_count: stamps.length || plain.split("\n").filter(Boolean).length,

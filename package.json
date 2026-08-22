@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "media:upload": "node scripts/upload-media.mjs",
-    "migrate:slugs": "ts-node scripts/migrate-slugs.ts"
+    "migrate:slugs": "ts-node scripts/migrate-slugs.ts",
+    "music:audio": "node scripts/music-audio.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

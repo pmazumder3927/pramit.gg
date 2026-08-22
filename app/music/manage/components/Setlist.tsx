@@ -26,30 +26,28 @@ import {
   formatDuration,
 } from "./paper";
 
-const KNOBS: Array<{
-  key: keyof Pick<Shape, "spreadArtists" | "groupLanguage" | "spreadFavorites" | "keepEras">;
-  label: string;
-  blurb: string;
-}> = [
+type KnobKey = "flow" | "leadWithNew" | "spreadArtists" | "spreadFavorites";
+
+const KNOBS: Array<{ key: KnobKey; label: string; blurb: string }> = [
+  {
+    key: "flow",
+    label: "keep neighbours alike",
+    blurb: "How much each song should resemble the one after it.",
+  },
+  {
+    key: "leadWithNew",
+    label: "lead with the new",
+    blurb: "Pull what's new to you, and newly released, toward the front.",
+  },
   {
     key: "spreadArtists",
     label: "spread the artists",
     blurb: "Keep the same name from turning up twice in a row.",
   },
   {
-    key: "groupLanguage",
-    label: "hold the language",
-    blurb: "Keep same-language runs together, and change over on a quiet song.",
-  },
-  {
     key: "spreadFavorites",
     label: "deal the favourites",
     blurb: "Spread the ones you actually play across the whole run.",
-  },
-  {
-    key: "keepEras",
-    label: "keep the years close",
-    blurb: "Put songs from the same stretch of time near each other.",
   },
 ];
 
@@ -210,6 +208,9 @@ export function Setlist({ playlistId }: { playlistId: string }) {
   }
 
   const card = view.scorecard;
+  // Rewriting the playlist in one shot is far fewer requests, but it re-adds
+  // every track by URI — which delisted tracks would not survive.
+  const canRewrite = card.moves > 90 && card.gone === 0;
   const positions = new Map(view.order.map((uid, index) => [uid, index]));
   const sectionStarts = new Map(
     view.sections.map((section) => [section.uids[0], section])
@@ -236,7 +237,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
             {busy === "saving" ? "keeping…" : "keep this order"}
           </Button>
           <Button
-            onClick={() => apply(card.moves > 90 ? "rewrite" : "reorder")}
+            onClick={() => apply(canRewrite ? "rewrite" : "reorder")}
             disabled={Boolean(busy) || card.moves === 0}
             tone="ink"
           >
@@ -249,29 +250,53 @@ export function Setlist({ playlistId }: { playlistId: string }) {
         </div>
       </div>
 
-      {card.moves > 90 && (
+      {canRewrite && (
         <p className="mt-3 rounded border border-accent-orange/40 bg-accent-orange/5 px-3 py-2 text-xs text-ink-soft">
           That&rsquo;s a big change. Applying will rewrite the playlist in one go
           rather than make {card.moves} separate moves — faster, but it resets
           the &ldquo;date added&rdquo; on every song.
         </p>
       )}
+      {card.moves > 90 && card.gone > 0 && (
+        <p className="mt-3 rounded border border-line bg-paper-2 px-3 py-2 text-xs text-ink-soft">
+          {card.moves} moves, one request each. It would be quicker to rewrite the
+          playlist wholesale, but {card.gone} delisted track
+          {card.gone === 1 ? "" : "s"} here can&rsquo;t be re-added by URI, so
+          that would drop {card.gone === 1 ? "it" : "them"}. Clear the
+          &ldquo;gone&rdquo; pile first if you want the fast path.
+        </p>
+      )}
 
       {/* ---- what's true about this order ---- */}
       <Sheet className="mt-5 p-4">
-        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Score
+            value={`${card.flow}%`}
+            name="handed to a near neighbour"
+            good={card.flow >= 50}
+            note="a shuffle scores about 25"
+          />
+          <Score
+            value={`${card.newUpFront}%`}
+            name="where the newest quarter sits"
+            good={card.newUpFront <= 40}
+            note="50 is scattered evenly"
+          />
           <Score
             value={card.artistClumps}
             name="artists back to back"
             good={card.artistClumps === 0}
           />
           <Score
-            value={`${card.cushionedSwitches}/${card.languageSwitches}`}
-            name="language changes cushioned"
-            good={card.languageSwitches === 0 || card.cushionedSwitches >= card.languageSwitches / 2}
+            value={card.favoriteSpread === null ? "—" : `${card.favoriteSpread}%`}
+            name="favourites evenly dealt"
+            good={card.favoriteSpread === null || card.favoriteSpread >= 60}
           />
-          <Score value={`${card.favoriteSpread}%`} name="favourites evenly dealt" good={card.favoriteSpread >= 60} />
-          <Score value={`${card.wordFit}%`} name={`follows "${WORD_CURVE_LABELS[view.shape.wordCurve]}"`} good={card.wordFit >= 60} />
+          <Score
+            value={`${card.wordFit}%`}
+            name={`follows "${WORD_CURVE_LABELS[view.shape.wordCurve]}"`}
+            good={card.wordFit >= 60}
+          />
         </div>
 
         <Rule className="my-3.5" />
@@ -331,6 +356,34 @@ export function Setlist({ playlistId }: { playlistId: string }) {
                 <p className="mt-1 text-xs leading-snug text-ink-faint">{knob.blurb}</p>
               </div>
             ))}
+          </div>
+
+          <Rule className="my-4" />
+
+          {/* what "alike" means */}
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-ink">what counts as alike</span>
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {Math.round((1 - shape.likeness) * 100)} sound / {Math.round(shape.likeness * 100)} sense
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(shape.likeness * 100)}
+              onChange={(event) => nudge({ likeness: Number(event.target.value) / 100 })}
+              className="mt-1.5 w-full accent-[rgb(var(--accent-purple))]"
+            />
+            <div className="mt-1 flex justify-between text-xs text-ink-faint">
+              <span>how it sounds — tempo, loudness, brightness, timbre</span>
+              <span>what it&rsquo;s about — an embedding of the lyrics</span>
+            </div>
+            <p className="mt-2 font-mono text-[10px] text-ink-faint">
+              {card.heard} of {view.playlist.trackCount} listened to ·{" "}
+              {card.read} embedded
+            </p>
           </div>
 
           <Rule className="my-4" />
@@ -423,7 +476,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
                   const track = byUid.get(uid);
                   if (!track) return null;
                   return (
-                    <Reorder.Item key={uid} value={uid}>
+                    <Reorder.Item key={uid} value={uid} drag={!track.unavailable}>
                       <Row
                         track={track}
                         index={positions.get(uid)! + 1}
@@ -446,10 +499,12 @@ function Score({
   value,
   name,
   good,
+  note,
 }: {
   value: number | string;
   name: string;
   good: boolean;
+  note?: string;
 }) {
   return (
     <div>
@@ -459,6 +514,7 @@ function Score({
         {value}
       </p>
       <Label className="mt-1 block">{name}</Label>
+      {note && <p className="mt-0.5 text-[10px] text-ink-faint/80">{note}</p>}
     </div>
   );
 }
@@ -513,10 +569,23 @@ function Row({
   startsSection: boolean;
 }) {
   const facts: string[] = [];
+  if (track.unavailable) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-dashed border-line bg-paper-2 px-3 py-2">
+        <span className="w-6 flex-none text-right font-mono text-[10px] tabular-nums text-ink-faint">
+          {index}
+        </span>
+        <span className="h-[34px] w-[34px] flex-none rounded border border-dashed border-line" />
+        <span className="flex-1 truncate text-sm italic text-ink-faint">
+          delisted by Spotify · {track.trackId}
+        </span>
+      </div>
+    );
+  }
   if (track.releaseYear) facts.push(String(track.releaseYear));
+  if (track.bpm) facts.push(`${Math.round(track.bpm)} bpm`);
   if (track.instrumental) facts.push("instrumental");
   else if (track.wordsPerMin !== null) facts.push(`${Math.round(track.wordsPerMin)} wpm`);
-  else facts.push("no lyrics on file");
   facts.push(formatDuration(track.durationMs));
 
   return (
@@ -538,12 +607,21 @@ function Row({
               ★
             </span>
           )}
+          {track.freshness >= 0.7 && (
+            <span
+              className="flex-none font-mono text-[10px] text-accent-purple"
+              title="new to you, or newly out"
+            >
+              new
+            </span>
+          )}
         </div>
         <p className="truncate text-xs text-ink-faint">{track.artist}</p>
       </div>
 
       <div className="hidden flex-none items-center gap-1.5 sm:flex">
         {track.language && <Tag tone="cool">{track.language}</Tag>}
+        {!track.heard && <Tag>not listened to</Tag>}
         {track.kin.slice(0, 1).map((name) => (
           <Tag key={name}>also in {name}</Tag>
         ))}

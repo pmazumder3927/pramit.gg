@@ -63,6 +63,9 @@ function flatten(track: SpotifyTrack) {
     popularity: track.popularity,
     explicit: Boolean(track.explicit),
     song_url: track.external_urls?.spotify || null,
+    // Spotify keeps delisted tracks in playlists as an item with an id and an
+    // empty name. Nothing can be learned about them and they can't be played.
+    unavailable: !track.name,
   };
 }
 

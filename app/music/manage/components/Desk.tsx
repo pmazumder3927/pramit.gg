@@ -47,8 +47,7 @@ export function Desk() {
   const playlists =
     data?.playlists.filter((p) => p.role === "shelf" || p.role === "inbox") || [];
   const publicPlaylists = playlists.filter((p) => p.isPublic && !p.hidden);
-  const lyricsTotal = data?.counts.tracks || 0;
-  const lyricsKnown = data?.counts.lyricsKnown || 0;
+  const total = data?.counts.analysable || 0;
 
   async function resync() {
     setSyncing(true);
@@ -61,20 +60,20 @@ export function Desk() {
     }
   }
 
-  /** Walk LRCLIB in chunks until every track has been looked up once. */
-  async function readLyrics() {
+  /** Walk a chunked enrichment endpoint until it says there is nothing left. */
+  async function runPass(path: string, limit: number, done: (r: any) => boolean) {
     setEnriching("starting");
     try {
       for (let pass = 0; pass < 60; pass++) {
-        const response = await fetch("/api/music/enrich", {
+        const response = await fetch(path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 60 }),
+          body: JSON.stringify({ limit }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error);
         setEnriching(`${result.remaining} to go`);
-        if (result.remaining === 0 || result.processed === 0) break;
+        if (done(result)) break;
       }
       await mutate();
     } catch (failure) {
@@ -159,27 +158,40 @@ export function Desk() {
           </p>
         )}
 
-        {/* lyric coverage — the sequencer's whole basis, so it says so */}
-        {lyricsTotal > 0 && (
-          <div className="mt-6">
-            <div className="flex items-baseline justify-between gap-4">
-              <Label>
-                lyrics on file · {lyricsKnown} of {lyricsTotal}
-              </Label>
-              {lyricsKnown < lyricsTotal && (
-                <Button onClick={readLyrics} disabled={Boolean(enriching)} tone="warm">
-                  {enriching ? `reading… ${enriching}` : "read the rest"}
-                </Button>
-              )}
-            </div>
-            <div className="mt-2">
-              <Meter value={lyricsKnown} max={lyricsTotal} />
-            </div>
-            <p className="mt-2 text-xs text-ink-faint">
-              Sequencing runs on language and words-per-minute pulled from synced
-              lyrics. Spotify stopped serving audio features, so this is the real
-              measurement that&rsquo;s left.
-            </p>
+        {/* What the sequencer actually knows. It says so plainly, because
+            every one of these is a real measurement and the gaps are real
+            gaps. */}
+        {total > 0 && (
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <Coverage
+              name="lyrics read"
+              known={data!.counts.lyricsKnown}
+              total={total}
+              blurb="language and words a minute, from synced lyrics"
+              action="read them"
+              busy={enriching}
+              onRun={() =>
+                runPass("/api/music/enrich", 60, (r) => r.remaining === 0 || r.processed === 0)
+              }
+            />
+            <Coverage
+              name="lyrics embedded"
+              known={data!.counts.senseKnown}
+              total={total}
+              blurb="what a song is about, as a vector"
+              action="embed them"
+              busy={enriching}
+              onRun={() =>
+                runPass("/api/music/embed", 300, (r) => r.remaining === 0 || r.embedded === 0)
+              }
+            />
+            <Coverage
+              name="listened to"
+              known={data!.counts.soundKnown}
+              total={total}
+              blurb="tempo, loudness, brightness, timbre — off a real preview"
+              hint="npm run music:audio"
+            />
           </div>
         )}
       </Sheet>
@@ -279,6 +291,52 @@ export function Desk() {
       )}
 
     </main>
+  );
+}
+
+function Coverage({
+  name,
+  known,
+  total,
+  blurb,
+  action,
+  busy,
+  onRun,
+  hint,
+}: {
+  name: string;
+  known: number;
+  total: number;
+  blurb: string;
+  action?: string;
+  busy?: string | null;
+  onRun?: () => void;
+  hint?: string;
+}) {
+  const complete = known >= total;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <Label>{name}</Label>
+        <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+          {known}/{total}
+        </span>
+      </div>
+      <div className="mt-1.5">
+        <Meter value={known} max={total || 1} />
+      </div>
+      <p className="mt-1.5 text-xs leading-snug text-ink-faint">{blurb}</p>
+      {!complete && action && onRun && (
+        <Button onClick={onRun} disabled={Boolean(busy)} tone="warm" className="mt-2">
+          {busy ? `working… ${busy}` : action}
+        </Button>
+      )}
+      {!complete && hint && (
+        <p className="mt-2 font-mono text-[10px] text-ink-faint">
+          needs ffmpeg — run <span className="text-accent-orange">{hint}</span>
+        </p>
+      )}
+    </div>
   );
 }
 

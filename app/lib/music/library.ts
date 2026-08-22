@@ -36,10 +36,11 @@ type TrackRow = {
   shelf: string;
   retired_at: string | null;
   reviewed_at: string | null;
+  unavailable: boolean;
 };
 
 const TRACK_COLUMNS =
-  "track_id, uri, title, artist_display, album_name, album_image_url, song_url, duration_ms, release_year, liked, liked_at, last_played_at, affinity, shelf, retired_at, reviewed_at";
+  "track_id, uri, title, artist_display, album_name, album_image_url, song_url, duration_ms, release_year, liked, liked_at, last_played_at, affinity, shelf, retired_at, reviewed_at, unavailable";
 
 /** Handled recently enough that it doesn't belong in a pile yet. */
 function settled(reviewedAt: string | null): boolean {
@@ -109,6 +110,8 @@ function toCard(
   const sinceLiked = daysSince(row.liked_at);
   const sincePlayed = daysSince(row.last_played_at);
 
+  if (row.unavailable) notes.push("Spotify has delisted this");
+
   if (playlistIds.length === 0) {
     notes.push(row.liked ? "in no playlist" : "not liked, not filed");
   } else {
@@ -127,8 +130,8 @@ function toCard(
   return {
     id: row.track_id,
     uri: row.uri,
-    title: row.title,
-    artist: row.artist_display,
+    title: row.unavailable ? "gone from Spotify" : row.title,
+    artist: row.unavailable ? "—" : row.artist_display,
     album: row.album_name,
     art: row.album_image_url,
     songUrl: row.song_url,
@@ -139,6 +142,7 @@ function toCard(
     lastPlayedAt: row.last_played_at,
     likedAt: row.liked_at,
     playlistIds,
+    unavailable: row.unavailable,
     notes: notes.slice(0, 3),
   };
 }
@@ -151,13 +155,25 @@ export async function getDesk(): Promise<DeskSnapshot> {
   const supabase = createAdminClient();
   const { playlists, shelves, byTrack, byPlaylist } = await loadPlaylistIndex();
 
-  const [{ data: tracks }, { count: lyricsKnown }, sequences, lastSync] =
-    await Promise.all([
+  const [
+    { data: tracks },
+    { count: lyricsKnown },
+    { count: soundKnown },
+    { count: senseKnown },
+    sequences,
+    lastSync,
+  ] = await Promise.all([
       supabase
         .from("music_tracks")
-        .select("track_id, liked, shelf, liked_at, affinity, reviewed_at"),
+        .select("track_id, liked, shelf, liked_at, affinity, reviewed_at, unavailable"),
       supabase
         .from("music_track_lyrics")
+        .select("track_id", { count: "exact", head: true }),
+      supabase
+        .from("music_track_sound")
+        .select("track_id", { count: "exact", head: true }),
+      supabase
+        .from("music_track_sense")
         .select("track_id", { count: "exact", head: true }),
       supabase
         .from("music_sequences")
@@ -176,10 +192,12 @@ export async function getDesk(): Promise<DeskSnapshot> {
   const fresh = openLiked.filter((t) => (daysSince(t.liked_at as string) ?? 9999) <= 60);
   const cold = open.filter(
     (t) =>
+      !t.unavailable &&
       byTrack.has(t.track_id as string) &&
       t.affinity === null &&
       (daysSince(t.liked_at as string) ?? 0) > COLD_AFTER_DAYS
   );
+  const gone = active.filter((t) => t.unavailable);
 
   const sequenceMap = new Map(
     (sequences.data || []).map((row: any) => [row.playlist_id as string, row])
@@ -240,6 +258,12 @@ export async function getDesk(): Promise<DeskSnapshot> {
       blurb: "not liked, not filed — decide or let go",
       count: orphans.length,
     },
+    {
+      kind: "gone",
+      label: "gone from spotify",
+      blurb: "delisted, still taking up a slot",
+      count: gone.length,
+    },
   ] as DeckSummary[]).filter((deck) => deck.count > 0);
 
   for (const playlist of shelves) {
@@ -258,10 +282,15 @@ export async function getDesk(): Promise<DeskSnapshot> {
     error: null,
     counts: {
       tracks: active.length,
+      // Delisted tracks can't be read, embedded or listened to, so they don't
+      // belong in the denominator of any coverage bar.
+      analysable: active.filter((t) => !t.unavailable).length,
       liked: liked.length,
       unfiled: unfiled.length,
       retired: retired.length,
       lyricsKnown: lyricsKnown ?? 0,
+      soundKnown: soundKnown ?? 0,
+      senseKnown: senseKnown ?? 0,
     },
     decks,
     playlists: managed,
@@ -281,6 +310,10 @@ const DECK_COPY: Record<DeckKind, { label: string; blurb: string }> = {
   },
   orphans: { label: "adrift", blurb: "not liked, not filed — decide or let go" },
   playlist: { label: "playlist", blurb: "walk the whole playlist" },
+  gone: {
+    label: "gone from spotify",
+    blurb: "delisted, still taking up a slot — nothing to do but let them go",
+  },
 };
 
 export async function getDeck(
@@ -315,24 +348,29 @@ export async function getDeck(
     label = playlistNames.get(playlistId) || "playlist";
   } else if (kind === "unfiled") {
     pool = rows
-      .filter((row) => row.liked && !byTrack.has(row.track_id))
+      .filter((row) => !row.unavailable && row.liked && !byTrack.has(row.track_id))
       .sort((a, b) => (b.liked_at || "").localeCompare(a.liked_at || ""));
   } else if (kind === "fresh") {
     pool = rows
-      .filter((row) => row.liked && (daysSince(row.liked_at) ?? 999) <= 60)
+      .filter(
+        (row) => !row.unavailable && row.liked && (daysSince(row.liked_at) ?? 999) <= 60
+      )
       .sort((a, b) => (b.liked_at || "").localeCompare(a.liked_at || ""));
   } else if (kind === "cold") {
     pool = rows
       .filter(
         (row) =>
+          !row.unavailable &&
           byTrack.has(row.track_id) &&
           row.affinity === null &&
           (daysSince(row.liked_at) ?? 0) > COLD_AFTER_DAYS
       )
       .sort((a, b) => (a.liked_at || "").localeCompare(b.liked_at || ""));
+  } else if (kind === "gone") {
+    pool = rows.filter((row) => row.unavailable);
   } else if (kind === "orphans") {
     pool = rows
-      .filter((row) => !row.liked && !byTrack.has(row.track_id))
+      .filter((row) => !row.unavailable && !row.liked && !byTrack.has(row.track_id))
       .sort((a, b) => (a.liked_at || "").localeCompare(b.liked_at || ""));
   }
 

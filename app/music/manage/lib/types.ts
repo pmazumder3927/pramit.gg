@@ -49,11 +49,20 @@ export interface TrackCard {
   lastPlayedAt: string | null;
   likedAt: string | null;
   playlistIds: string[];
+  /** Spotify has delisted it — no title, no artist, nothing to play */
+  unavailable: boolean;
   /** plain-language facts, not scores */
   notes: string[];
 }
 
-export const DECK_KINDS = ["unfiled", "cold", "fresh", "playlist", "orphans"] as const;
+export const DECK_KINDS = [
+  "unfiled",
+  "cold",
+  "fresh",
+  "playlist",
+  "orphans",
+  "gone",
+] as const;
 export type DeckKind = (typeof DECK_KINDS)[number];
 
 export interface DeckSummary {
@@ -82,10 +91,14 @@ export interface DeskSnapshot {
   error: string | null;
   counts: {
     tracks: number;
+    /** active and still on Spotify — the denominator for every coverage bar */
+    analysable: number;
     liked: number;
     unfiled: number;
     retired: number;
     lyricsKnown: number;
+    soundKnown: number;
+    senseKnown: number;
   };
   decks: DeckSummary[];
   playlists: ManagedPlaylist[];
@@ -143,19 +156,25 @@ export const WORD_CURVE_BLURBS: Record<WordCurve, string> = {
 };
 
 /**
- * The shaping knobs. Every one is a rule you can check by eye — no invented
- * "energy" or "valence", because Spotify no longer serves audio features and
- * guessing them from song titles is how the old sequencer produced noise.
+ * The shaping knobs.
+ *
+ * `flow` is the engine: it wants each song to sit next to one it resembles.
+ * `likeness` decides what "resembles" means — what a song is about (an
+ * embedding of its lyrics) or what it sounds like (tempo, loudness, brightness
+ * and timbre measured off a real 30-second preview). Everything else is a rule
+ * you can check by eye.
  */
 export interface Shape {
+  /** how hard to keep neighbours alike */
+  flow: number;
+  /** 0 = purely how it sounds, 1 = purely what it's about */
+  likeness: number;
   /** keep the same artist from stacking up */
   spreadArtists: number;
-  /** hold same-language runs together and cushion the switches */
-  groupLanguage: number;
   /** deal the songs you actually play across the whole run */
   spreadFavorites: number;
-  /** keep tracks from the same years near each other */
-  keepEras: number;
+  /** pull new-to-you and newly-released songs toward the front */
+  leadWithNew: number;
   /** how wordiness should move across the playlist */
   wordCurve: WordCurve;
   /** open on something you play; close on something long and sparse */
@@ -164,10 +183,11 @@ export interface Shape {
 }
 
 export const DEFAULT_SHAPE: Shape = {
+  flow: 0.75,
+  likeness: 0.55,
   spreadArtists: 0.7,
-  groupLanguage: 0.5,
-  spreadFavorites: 0.6,
-  keepEras: 0.3,
+  spreadFavorites: 0.5,
+  leadWithNew: 0.6,
   wordCurve: "arc",
   openStrong: true,
   landSoft: true,
@@ -189,6 +209,14 @@ export interface SeqTrack {
   language: string | null;
   wordsPerMin: number | null;
   instrumental: boolean;
+  unavailable: boolean;
+  /** 0..1 — new to you, newly released, or both */
+  freshness: number;
+  /** measured off a real preview; null when no preview could be found */
+  bpm: number | null;
+  /** does this track have a sound vector / a lyric embedding */
+  heard: boolean;
+  read: boolean;
   /** names of the owner's other playlists this song also lives in */
   kin: string[];
 }
@@ -202,20 +230,29 @@ export interface Section {
 }
 
 export interface Scorecard {
+  /** 0-100, how alike each song is to the one after it */
+  flow: number;
+  /** 0-100, how far toward the front the newest material sits */
+  newUpFront: number;
   /** adjacent pairs by the same artist */
   artistClumps: number;
   /** points where the language changes */
   languageSwitches: number;
   /** ...of which land on an instrumental or near-wordless track */
   cushionedSwitches: number;
-  /** 0-100, how evenly your most-played songs are dealt out */
-  favoriteSpread: number;
+  /** 0-100, how evenly your most-played songs are dealt out; null if too few */
+  favoriteSpread: number | null;
   /** 0-100, how well wordiness follows the chosen curve */
   wordFit: number;
   /** how many songs would move if you applied this */
   moves: number;
   /** songs with no lyric data, so the word rules can't see them */
   unknownWords: number;
+  /** songs Spotify has delisted, parked at the end */
+  gone: number;
+  /** how many of these songs have been listened to / embedded */
+  heard: number;
+  read: number;
 }
 
 export interface Setlist {

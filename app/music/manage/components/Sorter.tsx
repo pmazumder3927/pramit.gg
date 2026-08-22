@@ -148,7 +148,7 @@ export function Sorter() {
   useEffect(() => {
     setFiling(card?.playlistIds || []);
     dragX.set(0);
-    if (card?.uri) player.play(card.uri);
+    if (card?.uri && !card.unavailable) player.play(card.uri);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card?.id]);
 
@@ -376,6 +376,7 @@ export function Sorter() {
                     </p>
 
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {card.unavailable && <Tag tone="cool">delisted</Tag>}
                       {card.liked && <Tag tone="warm">liked</Tag>}
                       {card.notes.map((note) => (
                         <Tag key={note}>{note}</Tag>

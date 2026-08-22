@@ -20,10 +20,11 @@ function readShape(input: unknown): Shape | undefined {
   };
 
   return {
+    flow: number("flow", DEFAULT_SHAPE.flow),
+    likeness: number("likeness", DEFAULT_SHAPE.likeness),
     spreadArtists: number("spreadArtists", DEFAULT_SHAPE.spreadArtists),
-    groupLanguage: number("groupLanguage", DEFAULT_SHAPE.groupLanguage),
     spreadFavorites: number("spreadFavorites", DEFAULT_SHAPE.spreadFavorites),
-    keepEras: number("keepEras", DEFAULT_SHAPE.keepEras),
+    leadWithNew: number("leadWithNew", DEFAULT_SHAPE.leadWithNew),
     wordCurve: WORD_CURVES.includes(raw.wordCurve as never)
       ? (raw.wordCurve as Shape["wordCurve"])
       : DEFAULT_SHAPE.wordCurve,
