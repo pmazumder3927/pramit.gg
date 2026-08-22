@@ -11,7 +11,8 @@
 //                  flat regions so backgrounds don't go noisy (Tyler Hobbs flow fields).
 //   · brush      — sumi-e: tapered multi-bristle marks, low-alpha buildup, the band
 //                  thins to dry at the ends. Drawn into an offscreen buffer.
-// Pure DOM/canvas (no React) so a dev harness and the component share one code path.
+// Pure canvas (no React, no DOM lookups) so the dev harness, the component and the
+// paint WORKER all share one code path — see app/lib/painter.worker.ts.
 
 /* ------------------------------ rng / math ----------------------------- */
 export function mulberry32(seed: number) {
@@ -33,6 +34,48 @@ const smoothstep = (e0: number, e1: number, x: number) => {
   const t = clamp01((x - e0) / (e1 - e0 || 1));
   return t * t * (3 - 2 * t);
 };
+
+/* ----------------------------- surfaces -------------------------------- */
+// Scratch canvases. The engine renders inside a worker (where there is no
+// `document`) and, on browsers without OffscreenCanvas, on the main thread —
+// so ask the environment for a surface rather than reaching for the DOM.
+export interface Surface {
+  width: number;
+  height: number;
+  getContext(
+    id: "2d",
+    opts?: { willReadFrequently?: boolean },
+  ): CanvasRenderingContext2D | null;
+}
+
+// The slice of the 2D API the engine actually uses. Both
+// CanvasRenderingContext2D and OffscreenCanvasRenderingContext2D satisfy it,
+// which a plain union of the two does not (TS can't reconcile their overloads).
+export interface Ctx2D {
+  lineCap: CanvasLineCap;
+  lineJoin: CanvasLineJoin;
+  strokeStyle: string | CanvasGradient | CanvasPattern;
+  lineWidth: number;
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void;
+  stroke(): void;
+  clearRect(x: number, y: number, w: number, h: number): void;
+  drawImage(img: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
+  scale(x: number, y: number): void;
+}
+
+export function makeSurface(w: number, h: number): Surface {
+  const W = Math.max(1, Math.round(w));
+  const H = Math.max(1, Math.round(h));
+  if (typeof document === "undefined")
+    return new OffscreenCanvas(W, H) as unknown as Surface;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  return c;
+}
 
 /* ------------------------------- field --------------------------------- */
 export interface Field {
@@ -637,7 +680,7 @@ function* planPaintingGen(
     let sinceYield = 0;
     for (const [sxp, syp] of seeds) {
       if (strokes.length >= maxStrokes) break;
-      if (++sinceYield >= 48) {
+      if (++sinceYield >= 16) {
         sinceYield = 0;
         yield;
       }
@@ -781,7 +824,7 @@ export function planPaintingAsync(
 
 /* ------------------------------ animate -------------------------------- */
 // (caller sets the constant lineCap/lineJoin once — not per bristle)
-function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke, p: number) {
+function drawStroke(ctx: Ctx2D, s: Stroke, p: number) {
   for (const b of s.bristles) {
     const n = b.pts.length / 2;
     if (n < 2) continue;
@@ -808,16 +851,14 @@ export interface PaintController {
 // Animate the painting onto an already-dpr-scaled 2D context. Completed strokes
 // accumulate in an offscreen "dry" buffer; only the wet front is redrawn per frame.
 export function animatePainting(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   painting: Painting,
   dpr: number,
   now: () => number,
   onDone: () => void,
 ): PaintController {
   const { w, h, strokes } = painting;
-  const dry = document.createElement("canvas");
-  dry.width = Math.max(1, Math.round(w * dpr));
-  dry.height = Math.max(1, Math.round(h * dpr));
+  const dry = makeSurface(w * dpr, h * dpr);
   const dctx = dry.getContext("2d")!;
   dctx.scale(dpr, dpr);
   // constant stroke state, set once instead of per bristle
@@ -839,20 +880,13 @@ export function animatePainting(
     if (t0 < 0) t0 = tn;
     const t = (tn - t0) / 1000;
 
-    // Watch the real frame cadence. When frames run long two in a row, bake the
-    // oldest wet strokes early (they complete instantly instead of finishing
-    // their last fraction) — invisible among hundreds of marks, and it sheds
-    // exactly the per-frame redraw work that was causing the stutter. Never
-    // triggers while the machine keeps up.
+    // Watch the real frame cadence. When frames run long two in a row, bake some
+    // of the wet front early — those marks complete instantly instead of running
+    // out their last fraction. Never triggers while the machine keeps up, so a
+    // machine that does keep up paints every mark exactly as planned.
     if (prevT >= 0 && tn - prevT > 28) slow++;
     else slow = Math.max(0, slow - 1);
     prevT = tn;
-    if (slow >= 2 && active.length > 24) {
-      const shed = Math.ceil(active.length * 0.15);
-      for (let i = 0; i < shed; i++) drawStroke(dctx, active[i], 1);
-      active.splice(0, shed);
-      slow = 0;
-    }
 
     let baked = false;
     while (idx < strokes.length && strokes[idx].start <= t)
@@ -867,12 +901,23 @@ export function animatePainting(
       }
       active = still;
     }
+    if (slow >= 2 && active.length > 24) {
+      // shed the marks NEAREST finishing rather than the oldest — they have the
+      // least left to lay down, so snapping them costs the least on screen
+      const prog = (s: Stroke) => (t - s.start) / s.dur;
+      active.sort((a, b) => prog(b) - prog(a));
+      const shed = Math.ceil(active.length * 0.15);
+      for (let i = 0; i < shed; i++) drawStroke(dctx, active[i], 1);
+      active = active.slice(shed);
+      baked = true;
+      slow = 0;
+    }
 
     // Repaint only when something moved: wet strokes advanced, a stroke baked,
     // or wet marks from last frame need replacing with their dry state.
     if (active.length || baked || wasWet) {
       ctx.clearRect(0, 0, w, h);
-      ctx.drawImage(dry, 0, 0, w, h);
+      ctx.drawImage(dry as unknown as CanvasImageSource, 0, 0, w, h);
       for (const s of active) drawStroke(ctx, s, (t - s.start) / s.dur);
     }
     wasWet = active.length > 0;
@@ -912,9 +957,7 @@ export function analyzeCover(
     AH = longSide;
     AW = Math.max(1, Math.round(longSide * aspect));
   }
-  const c = document.createElement("canvas");
-  c.width = AW;
-  c.height = AH;
+  const c = makeSurface(AW, AH);
   const cx = c.getContext("2d", { willReadFrequently: true });
   if (!cx) return null;
   // cover-fit the square source into AW×AH (crop overflow, no distortion)
