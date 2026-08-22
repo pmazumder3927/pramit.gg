@@ -1,5 +1,5 @@
-// Main-thread side of the paint worker: hand the repaint's canvas, cover and
-// job over to app/lib/painter.worker.ts and get told when the paint is laid
+// Main-thread side of the paint worker: hand the repaint's two layers, cover
+// and job over to app/lib/painter.worker.ts and get told when the paint is laid
 // down. Returns null whenever the worker path is not usable, so the caller can
 // fall back to painting on this thread.
 
@@ -8,7 +8,8 @@ import type { AvoidBox } from "./painterly";
 export interface PaintJob {
   w: number;
   h: number;
-  dpr: number;
+  dryDpr: number;
+  wetDpr: number;
   dark: boolean;
   seed: number;
   avoid: AvoidBox[];
@@ -25,7 +26,7 @@ export interface PaintHandle {
 // to stop trying for the rest of the session.
 let unusable = false;
 
-function supported(canvas: HTMLCanvasElement): boolean {
+export function workerPaintSupported(canvas: HTMLCanvasElement): boolean {
   return (
     !unusable &&
     typeof Worker !== "undefined" &&
@@ -36,11 +37,12 @@ function supported(canvas: HTMLCanvasElement): boolean {
 }
 
 export async function paintInWorker(
-  canvas: HTMLCanvasElement,
+  dryCanvas: HTMLCanvasElement,
+  wetCanvas: HTMLCanvasElement,
   cover: CanvasImageSource,
   job: PaintJob,
 ): Promise<PaintHandle | null> {
-  if (!supported(canvas)) return null;
+  if (!workerPaintSupported(dryCanvas)) return null;
 
   let worker: Worker;
   try {
@@ -75,7 +77,8 @@ export async function paintInWorker(
   }
 
   let bitmap: ImageBitmap;
-  let off: OffscreenCanvas;
+  let dry: OffscreenCanvas;
+  let wet: OffscreenCanvas;
   try {
     bitmap = await createImageBitmap(cover);
   } catch {
@@ -83,7 +86,8 @@ export async function paintInWorker(
     return null;
   }
   try {
-    off = canvas.transferControlToOffscreen();
+    dry = dryCanvas.transferControlToOffscreen();
+    wet = wetCanvas.transferControlToOffscreen();
   } catch {
     bitmap.close();
     worker.terminate();
@@ -99,7 +103,7 @@ export async function paintInWorker(
     };
     worker.onerror = () => resolve("failed");
   });
-  worker.postMessage({ type: "paint", canvas: off, bitmap, ...job }, [off, bitmap]);
+  worker.postMessage({ type: "paint", dry, wet, bitmap, ...job }, [dry, wet, bitmap]);
   return {
     done,
     dispose: () => {

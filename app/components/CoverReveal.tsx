@@ -11,11 +11,19 @@
 //   · once   : one-shot per switch, and once on first load when the song
 //              resolves. Skipped only under reduced-motion.
 //   · thread : the whole render — planner and every frame of the wet front —
-//              happens on a WORKER against an OffscreenCanvas. This layer used
+//              happens on a WORKER against OffscreenCanvases. This layer used
 //              to paint on the main thread at the exact moment the page was
 //              busiest (hydration, doodles, lyrics, covers decoding) and the
 //              site stuttered right through the first wash. Browsers without
 //              OffscreenCanvas fall back to painting here, as before.
+//   · layers : TWO stacked canvases in one isolated, blended group. The lower
+//              holds the settled marks at full device resolution and is only
+//              ever added to; the upper holds just the marks mid-growth and is
+//              the only thing redrawn each frame, at half resolution, because
+//              nothing stays on it longer than a stroke takes to land. Relaying
+//              the whole viewport at dpr 2 every frame was a fill-rate wall on
+//              integrated graphics (8.5fps at 1920×1080; the same painting at
+//              dpr 1 ran at sixty). The painting you hold and dry is unchanged.
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
@@ -53,7 +61,9 @@ export default function CoverReveal() {
   const [dark, setDark] = useState(false);
   const [active, setActive] = useState<{ url: string; key: string; id: number } | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const groupRef = useRef<HTMLDivElement | null>(null);
+  const dryRef = useRef<HTMLCanvasElement | null>(null);
+  const wetRef = useRef<HTMLCanvasElement | null>(null);
   const startedFor = useRef<string | null>(null);
   const cycle = useRef(0);
   const unmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,8 +99,10 @@ export default function CoverReveal() {
   // run the painting for the active cycle (load → hand off → paint → dry)
   useEffect(() => {
     if (!active || reduced) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const group = groupRef.current;
+    const dryCanvas = dryRef.current;
+    const wetCanvas = wetRef.current;
+    if (!group || !dryCanvas || !wetCanvas) return;
     let alive = true;
     let dispose: (() => void) | null = null;
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
@@ -98,23 +110,26 @@ export default function CoverReveal() {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    // full min(2, dpr) — a 1.5 cap was tried once for perf and visibly
-    // softened the strokes; the owner keeps the crispness (see memory:
-    // songscape-backdrop "dpr REGRESSION"). Perf comes from painting off the
-    // main thread instead.
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    // set BEFORE the canvas is handed to the worker — once transferred, its
-    // size belongs to the worker and cannot be touched from here
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    canvas.style.transition = "none";
-    canvas.style.opacity = String(dark ? 0.55 : 0.72);
+    // the settled layer keeps the full min(2, dpr) — a cap was tried once for
+    // perf and visibly softened the strokes; the owner keeps the crispness
+    // (see memory: songscape-backdrop "dpr REGRESSION"). Only the wet front,
+    // which no mark stays on for longer than it takes to land, runs coarser.
+    const dryDpr = Math.min(2, window.devicePixelRatio || 1);
+    const wetDpr = Math.min(1, dryDpr);
+    // set BEFORE the canvases are handed to the worker — once transferred,
+    // their size belongs to the worker and cannot be touched from here
+    dryCanvas.width = Math.round(w * dryDpr);
+    dryCanvas.height = Math.round(h * dryDpr);
+    wetCanvas.width = Math.round(w * wetDpr);
+    wetCanvas.height = Math.round(h * wetDpr);
+    group.style.transition = "none";
+    group.style.opacity = String(dark ? 0.55 : 0.72);
 
     // paint laid down → let it dry: a long slow fade after a held beat
     const dry = () => {
       if (!alive) return;
-      canvas.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
-      canvas.style.opacity = "0";
+      group.style.transition = `opacity ${FADE}s ease-in ${HOLD}s`;
+      group.style.opacity = "0";
       unmountTimer.current = setTimeout(finish, (HOLD + FADE) * 1000 + 400);
     };
 
@@ -132,7 +147,13 @@ export default function CoverReveal() {
       // (the post TOC etc): true = include [data-lyrics-ignore] rects.
       const opts = { dark, seed: fnv(active.key), avoid: collectForegroundRects(true) };
 
-      const handle = await paintInWorker(canvas, img, { w, h, dpr, ...opts });
+      const handle = await paintInWorker(dryCanvas, wetCanvas, img, {
+        w,
+        h,
+        dryDpr,
+        wetDpr,
+        ...opts,
+      });
       if (!alive) {
         handle?.dispose();
         return;
@@ -153,15 +174,16 @@ export default function CoverReveal() {
         "@/app/lib/painterly"
       );
       if (!alive) return;
-      const ctx = canvas.getContext("2d");
-      const an = ctx
-        ? analyzeCover(img, img.naturalWidth || 640, img.naturalHeight || 640, w, h, 240)
-        : null;
-      if (!ctx || !an) {
+      const dctx = dryCanvas.getContext("2d");
+      const wctx = wetCanvas.getContext("2d");
+      const an =
+        dctx && wctx
+          ? analyzeCover(img, img.naturalWidth || 640, img.naturalHeight || 640, w, h, 240)
+          : null;
+      if (!dctx || !wctx || !an) {
         finish();
         return;
       }
-      ctx.scale(dpr, dpr);
       // plan in frame-budgeted slices — the stroke planner is the one big
       // synchronous block, and running it whole caused a visible hitch right
       // as the repaint (and the doodles' write-in) kicked off
@@ -173,7 +195,12 @@ export default function CoverReveal() {
       };
       const painting = await plan.promise;
       if (!alive || !painting) return;
-      ctrl = animatePainting(ctx, painting, dpr, () => performance.now(), dry);
+      ctrl = animatePainting(
+        { dry: dctx, dryDpr, wet: wctx, wetDpr },
+        painting,
+        () => performance.now(),
+        dry,
+      );
     })();
 
     return () => {
@@ -187,15 +214,22 @@ export default function CoverReveal() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* keyed per cycle AND per sheet: a canvas can only be handed to a worker
+      {/* One isolated, blended group holding both layers, so wet-over-dry
+          composites inside it and only the finished stack meets the sheet —
+          exactly what the single canvas used to hand the page. Opacity lives
+          here too, so the dry-out fades the whole painting as one.
+          Keyed per cycle AND per sheet: a canvas can only be handed to a worker
           once, so every (re)paint — a new song, or a theme flip mid-wash —
-          gets a fresh element rather than reusing a transferred one */}
-      <canvas
+          gets fresh elements rather than reusing transferred ones. */}
+      <div
         key={`${active.id}-${dark ? "night" : "day"}`}
-        ref={canvasRef}
-        className="absolute inset-0 h-full w-full"
-        style={{ mixBlendMode: dark ? "screen" : "multiply" }}
-      />
+        ref={groupRef}
+        className="absolute inset-0"
+        style={{ isolation: "isolate", mixBlendMode: dark ? "screen" : "multiply" }}
+      >
+        <canvas ref={dryRef} className="absolute inset-0 h-full w-full" />
+        <canvas ref={wetRef} className="absolute inset-0 h-full w-full" />
+      </div>
     </div>
   );
 }

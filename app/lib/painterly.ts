@@ -848,27 +848,75 @@ export interface PaintController {
   cancel: () => void;
 }
 
-// Animate the painting onto an already-dpr-scaled 2D context. Completed strokes
-// accumulate in an offscreen "dry" buffer; only the wet front is redrawn per frame.
+/** The two layers a painting is laid onto. See animatePainting. */
+export interface PaintSurfaces {
+  /** settled marks. Full device resolution; only ever ADDED to, never cleared. */
+  dry: Ctx2D;
+  dryDpr: number;
+  /** the wet front, cleared and relaid every frame. May be coarser than dry. */
+  wet: Ctx2D;
+  wetDpr: number;
+}
+
+// Animate the painting onto two stacked layers.
+//
+// Every stroke still growing has to be wiped and relaid each frame, which used
+// to mean clearing and re-blitting the WHOLE viewport at device resolution
+// (2880×1800 at dpr 2 — 20MB a frame, cleared, copied and re-composited sixty
+// times a second) no matter how little of it had moved. On an integrated GPU
+// that is a fill-rate wall: measured 8.5fps at 1920×1080 dpr 2, and 4.7fps on a
+// 1440p sheet, where the same painting at dpr 1 ran at sixty.
+//
+// So the layers are split by how often they change:
+//   · dry — every finished stroke, drawn ONCE, at full device resolution. Never
+//           cleared, never re-blitted. This is the painting you actually look
+//           at: by the time the paint holds and dries, everything is here, at
+//           exactly the resolution it always was.
+//   · wet — only the marks mid-growth, cleared and relaid each frame, and free
+//           to be coarser since it holds nothing for longer than a stroke takes
+//           to land (and lands into dry at full resolution when it does).
+//
+// The caller stacks them in one isolated, blended group, so the two composite
+// exactly as the single canvas did: wet over dry, then the group's opacity,
+// then the sheet's multiply (or screen at night).
 export function animatePainting(
-  ctx: Ctx2D,
+  surfaces: PaintSurfaces,
   painting: Painting,
-  dpr: number,
   now: () => number,
   onDone: () => void,
 ): PaintController {
   const { w, h, strokes } = painting;
-  const dry = makeSurface(w * dpr, h * dpr);
-  const dctx = dry.getContext("2d")!;
-  dctx.scale(dpr, dpr);
+  const { dry, wet } = surfaces;
+  dry.scale(surfaces.dryDpr, surfaces.dryDpr);
+  wet.scale(surfaces.wetDpr, surfaces.wetDpr);
   // constant stroke state, set once instead of per bristle
-  dctx.lineCap = ctx.lineCap = "round";
-  dctx.lineJoin = ctx.lineJoin = "round";
+  dry.lineCap = wet.lineCap = "round";
+  dry.lineJoin = wet.lineJoin = "round";
+
+  // Finished strokes wait here rather than going straight onto dry. Touching
+  // dry hands the compositor a whole full-resolution viewport, so it is worth
+  // doing in batches — and the more that costs, the larger the batch. Until a
+  // batch lands the finished marks keep being relaid at full length on the
+  // (cheap) wet layer, so nothing waits to appear; it simply appears there
+  // first. Measured across a batch sweep: too small and dry commits dominate
+  // (40fps at 24), past ~100 it flattens out.
+  const SETTLE_BATCH = clamp(
+    Math.round((w * surfaces.dryDpr * h * surfaces.dryDpr) / 50000),
+    64,
+    192,
+  );
+  // …and a wait bound as well as a size one. At the crescendo a batch fills in
+  // a few frames, but at the sparse open — a handful of marks a second, where
+  // the eye actually follows one — it never would, and those marks would sit
+  // coarse for the whole paint. Nothing waits longer than this to settle.
+  const SETTLE_WAIT = 0.2; // s
 
   let raf = 0;
   let t0 = -1;
   let idx = 0;
   let active: Stroke[] = [];
+  let pending: Stroke[] = [];
+  let pendingSince = 0;
   let cancelled = false;
   let prevT = -1;
   let slow = 0; // consecutive over-budget frames
@@ -888,15 +936,14 @@ export function animatePainting(
     else slow = Math.max(0, slow - 1);
     prevT = tn;
 
-    let baked = false;
     while (idx < strokes.length && strokes[idx].start <= t)
       active.push(strokes[idx++]);
     if (active.length) {
       const still: Stroke[] = [];
       for (const s of active) {
         if (t >= s.start + s.dur) {
-          drawStroke(dctx, s, 1); // finished → bake into dry
-          baked = true;
+          if (!pending.length) pendingSince = t;
+          pending.push(s); // finished → queue to settle
         } else still.push(s);
       }
       active = still;
@@ -907,22 +954,33 @@ export function animatePainting(
       const prog = (s: Stroke) => (t - s.start) / s.dur;
       active.sort((a, b) => prog(b) - prog(a));
       const shed = Math.ceil(active.length * 0.15);
-      for (let i = 0; i < shed; i++) drawStroke(dctx, active[i], 1);
+      if (!pending.length) pendingSince = t;
+      for (let i = 0; i < shed; i++) pending.push(active[i]);
       active = active.slice(shed);
-      baked = true;
       slow = 0;
     }
 
-    // Repaint only when something moved: wet strokes advanced, a stroke baked,
-    // or wet marks from last frame need replacing with their dry state.
-    if (active.length || baked || wasWet) {
-      ctx.clearRect(0, 0, w, h);
-      ctx.drawImage(dry as unknown as CanvasImageSource, 0, 0, w, h);
-      for (const s of active) drawStroke(ctx, s, (t - s.start) / s.dur);
+    const last = idx >= strokes.length && active.length === 0;
+    if (
+      pending.length &&
+      (pending.length >= SETTLE_BATCH || t - pendingSince >= SETTLE_WAIT || last)
+    ) {
+      for (const s of pending) drawStroke(dry, s, 1);
+      pending = [];
     }
-    wasWet = active.length > 0;
 
-    if (idx >= strokes.length && active.length === 0) {
+    // relay the wet front — the marks still growing, plus any finished ones
+    // still waiting for a batch to settle onto dry
+    if (active.length || pending.length || wasWet) {
+      wet.clearRect(0, 0, w, h);
+      for (const s of pending) drawStroke(wet, s, 1);
+      for (const s of active) drawStroke(wet, s, (t - s.start) / s.dur);
+    }
+    wasWet = active.length > 0 || pending.length > 0;
+
+    if (last) {
+      // everything has settled onto dry; wipe the wet layer so nothing doubles
+      wet.clearRect(0, 0, w, h);
       onDone();
       return;
     }
