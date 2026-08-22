@@ -183,13 +183,31 @@ export function Sorter() {
     decide(before === after ? "keep" : "file");
   }, [card, filing, decide]);
 
+  /**
+   * Step back a card. If the decision hasn't drained yet it is pulled out of
+   * the queue and never happens at all; once it has reached the server it
+   * stands, and the UI says so rather than pretending otherwise.
+   */
   const stepBack = useCallback(() => {
     if (index === 0) return;
+    const last = done[done.length - 1];
+    if (last) {
+      const at = queue.current.findIndex(
+        (pending) =>
+          pending.trackId === last.decision.trackId && pending.verb === last.decision.verb
+      );
+      if (at >= 0) {
+        queue.current.splice(at, 1);
+        setFlushError(null);
+      } else {
+        setFlushError(
+          `"${last.card.title}" was already saved — undo it from the graveyard or by filing it again.`
+        );
+      }
+    }
     setIndex((i) => i - 1);
     setDone((list) => list.slice(0, -1));
-    // Anything already flushed stays flushed; undo on the server is a separate,
-    // explicit action so a stray keypress can't silently rewrite Spotify.
-  }, [index]);
+  }, [index, done]);
 
   const toggleChip = useCallback((id: string) => {
     setFiling((current) =>

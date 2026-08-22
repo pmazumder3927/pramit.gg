@@ -11,8 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         "/api/",
         "/dashboard/",
         "/music/manage/",
-        "/music/review/",
-        "/music/sequencer/",
         "/post/*/preview",
       ],
     },

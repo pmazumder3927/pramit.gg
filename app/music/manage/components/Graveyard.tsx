@@ -24,6 +24,7 @@ export function Graveyard() {
 
   const [mirroring, setMirroring] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [plan, setPlan] = useState<{ added: number; removed: number } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [reviving, setReviving] = useState<string | null>(null);
 
@@ -31,21 +32,38 @@ export function Graveyard() {
   const activeYear = open ?? years[0]?.year ?? null;
   const pending = years.reduce((sum, year) => sum + year.pending, 0);
 
-  async function mirror() {
+  /**
+   * Mirroring removes as well as adds — the year playlists carry leftovers from
+   * when a retired song could wander back into a playlist — so it says what it
+   * would do and waits for a second press.
+   */
+  async function mirror(commit: boolean) {
     setMirroring(true);
     setResult(null);
     try {
-      const response = await fetch("/api/music/graveyard", { method: "POST" });
+      const response = await fetch("/api/music/graveyard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: !commit }),
+      });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error);
-      setResult(
-        payload.added || payload.removed
-          ? `added ${payload.added}, removed ${payload.removed}`
-          : "already matching"
-      );
-      await mutate();
+
+      if (!commit) {
+        if (!payload.added && !payload.removed) {
+          setResult("Spotify already matches");
+          setPlan(null);
+        } else {
+          setPlan({ added: payload.added, removed: payload.removed });
+        }
+      } else {
+        setResult(`added ${payload.added}, removed ${payload.removed}`);
+        setPlan(null);
+        await mutate();
+      }
     } catch (failure) {
       setResult(failure instanceof Error ? failure.message : "failed");
+      setPlan(null);
     } finally {
       setMirroring(false);
     }
@@ -77,13 +95,37 @@ export function Graveyard() {
           <Figure value={isLoading ? "—" : data!.total} name="at rest" tone="cool" />
           <Figure value={isLoading ? "—" : years.length} name="years" />
           <div className="flex flex-col items-end gap-1.5">
-            <Button onClick={mirror} disabled={mirroring} tone={pending > 0 ? "warm" : "plain"}>
-              {mirroring ? "mirroring…" : pending > 0 ? `mirror ${pending} to spotify` : "mirror to spotify"}
+            <Button
+              onClick={() => mirror(false)}
+              disabled={mirroring || Boolean(plan)}
+              tone={pending > 0 ? "warm" : "plain"}
+            >
+              {mirroring ? "checking…" : "mirror to spotify"}
             </Button>
             {result && <Label>{result}</Label>}
           </div>
         </div>
       </div>
+
+      {plan && (
+        <Sheet className="mt-6 border-accent-orange/40 p-4">
+          <p className="text-sm text-ink">
+            This would add {plan.added} and{" "}
+            <span className="text-accent-rust">remove {plan.removed}</span> from the
+            year playlists on Spotify.
+          </p>
+          <p className="mt-1 text-xs text-ink-soft">
+            Removals are songs sitting in a graveyard playlist that aren&rsquo;t
+            retired any more — usually because you put them back somewhere.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button onClick={() => mirror(true)} disabled={mirroring} tone="ink">
+              {mirroring ? "writing…" : "do it"}
+            </Button>
+            <Button onClick={() => setPlan(null)}>leave it</Button>
+          </div>
+        </Sheet>
+      )}
 
       <Sheet className="mt-6 p-4">
         <p className="text-xs leading-relaxed text-ink-soft">

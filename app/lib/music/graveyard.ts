@@ -12,9 +12,10 @@ import { getSetting } from "./settings";
  * exactly the loop that used to drag retired songs into triage, so this never
  * does it — it only adds what's missing and removes what's no longer retired.
  */
-export async function mirrorGraveyard(): Promise<{
+export async function mirrorGraveyard(options?: { dryRun?: boolean }): Promise<{
   added: number;
   removed: number;
+  dryRun: boolean;
 }> {
   const supabase = createAdminClient();
   const mapping = (await getSetting<Record<string, string>>("graveyard_playlists")) || {};
@@ -47,12 +48,18 @@ export async function mirrorGraveyard(): Promise<{
     const toAdd = Array.from(target).filter((uri) => !live.has(uri));
     const toRemove = Array.from(live).filter((uri) => !target.has(uri));
 
+    added += toAdd.length;
+    removed += toRemove.length;
+
+    // Removing is the destructive half — the caller asks what would happen
+    // before it happens, and the page shows the number.
+    if (options?.dryRun) continue;
+
     for (const batch of chunk(toAdd, 100)) {
       await api(`/playlists/${playlistId}/tracks`, {
         method: "POST",
         body: JSON.stringify({ uris: batch }),
       });
-      added += batch.length;
     }
 
     for (const batch of chunk(toRemove, 100)) {
@@ -60,7 +67,6 @@ export async function mirrorGraveyard(): Promise<{
         method: "DELETE",
         body: JSON.stringify({ tracks: batch.map((uri) => ({ uri })) }),
       });
-      removed += batch.length;
     }
 
     await supabase
@@ -69,5 +75,5 @@ export async function mirrorGraveyard(): Promise<{
       .eq("playlist_id", playlistId);
   }
 
-  return { added, removed };
+  return { added, removed, dryRun: Boolean(options?.dryRun) };
 }
