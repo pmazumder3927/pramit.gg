@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
@@ -57,14 +64,9 @@ export function Sorter() {
 
   const queue = useRef<Decision[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
   const [cardHeight, setCardHeight] = useState(200);
 
   const player = useDeckPlayer();
-  const dragX = useMotionValue(0);
-  const rotate = useTransform(dragX, [-260, 0, 260], [-7, 0, 7]);
-  const keepInk = useTransform(dragX, [30, SWIPE], [0, 1]);
-  const retireInk = useTransform(dragX, [-SWIPE, -30], [1, 0]);
 
   const cards = data?.cards || [];
   const card = cards[index] || null;
@@ -147,8 +149,14 @@ export function Sorter() {
 
   useEffect(() => {
     setFiling(card?.playlistIds || []);
-    dragX.set(0);
     if (card?.uri && !card.unavailable) player.play(card.uri);
+
+    // A chip keeps focus after you click it, and the focus ring is the same
+    // accent as the selected state — so the last playlist you touched went on
+    // looking chosen for every card after it. Focus belongs to the deck once
+    // the card has moved on; the shortcuts live on the window either way.
+    const focused = document.activeElement as HTMLElement | null;
+    if (focused?.dataset.chip !== undefined) focused.blur();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card?.id]);
 
@@ -353,126 +361,14 @@ export function Sorter() {
           ))}
 
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.div
+            <SongCard
               key={card.id}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.7}
-              style={{ x: dragX, rotate }}
-              onDragEnd={(_, info) => {
-                if (info.offset.x > SWIPE) commit();
-                else if (info.offset.x < -SWIPE) decide("retire");
-              }}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: dragX.get() > 0 ? 320 : -320, transition: { duration: 0.16 } }}
-              transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
-              className="relative cursor-grab active:cursor-grabbing"
-              ref={(node) => {
-                cardRef.current = node;
-                if (node) setCardHeight(node.offsetHeight);
-              }}
-            >
-              <Sheet className="relative overflow-hidden p-4 sm:p-5">
-                {/* swipe verdict, written in ink rather than a coloured overlay */}
-                <motion.span
-                  style={{ opacity: keepInk }}
-                  className="pointer-events-none absolute right-5 top-4 font-hand text-2xl text-accent-orange"
-                >
-                  keep
-                </motion.span>
-                <motion.span
-                  style={{ opacity: retireInk }}
-                  className="pointer-events-none absolute left-5 top-4 font-hand text-2xl text-accent-purple"
-                >
-                  let go
-                </motion.span>
-
-                <div className="flex gap-4">
-                  <Art src={card.art} alt={card.title} size={104} />
-
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate font-serif text-xl text-ink">{card.title}</h2>
-                    <p className="truncate text-sm text-ink-soft">{card.artist}</p>
-                    <p className="mt-0.5 truncate font-mono text-[10px] text-ink-faint">
-                      {[card.album, card.releaseYear, formatDuration(card.durationMs)]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {card.unavailable && <Tag tone="cool">delisted</Tag>}
-                      {card.liked && <Tag tone="warm">liked</Tag>}
-                      {card.notes.map((note) => (
-                        <Tag key={note}>{note}</Tag>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* playhead */}
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={player.toggle}
-                    disabled={player.status !== "ready"}
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-ink text-ink transition hover:bg-ink hover:text-paper disabled:opacity-30"
-                    aria-label={player.playing ? "pause" : "play"}
-                  >
-                    {player.playing ? (
-                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="4" width="4" height="16" rx="1" />
-                        <rect x="14" y="4" width="4" height="16" rx="1" />
-                      </svg>
-                    ) : (
-                      <svg className="ml-0.5 h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7 4v16l13-8z" />
-                      </svg>
-                    )}
-                  </button>
-
-                  <div
-                    className="group relative h-4 flex-1 cursor-pointer"
-                    onClick={(event) => {
-                      if (!player.duration) return;
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      player.seek(
-                        ((event.clientX - rect.left) / rect.width) * player.duration
-                      );
-                    }}
-                  >
-                    <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" />
-                    <div
-                      className="absolute left-0 top-1/2 h-px -translate-y-1/2 bg-accent-orange"
-                      style={{
-                        width: player.duration
-                          ? `${(player.position / player.duration) * 100}%`
-                          : "0%",
-                      }}
-                    />
-                  </div>
-
-                  <span className="flex-none font-mono text-[10px] tabular-nums text-ink-faint">
-                    {player.status === "ready"
-                      ? `${formatDuration(player.position)} / ${formatDuration(player.duration)}`
-                      : player.status === "connecting"
-                        ? "connecting"
-                        : "no player"}
-                  </span>
-
-                  {card.songUrl && (
-                    <a
-                      href={card.songUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-none font-mono text-[10px] text-ink-faint transition-colors hover:text-accent-orange"
-                    >
-                      spotify ↗
-                    </a>
-                  )}
-                </div>
-              </Sheet>
-            </motion.div>
+              card={card}
+              player={player}
+              onKeep={commit}
+              onRetire={() => decide("retire")}
+              onMeasure={setCardHeight}
+            />
           </AnimatePresence>
         </div>
       )}
@@ -494,6 +390,8 @@ export function Sorter() {
                 <button
                   key={chip.id}
                   type="button"
+                  data-chip=""
+                  aria-pressed={on}
                   onClick={() => toggleChip(chip.id)}
                   className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] transition ${
                     on
@@ -501,6 +399,13 @@ export function Sorter() {
                       : "border-line text-ink-faint hover:border-ink/30 hover:text-ink-soft"
                   }`}
                 >
+                  {/* a filled mark, so "chosen" reads even when a focus ring
+                      happens to be sitting on the same button */}
+                  <span
+                    className={`h-1.5 w-1.5 flex-none rounded-full ${
+                      on ? "bg-accent-orange" : "bg-line"
+                    }`}
+                  />
                   {position < 9 && (
                     <span className="font-mono text-[9px] text-ink-faint">
                       {position + 1}
@@ -591,3 +496,159 @@ export function Sorter() {
     </main>
   );
 }
+/**
+ * One card, holding its own drag state.
+ *
+ * The deck used to share a single `dragX` across every card. The outgoing
+ * card's exit animation is bound to that value, so it drove it to ±320 and left
+ * it there — and because the next card was bound to the same value, every card
+ * after the first decision mounted permanently offset and tilted. A motion
+ * value per card dies with the card that owns it.
+ */
+function SongCard({
+  card,
+  player,
+  onKeep,
+  onRetire,
+  onMeasure,
+}: {
+  card: TrackCard;
+  player: ReturnType<typeof useDeckPlayer>;
+  onKeep: () => void;
+  onRetire: () => void;
+  onMeasure: (height: number) => void;
+}) {
+  const dragX = useMotionValue(0);
+  const rotate = useTransform(dragX, [-260, 0, 260], [-7, 0, 7]);
+  const keepInk = useTransform(dragX, [30, SWIPE], [0, 1]);
+  const retireInk = useTransform(dragX, [-SWIPE, -30], [1, 0]);
+  const node = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (node.current) onMeasure(node.current.offsetHeight);
+  }, [card.id, onMeasure]);
+
+  return (
+    <motion.div
+      ref={node}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.7}
+      style={{ x: dragX, rotate }}
+      onDragEnd={(_, info) => {
+        if (info.offset.x > SWIPE) onKeep();
+        else if (info.offset.x < -SWIPE) onRetire();
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{
+        opacity: 0,
+        x: dragX.get() > 0 ? 320 : -320,
+        transition: { duration: 0.16 },
+      }}
+      transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+      className="relative cursor-grab active:cursor-grabbing"
+    >
+        <Sheet className="relative overflow-hidden p-4 sm:p-5">
+          {/* swipe verdict, written in ink rather than a coloured overlay */}
+          <motion.span
+            style={{ opacity: keepInk }}
+            className="pointer-events-none absolute right-5 top-4 font-hand text-2xl text-accent-orange"
+          >
+            keep
+          </motion.span>
+          <motion.span
+            style={{ opacity: retireInk }}
+            className="pointer-events-none absolute left-5 top-4 font-hand text-2xl text-accent-purple"
+          >
+            let go
+          </motion.span>
+
+          <div className="flex gap-4">
+            <Art src={card.art} alt={card.title} size={104} />
+
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate font-serif text-xl text-ink">{card.title}</h2>
+              <p className="truncate text-sm text-ink-soft">{card.artist}</p>
+              <p className="mt-0.5 truncate font-mono text-[10px] text-ink-faint">
+                {[card.album, card.releaseYear, formatDuration(card.durationMs)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {card.unavailable && <Tag tone="cool">delisted</Tag>}
+                {card.liked && <Tag tone="warm">liked</Tag>}
+                {card.notes.map((note) => (
+                  <Tag key={note}>{note}</Tag>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* playhead */}
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={player.toggle}
+              disabled={player.status !== "ready"}
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-ink text-ink transition hover:bg-ink hover:text-paper disabled:opacity-30"
+              aria-label={player.playing ? "pause" : "play"}
+            >
+              {player.playing ? (
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg className="ml-0.5 h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7 4v16l13-8z" />
+                </svg>
+              )}
+            </button>
+
+            <div
+              className="group relative h-4 flex-1 cursor-pointer"
+              onClick={(event) => {
+                if (!player.duration) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                player.seek(
+                  ((event.clientX - rect.left) / rect.width) * player.duration
+                );
+              }}
+            >
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" />
+              <div
+                className="absolute left-0 top-1/2 h-px -translate-y-1/2 bg-accent-orange"
+                style={{
+                  width: player.duration
+                    ? `${(player.position / player.duration) * 100}%`
+                    : "0%",
+                }}
+              />
+            </div>
+
+            <span className="flex-none font-mono text-[10px] tabular-nums text-ink-faint">
+              {player.status === "ready"
+                ? `${formatDuration(player.position)} / ${formatDuration(player.duration)}`
+                : player.status === "connecting"
+                  ? "connecting"
+                  : "no player"}
+            </span>
+
+            {card.songUrl && (
+              <a
+                href={card.songUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-none font-mono text-[10px] text-ink-faint transition-colors hover:text-accent-orange"
+              >
+                spotify ↗
+              </a>
+            )}
+          </div>
+        </Sheet>
+    </motion.div>
+  );
+}
+
