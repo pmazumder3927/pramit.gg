@@ -226,6 +226,33 @@ async function axisVectors(): Promise<Record<string, number[]> | null> {
 // The refit
 // ---------------------------------------------------------------------------
 
+const PAGE = 1000;
+
+/**
+ * Read a whole table, a page at a time.
+ *
+ * PostgREST caps an unbounded select at a thousand rows and says nothing about
+ * it. The library sits just under that today, so the refit would have started
+ * silently fitting on a truncated slice — and worse, the stale sweep at the end
+ * deletes every feel row it did not just write, so the first read to cross the
+ * cap would have deleted the axes for every track past the thousandth.
+ *
+ * The order matters: without it two pages can overlap or skip rows.
+ */
+async function readAll<T>(
+  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> },
+  label: string
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error) throw new Error(`${label} read failed: ${error.message}`);
+    const page = data || [];
+    out.push(...page);
+    if (page.length < PAGE) return out;
+  }
+}
+
 export type FeelThresholds = {
   /** below this familiarity a track is a stranger to a visitor */
   strangerBelow: number;
@@ -250,21 +277,38 @@ export async function refitFeel(): Promise<{
   const supabase = createAdminClient();
   const axes = await axisVectors();
 
-  const [{ data: tracks }, { data: sound }, { data: sense }, { data: lyrics }] =
-    await Promise.all([
-      supabase
-        .from("music_tracks")
-        .select("track_id, artist_ids, popularity, duration_ms")
-        .eq("shelf", "active")
-        .eq("unavailable", false),
-      supabase
-        .from("music_track_sound")
-        .select("track_id, embedding, bpm, loudness, dynamics, brightness, zcr, pulse"),
-      supabase.from("music_track_sense").select("track_id, embedding"),
-      supabase
-        .from("music_track_lyrics")
-        .select("track_id, status, words_per_min, vocal_start_ms"),
-    ]);
+  const [tracks, sound, sense, lyrics] = await Promise.all([
+    readAll<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("music_tracks")
+          .select("track_id, artist_ids, popularity, duration_ms")
+          .eq("shelf", "active")
+          .eq("unavailable", false)
+          .order("track_id"),
+      "music_tracks"
+    ),
+    readAll<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("music_track_sound")
+          .select("track_id, embedding, bpm, loudness, dynamics, brightness, zcr, pulse")
+          .order("track_id"),
+      "music_track_sound"
+    ),
+    readAll<Record<string, unknown>>(
+      () => supabase.from("music_track_sense").select("track_id, embedding").order("track_id"),
+      "music_track_sense"
+    ),
+    readAll<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("music_track_lyrics")
+          .select("track_id, status, words_per_min, vocal_start_ms")
+          .order("track_id"),
+      "music_track_lyrics"
+    ),
+  ]);
 
   const soundById = new Map((sound || []).map((row) => [row.track_id as string, row]));
   const senseById = new Map((sense || []).map((row) => [row.track_id as string, row]));
@@ -288,8 +332,15 @@ export async function refitFeel(): Promise<{
   const zZcr = z("zcr");
   const zBpm = z("bpm");
   const zDyn = z("dynamics");
-  const hasPulse = pool.some((row) => soundById.get(row.track_id as string)?.pulse != null);
-  const zPulse = hasPulse ? z("pulse") : null;
+  // A track analysed before the audio pass learned to measure pulse has none.
+  // Reading that as zero would put it at the bottom of the scale — 1.3 SD of
+  // arousal — rather than leaving the term out, so the scale is built from the
+  // tracks that have one and the term is dropped for those that don't.
+  const measured = pool
+    .map((row) => soundById.get(row.track_id as string))
+    .filter((row) => row?.pulse != null)
+    .map((row) => Number(row!.pulse));
+  const pulseStats = measured.length >= 12 ? stats(measured) : null;
 
   const rawArousal = (row: Record<string, unknown>) =>
     1.0 * zLoud(Number(row.loudness ?? 0)) +
@@ -297,7 +348,9 @@ export async function refitFeel(): Promise<{
     0.5 * zZcr(Number(row.zcr ?? 0)) +
     0.25 * zBpm(Number(row.bpm ?? 0)) -
     0.25 * zDyn(Number(row.dynamics ?? 0)) +
-    (zPulse ? 0.75 * zPulse(Number(row.pulse ?? 0)) : 0);
+    (pulseStats && row.pulse != null
+      ? 0.75 * ((Number(row.pulse) - pulseStats.mean) / pulseStats.sd)
+      : 0);
 
   const arousalStats = stats(
     pool.map((row) => rawArousal(soundById.get(row.track_id as string) as Record<string, unknown>))
@@ -335,7 +388,11 @@ export async function refitFeel(): Promise<{
   const standardise = (v: number[]) =>
     Array.from({ length: width }, (_, j) => ((v[j] ?? 0) - dimStats[j].mean) / dimStats[j].sd);
   const usable = soundVectors.filter((v) => v.length).map(standardise);
-  const toTexture = pca(usable, Math.min(TEX_DIMS, width), true);
+  // Rank is at most n-1 after centring; asking for more components hands back a
+  // raw seed vector with a zero eigenvalue, which whitening then divides by
+  // ~1e-9 and turns into a distance of tens of thousands.
+  const texDims = Math.min(TEX_DIMS, width, Math.max(0, usable.length - 1));
+  const toTexture = texDims > 0 ? pca(usable, texDims, true) : null;
 
   const meaningRows = Array.from(senseVectorById.values());
   const toMeaning = meaningRows.length >= MEANING_DIMS + 2 ? pca(meaningRows, MEANING_DIMS, false) : null;
@@ -418,12 +475,18 @@ export async function refitFeel(): Promise<{
           ? null
           : Number(Math.max(0, Math.min(1, (wpm - wordLo) / (wordHi - wordLo || 1))).toFixed(4)),
       familiarity: Number(familiarityOf(row).toFixed(4)),
+      // Requires the measurement to exist. Treating an unmeasured vocal start as
+      // "starts early" made this a duration filter, and put tracks with a long
+      // ambient intro in the one slot where that costs most.
       opens_well:
-        lyric?.status !== "instrumental" &&
-        (vocalStart === null || vocalStart <= 20_000) &&
+        vocalStart !== null &&
+        vocalStart <= 20_000 &&
         duration >= 150_000 &&
         duration <= 300_000,
-      texture: texture ? JSON.stringify(toTexture(standardise(texture)).map((v) => Number(v.toFixed(4)))) : null,
+      texture:
+        texture && toTexture
+          ? JSON.stringify(toTexture(standardise(texture)).map((v) => Number(v.toFixed(4))))
+          : null,
       meaning:
         senseVector && toMeaning
           ? JSON.stringify(unit(toMeaning(senseVector)).map((v) => Number(v.toFixed(5))))
@@ -442,8 +505,11 @@ export async function refitFeel(): Promise<{
   // Anything that fell out of the library — retired, delisted — should not keep
   // a stale row that a later playlist read could pick up.
   const live = new Set(rows.map((row) => row.track_id));
-  const { data: existing } = await supabase.from("music_track_feel").select("track_id");
-  const stale = (existing || [])
+  const existing = await readAll<{ track_id: string }>(
+    () => supabase.from("music_track_feel").select("track_id").order("track_id"),
+    "music_track_feel"
+  );
+  const stale = existing
     .map((row) => row.track_id as string)
     .filter((id) => !live.has(id));
   for (const group of chunk(stale, 300)) {
