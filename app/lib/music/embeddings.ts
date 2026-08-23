@@ -8,11 +8,11 @@ import { chunk } from "./spotify-api";
 /**
  * "Sense" vectors — an embedding of what a song is actually about.
  *
- * The lyrics are the substance; title, artist, album and year are there to
- * place a song when the lyrics are thin or missing. Together they give a
- * similarity that understands that two break-up songs belong near each other
- * even when one is in Korean and the other in English — which is the thing
- * hand-written features could never do.
+ * The lyrics are the substance and very nearly the whole document; see the note
+ * on `document` below for why everything else was taken out of it. What this
+ * buys is a similarity that puts two break-up songs together even when one is in
+ * Korean and the other in English, which is the thing hand-written features
+ * could never do.
  *
  * Pairs with the "sound" vectors from scripts/music-audio.mjs. One knows what a
  * song means, the other knows what it sounds like.
@@ -47,20 +47,32 @@ type LyricRow = {
   words_per_min: number | null;
 };
 
-/** The document a track gets embedded as. Lyrics first, facts as context. */
+/**
+ * The document a track gets embedded as.
+ *
+ * Lyrics, and almost nothing else. The version this replaces led every document
+ * with "{title} — {artist} / from {album} / released {year} / sung in
+ * {language}", which made artist and language the strongest directions in the
+ * space: a track's nearest neighbour was by the same artist 46.7% of the time
+ * against a 0.17% chance rate, and shared its language 78% of the time against
+ * 56%. So "what this song is about" was largely "who made it", and a playlist
+ * ordered on it came out in artist and language slabs.
+ *
+ * With the header gone those fall to 9.8% and 55.5% — the language leak
+ * disappears entirely, and what is left of the artist effect is the real thing,
+ * people writing about the same subjects twice.
+ *
+ * Language, year and artist are all still used by the sequencer. They are read
+ * from their own columns, where a rule can say what it means by them, rather
+ * than smuggled into a similarity.
+ */
 function document(track: Row, lyric: LyricRow | undefined): string {
-  const facts = [
-    `${track.title} — ${track.artist_display}`,
-    track.album_name ? `from ${track.album_name}` : null,
-    track.release_year ? `released ${track.release_year}` : null,
-    lyric?.language ? `sung in ${lyric.language}` : null,
-    lyric?.status === "instrumental" ? "instrumental, no words" : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   const body = (lyric?.text || "").trim();
-  return body ? `${facts}\n\n${body.slice(0, 4500)}` : facts;
+  if (body) return `${body.slice(0, 4500)}\n\n—\ncalled "${track.title}"`;
+  if (lyric?.status === "instrumental") {
+    return `An instrumental piece with no words, called "${track.title}".`;
+  }
+  return `A song called "${track.title}", whose words are not written down anywhere.`;
 }
 
 function hash(text: string): string {
