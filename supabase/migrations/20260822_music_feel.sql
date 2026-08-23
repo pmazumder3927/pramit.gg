@@ -27,6 +27,13 @@ create table if not exists music_track_feel (
   fitted_at    timestamptz not null default now()
 );
 
+-- Every other music_* table has this. Without it the anon key that ships in the
+-- browser bundle can read, rewrite and delete the whole feature table, and the
+-- sequencer would quietly order by whatever it found there. No policies: RLS on
+-- with none blocks anon and authenticated outright, while the service-role
+-- client every reader uses bypasses it.
+alter table music_track_feel enable row level security;
+
 create index if not exists music_track_feel_arousal_idx on music_track_feel (arousal);
 
 -- Two measurements the audio pass already computes and throws away.
