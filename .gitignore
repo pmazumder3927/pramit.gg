@@ -41,3 +41,6 @@ next-env.d.ts
 # favicon exploration scratch (mockups, not wired into Next)
 favicon-explorations/
 .env*
+
+# fetched audio previews (re-downloadable, ~500MB)
+/.cache/

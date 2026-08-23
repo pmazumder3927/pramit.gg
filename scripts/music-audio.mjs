@@ -9,7 +9,12 @@
  * lines of DSP turns that into a real measurement.
  *
  * Runs offline (it needs ffmpeg), writes vectors to Supabase, and the app only
- * ever reads the result:  npm run music:audio [-- --limit 200] [--all]
+ * ever reads the result:
+ *   npm run music:audio [-- --limit 200] [--all] [--refetch]
+ *
+ * Previews are kept under .cache/previews so adding a feature means re-reading
+ * local mp3s rather than crawling a free API a thousand times again. --refetch
+ * ignores that cache.
  */
 import { spawn } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
@@ -42,6 +47,8 @@ const args = process.argv.slice(2);
 const limitArg = args.indexOf("--limit");
 const LIMIT = limitArg >= 0 ? Number(args[limitArg + 1]) : Infinity;
 const REDO = args.includes("--all");
+const REFETCH = args.includes("--refetch");
+const CACHE = path.join(ROOT, ".cache", "previews");
 
 // ---------------------------------------------------------------------------
 // DSP
@@ -214,6 +221,22 @@ function analyse(pcm) {
     }
   }
 
+  // How much of the onset envelope's energy actually recurs at the winning
+  // period. A club track and a loud drone can sit at the same loudness; this is
+  // the only number here that tells them apart.
+  const zeroLag = centred.reduce((sum, x) => sum + x * x, 0) / (centred.length || 1);
+  const pulse = zeroLag > 0 ? Math.min(1, Math.max(0, bestScore / zeroLag)) : 0;
+
+  // Crest wants the true overall RMS, so take the root mean square of the frame
+  // levels rather than reusing loudness, which is their arithmetic mean.
+  let peak = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const a = Math.abs(pcm[i]);
+    if (a > peak) peak = a;
+  }
+  const overallRms = Math.sqrt(rms.reduce((sum, v) => sum + v * v, 0) / (rms.length || 1));
+  const crest = peak > 0 && overallRms > 0 ? 20 * Math.log10(peak / overallRms) : 0;
+
   const [loudness, dynamics] = stats(rms);
   const [brightness, brightnessVar] = stats(centroid);
   const mfccMeans = mfcc.map((c) => stats(c)[0]);
@@ -221,6 +244,8 @@ function analyse(pcm) {
 
   return {
     bpm: foldTempo(bestBpm),
+    pulse,
+    crest,
     loudness,
     dynamics,
     brightness,
@@ -270,6 +295,35 @@ function decode(mp3) {
 
 const clean = (s) => (s || "").replace(/\([^)]*\)|\[[^\]]*\]|feat\..*$|-\s.*$/gi, " ").trim();
 
+/**
+ * Reduce a name to the letters and digits that survive translation between two
+ * catalogues, so "Björk" and "Bjork", "Tiësto" and "Tiesto" compare equal.
+ */
+function fold(text) {
+  return (text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+/g, " ")
+    .trim();
+}
+
+/** Does this Deezer hit appear to be by the same people? */
+function sameArtist(track, hit) {
+  const theirs = fold(hit.artist?.name);
+  if (!theirs) return false;
+  for (const name of track.artist_names || []) {
+    const ours = fold(name);
+    if (!ours) continue;
+    if (ours === theirs || ours.includes(theirs) || theirs.includes(ours)) return true;
+    // Collaborations get credited differently on each service, so a shared
+    // distinctive word is enough.
+    const words = ours.split(" ").filter((w) => w.length >= 4);
+    if (words.some((w) => theirs.includes(w))) return true;
+  }
+  return false;
+}
+
 async function findPreview(track) {
   const attempts = [
     `${clean(track.title)} ${track.artist_names?.[0] || ""}`,
@@ -277,27 +331,96 @@ async function findPreview(track) {
     clean(track.title),
   ];
 
+  const wanted = Math.round((track.duration_ms || 0) / 1000);
+  const seen = [];
+
   for (const attempt of attempts) {
     const query = encodeURIComponent(attempt.slice(0, 100).trim());
     if (!query) continue;
     try {
-      const response = await fetch(`https://api.deezer.com/search?q=${query}&limit=5`);
+      const response = await fetch(`https://api.deezer.com/search?q=${query}&limit=8`);
       if (!response.ok) continue;
       const payload = await response.json();
-      const wanted = Math.round((track.duration_ms || 0) / 1000);
-      const candidates = (payload.data || []).filter((hit) => hit.preview);
-      if (candidates.length === 0) continue;
-      // Prefer a hit whose length matches — same title, very different duration
-      // is usually a remix or a live cut.
-      const matched =
-        candidates.find((hit) => wanted > 0 && Math.abs(hit.duration - wanted) <= 5) ||
-        candidates[0];
-      return matched.preview;
+      for (const hit of payload.data || []) if (hit.preview) seen.push(hit);
     } catch {
       /* try the next phrasing */
     }
+    // A hit by the right artist at roughly the right length is as good as it gets.
+    const exact = seen.find(
+      (hit) => sameArtist(track, hit) && wanted > 0 && Math.abs(hit.duration - wanted) <= 5
+    );
+    if (exact) return describe(exact, track);
   }
-  return null;
+
+  if (seen.length === 0) return null;
+
+  // Nothing matched outright, so rank what we have. The artist agreeing matters
+  // far more than the length: the wrong-length matches that were checked by hand
+  // split cleanly into a different *recording* of the same piece, which is fine
+  // to measure, and a different song that happens to share a title, which is
+  // not — and the artist is what tells those apart. A long orchestral movement
+  // matched to another orchestra's reading of it is still that music. "Falling
+  // to Pieces" by Júndu matched to Faith No More is not.
+  const scored = seen.map((hit) => {
+    const artist = sameArtist(track, hit) ? 1 : 0;
+    const drift = wanted > 0 && hit.duration ? Math.abs(hit.duration - wanted) / wanted : 1;
+    return { hit, artist, score: artist * 2 - Math.min(1, drift) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0];
+
+  // A different artist AND a length nowhere near ours is a different song. No
+  // measurement is better than a confident wrong one — the sequencer treats a
+  // missing vector as "sits at the average distance from everything", which is
+  // the honest answer, while a wrong one quietly misfiles the song forever.
+  if (!best.artist && wanted > 0 && best.hit.duration) {
+    const drift = Math.abs(best.hit.duration - wanted) / wanted;
+    if (drift > 0.25) return null;
+  }
+  return describe(best.hit, track);
+}
+
+function describe(hit, track) {
+  return {
+    url: hit.preview,
+    hit: {
+      id: hit.id,
+      title: hit.title,
+      artist: hit.artist?.name || null,
+      duration: hit.duration ?? null,
+      sameArtist: sameArtist(track, hit),
+    },
+  };
+}
+
+let cacheHits = 0;
+
+/** The mp3 for a track, from disk if we have already fetched it once. */
+async function loadPreview(track) {
+  const key = String(track.track_id).replace(/[^\w-]/g, "_");
+  const mp3Path = path.join(CACHE, `${key}.mp3`);
+  const matchPath = path.join(CACHE, `${key}.json`);
+
+  if (!REFETCH && fs.existsSync(mp3Path)) {
+    cacheHits++;
+    let match = null;
+    try {
+      match = JSON.parse(fs.readFileSync(matchPath, "utf8"));
+    } catch {
+      /* the audio is what we came for; provenance can be missing on old caches */
+    }
+    return { mp3: fs.readFileSync(mp3Path), match };
+  }
+
+  const found = await findPreview(track);
+  if (!found) throw new Error("no preview");
+  const response = await fetch(found.url);
+  if (!response.ok) throw new Error(`preview ${response.status}`);
+  const mp3 = Buffer.from(await response.arrayBuffer());
+  fs.mkdirSync(CACHE, { recursive: true });
+  fs.writeFileSync(mp3Path, mp3);
+  fs.writeFileSync(matchPath, JSON.stringify(found.hit));
+  return { mp3, match: found.hit };
 }
 
 async function mapLimit(items, limit, work) {
@@ -323,8 +446,11 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-const { data: known } = await supabase.from("music_track_sound").select("track_id");
-const done = new Set(REDO ? [] : (known || []).map((row) => row.track_id));
+// A row from before pulse and crest existed is not finished work, so it counts
+// as pending even without --all. Otherwise the backfill would never happen.
+const { data: known } = await supabase.from("music_track_sound").select("track_id, pulse");
+const stale = new Set((known || []).filter((row) => row.pulse === null).map((row) => row.track_id));
+const done = new Set(REDO ? [] : (known || []).filter((row) => row.pulse !== null).map((row) => row.track_id));
 
 const { data: tracks } = await supabase
   .from("music_tracks")
@@ -333,30 +459,48 @@ const { data: tracks } = await supabase
   .eq("unavailable", false);
 
 const pending = (tracks || []).filter((t) => !done.has(t.track_id)).slice(0, LIMIT);
-console.log(`listening to ${pending.length} of ${tracks?.length ?? 0} tracks…`);
+const reheard = pending.filter((t) => stale.has(t.track_id)).length;
+const note = REDO
+  ? " (--all: everything again)"
+  : reheard
+    ? ` (${reheard} of them already had a row but no pulse)`
+    : "";
+console.log(`listening to ${pending.length} of ${tracks?.length ?? 0} tracks…${note}`);
 
 let heard = 0;
 let missed = 0;
+let mismatched = 0;
 const rows = [];
 
 await mapLimit(pending, CONCURRENCY, async (track, index) => {
   try {
-    const preview = await findPreview(track);
-    if (!preview) throw new Error("no preview");
-    const response = await fetch(preview);
-    if (!response.ok) throw new Error(`preview ${response.status}`);
-    const features = analyse(await decode(Buffer.from(await response.arrayBuffer())));
+    const { mp3, match } = await loadPreview(track);
+    const features = analyse(await decode(mp3));
     if (!features) throw new Error("too short");
+
+    const wanted = Math.round((track.duration_ms || 0) / 1000);
+    if (match?.duration && wanted > 0 && Math.abs(match.duration - wanted) > 5) {
+      mismatched++;
+      console.log(
+        `  ? ${track.title} (${wanted}s) heard as "${match.title}" by ${match.artist} (${match.duration}s)`
+      );
+    }
 
     rows.push({
       track_id: track.track_id,
       embedding: JSON.stringify(features.vector.map((v) => Number(v.toFixed(5)))),
       bpm: features.bpm,
+      pulse: features.pulse,
+      crest: features.crest,
       loudness: features.loudness,
       dynamics: features.dynamics,
       brightness: features.brightness,
       flatness: features.flatness,
       zcr: features.zcr,
+      deezer_id: match?.id ?? null,
+      matched_title: match?.title ?? null,
+      matched_artist: match?.artist ?? null,
+      matched_duration_s: match?.duration ?? null,
       source: "deezer-preview",
       analysed_at: new Date().toISOString(),
     });
@@ -381,3 +525,4 @@ for (let i = 0; i < rows.length; i += 100) {
 }
 
 console.log(`\nheard ${heard}, missed ${missed}. ${rows.length} vectors written.`);
+console.log(`${cacheHits} previews came from the cache; ${mismatched} matches were the wrong length.`);
