@@ -249,7 +249,9 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
 
   const { data: existing } = await supabase
     .from("music_tracks")
-    .select("track_id, shelf, retired_at, last_played_at, affinity");
+    .select(
+      "track_id, shelf, retired_at, last_played_at, affinity, title, artist_names, artist_ids, artist_display, album_name, album_id, album_image_url, release_year, duration_ms, popularity, explicit, song_url"
+    );
   const existingById = new Map(
     (existing || []).map((row) => [row.track_id as string, row])
   );
@@ -291,10 +293,27 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
 
     // Spotify serves a delisted track as an id with an empty name, so writing
     // the payload straight through would blank the title, artist and album of
-    // a song that was fine yesterday.
+    // a song that was fine yesterday. Keep what we already knew — but keep the
+    // same set of columns, because a batch upsert takes the union of every
+    // row's keys and writes NULL into the ones a row left out.
     const descriptive =
       base.unavailable && prior
-        ? { track_id: base.track_id, uri: base.uri, unavailable: true }
+        ? {
+            ...base,
+            title: (prior.title as string) ?? base.title,
+            artist_names: (prior.artist_names as string[]) ?? base.artist_names,
+            artist_ids: (prior.artist_ids as string[]) ?? base.artist_ids,
+            artist_display: (prior.artist_display as string) ?? base.artist_display,
+            album_name: (prior.album_name as string | null) ?? base.album_name,
+            album_id: (prior.album_id as string | null) ?? base.album_id,
+            album_image_url:
+              (prior.album_image_url as string | null) ?? base.album_image_url,
+            release_year: (prior.release_year as number | null) ?? base.release_year,
+            duration_ms: (prior.duration_ms as number | null) ?? base.duration_ms,
+            popularity: (prior.popularity as number | null) ?? base.popularity,
+            explicit: (prior.explicit as boolean) ?? base.explicit,
+            song_url: (prior.song_url as string | null) ?? base.song_url,
+          }
         : base;
 
     return {
@@ -309,6 +328,18 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
       last_synced_at: nowIso(),
     };
   });
+
+  // A batch upsert writes the union of every row's keys, filling in NULL where
+  // a row left one out — so one row with a different shape silently nulls that
+  // column for the whole batch. Say which column and which track, here, rather
+  // than letting it surface as a not-null violation from Postgres.
+  const shape = trackRows[0] ? Object.keys(trackRows[0]).sort().join(",") : "";
+  const odd = trackRows.find((row) => Object.keys(row).sort().join(",") !== shape);
+  if (odd) {
+    throw new Error(
+      `music_tracks rows disagree on their columns — ${odd.track_id} has [${Object.keys(odd).sort().join(", ")}], expected [${shape.split(",").join(", ")}]`
+    );
+  }
 
   for (const batch of chunk(trackRows, 400)) {
     const { error } = await supabase
