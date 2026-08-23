@@ -18,6 +18,13 @@ create table if not exists music_track_feel (
   density      real,
   -- how likely a stranger is to know it, 0..1
   familiarity  real not null,
+  -- how new it is, which is a different question: `familiarity` says whether a
+  -- visitor will recognise it, `freshness` says whether the owner found it
+  -- recently or it came out recently. A brand-new obscure record scores high on
+  -- one and low on the other, and the two want opposite things from the order.
+  freshness    real,
+  new_to_me    real,
+  new_out      real,
   -- can someone get into it in the first ten seconds
   opens_well   boolean not null default false,
   -- what it sounds like, and what it is about, each small enough to load a

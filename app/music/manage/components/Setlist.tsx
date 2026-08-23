@@ -29,7 +29,7 @@ import {
   formatDuration,
 } from "./paper";
 
-type KnobKey = "shape" | "movement" | "discovery";
+type KnobKey = "shape" | "movement" | "discovery" | "leadWithNew";
 
 const KNOBS: Array<{ key: KnobKey; label: string; blurb: string }> = [
   {
@@ -46,6 +46,11 @@ const KNOBS: Array<{ key: KnobKey; label: string; blurb: string }> = [
     key: "discovery",
     label: "how much discovery",
     blurb: "How many songs almost nobody knows a side can carry, and how early they are allowed in.",
+  },
+  {
+    key: "leadWithNew",
+    label: "lead with the new",
+    blurb: "Pull what you found lately, and what came out lately, toward the front of every side — and put the newest sides first. A different question from the one above: this is about what's new to you, that is about what a visitor knows.",
   },
 ];
 
@@ -413,7 +418,7 @@ function Ledger({ card }: { card: Scorecard }) {
 
   return (
     <Sheet className="mt-5 p-4">
-      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
         <Score
           value={card.adjacency === null ? "—" : `${card.adjacency}`}
           name="how close neighbours sit"
@@ -440,6 +445,16 @@ function Ledger({ card }: { card: Scorecard }) {
             card.discovery
               ? `${card.discovery[0]}% → ${card.discovery[1]}% → ${card.discovery[2]}%`
               : "too few to shape"
+          }
+        />
+        <Score
+          value={card.newUpFront === null ? "—" : `${card.newUpFront}%`}
+          name="where the newest quarter sits"
+          good={card.newUpFront === null || card.newUpFront <= 46}
+          note={
+            card.newUpFrontSide === null
+              ? "50 is scattered evenly"
+              : `${card.newUpFrontSide}% inside a side · 50 is scattered`
           }
         />
         <Score
@@ -766,7 +781,7 @@ function Bench({
 
           <Rule className="my-4" />
 
-          <div className="grid gap-5 sm:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {KNOBS.map((knob) => (
               <div key={knob.key}>
                 <div className="flex items-baseline justify-between">
@@ -934,6 +949,18 @@ function Row({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm text-ink">{track.title}</span>
+          {(track.freshness ?? 0) >= 0.4 && (
+            <span
+              className="flex-none font-mono text-[10px] text-accent-orange"
+              title={
+                (track.newToMe ?? 0) >= (track.newOut ?? 0)
+                  ? "you found this recently"
+                  : "this came out recently"
+              }
+            >
+              {(track.newToMe ?? 0) >= (track.newOut ?? 0) ? "new to you" : "just out"}
+            </span>
+          )}
           {track.stranger && (
             <span
               className="flex-none font-mono text-[10px] text-accent-purple"

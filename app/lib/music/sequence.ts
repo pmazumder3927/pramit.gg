@@ -73,9 +73,10 @@ export const WEIGHTS = {
   smooth: 90,
   strangerBudget: 110,
   strangerPair: 260,
-  strangerAnchor: 200,
+  strangerAnchor: 450,
   strangerLate: 55,
   strangerEarly: 240,
+  fresh: 300,
 };
 
 export type SeqInternal = SeqTrack & {
@@ -393,6 +394,7 @@ export type Bench = {
   spread: number;
   arousal: Float64Array;
   valence: Float64Array;
+  fresh: Float64Array;
   instrumental: Uint8Array;
   stranger: Uint8Array;
   anchor: Uint8Array;
@@ -479,6 +481,7 @@ export function makeBench(
     floorTarget: Math.min(0.4, 0.62 * spread),
     spread,
     arousal,
+    fresh: Float64Array.from(rows, (track) => track.freshness ?? 0),
     valence: Float64Array.from(rows, (track) => track.valence ?? 0),
     instrumental: Uint8Array.from(rows, (track) => (track.instrumental ? 1 : 0)),
     stranger: Uint8Array.from(rows, (track) => (track.stranger ? 1 : 0)),
@@ -782,6 +785,25 @@ export function cost(order: Int32Array | number[], b: Bench): number {
     }
   }
 
+  // What you found recently, or what came out recently, goes near the front.
+  //
+  // A bonus that decays toward the end, never a penalty that grows toward it.
+  // The two are the same objective — every track is placed exactly once, so they
+  // differ by a constant — but the engine this replaces wrote it as the penalty,
+  // and every builder that compares candidates one slot at a time reads that as
+  // "a new song costs more here" and saves them all for last.
+  //
+  // Kept separate from the stranger rules on purpose. Those are about what a
+  // visitor will recognise and they push unfamiliar songs later; this is about
+  // what the playlist is about right now and it pulls new ones earlier. A
+  // brand-new obscure record gets both, and lands early but not in the opening
+  // five and not without a familiar neighbour.
+  if (n > 1 && shape.leadWithNew > 0) {
+    for (let i = 0; i < n; i++) {
+      J -= W.fresh * shape.leadWithNew * b.fresh[order[i]] * (1 - i / (n - 1));
+    }
+  }
+
   // Unfamiliar material earns its keep later in the side. Written as a bonus
   // that grows toward the end rather than a penalty that shrinks toward it —
   // the same objective, but only this form reads correctly to anything that
@@ -1038,7 +1060,7 @@ async function loadTracks(playlistId: string) {
     supabase
       .from("music_track_feel")
       .select(
-        "track_id, arousal, valence, familiarity, density, opens_well, texture, meaning"
+        "track_id, arousal, valence, familiarity, freshness, new_to_me, new_out, density, opens_well, texture, meaning"
       )
       .in("track_id", uniqueIds),
     supabase.from("music_track_sound").select("track_id, bpm").in("track_id", uniqueIds),
@@ -1096,6 +1118,9 @@ async function loadTracks(playlistId: string) {
       arousal: feel ? (feel.arousal as number) : null,
       valence: feel ? (feel.valence as number) : null,
       familiarity,
+      freshness: feel ? ((feel.freshness as number | null) ?? null) : null,
+      newToMe: feel ? ((feel.new_to_me as number | null) ?? null) : null,
+      newOut: feel ? ((feel.new_out as number | null) ?? null) : null,
       stranger: familiarity !== null && familiarity < edges.strangerBelow,
       anchor: familiarity !== null && familiarity >= edges.anchorAbove,
       opensWell: Boolean(feel?.opens_well),
@@ -1256,9 +1281,17 @@ export function sequence(
   const familiarityOf = (group: number[]) =>
     mean(group.map((i) => tracks[i].familiarity ?? 0.5));
 
+  const freshnessOf = (group: number[]) => mean(group.map((i) => tracks[i].freshness ?? 0));
+
+  // Familiar first, so a stranger's share rises the longer someone stays — and
+  // new first, because a side full of what you found last month should not be
+  // sitting at hour nine where nobody reaches it. The two pull apart (new music
+  // is usually less known), which is what the knob is for.
   const running = groups.map((_, i) => i).sort((a, b) => {
     const score = (i: number) =>
-      familiarityOf(groups[i]) + (groups[i].some((k) => tracks[k].opensWell) ? 0.03 : -0.3);
+      familiarityOf(groups[i]) +
+      4.0 * shape.leadWithNew * freshnessOf(groups[i]) +
+      (groups[i].some((k) => tracks[k].opensWell) ? 0.03 : -0.3);
     return score(b) - score(a);
   });
   for (let pass = 0; pass < 3; pass++) {
@@ -1359,6 +1392,7 @@ function nameSide(
   index: number,
   count: number,
   dominantLanguage: string | null,
+  playlistFreshness: number,
   taken: Set<string>
 ): { label: string; reason: string } {
   const size = side.length;
@@ -1393,6 +1427,15 @@ function nameSide(
   }
   if (meanValence <= -0.55 && free("the bleak one")) {
     return { label: "the bleak one", reason: "the darkest words on the record" };
+  }
+
+  const fresh = mean(side.map((track) => track.freshness ?? 0));
+  if (fresh >= playlistFreshness + 0.05 && fresh >= 0.3 && free("the new stuff")) {
+    const found = side.filter((track) => (track.newToMe ?? 0) >= (track.newOut ?? 0)).length;
+    return {
+      label: "the new stuff",
+      reason: found > size / 2 ? "mostly things you found lately" : "mostly things just out",
+    };
   }
 
   const strangers = side.filter((track) => track.stranger).length;
@@ -1471,6 +1514,10 @@ export function describeSides(run: Sequenced): Side[] {
   const dominant = mode(
     run.sides.flatMap((side) => side.tracks.map((track) => track.language).filter(Boolean) as string[])
   );
+  const everySong = run.sides.flatMap((side) => side.tracks);
+  const playlistFreshness = everySong.length
+    ? mean(everySong.map((track) => track.freshness ?? 0))
+    : 0;
   const taken = new Set<string>();
   const sides: Side[] = run.sides.map((side, index) => {
     const tracks = side.tracks;
@@ -1504,7 +1551,14 @@ export function describeSides(run: Sequenced): Side[] {
     for (let i = 0; i + 4 <= n; i++) {
       if (deviation(filled.slice(i, i + 4)) < side.bench.floorTarget - 0.02) restless = false;
     }
-    const { label, reason } = nameSide(tracks, index, run.sides.length, dominant?.value ?? null, taken);
+    const { label, reason } = nameSide(
+      tracks,
+      index,
+      run.sides.length,
+      dominant?.value ?? null,
+      playlistFreshness,
+      taken
+    );
     taken.add(label);
 
     return {
@@ -1737,6 +1791,35 @@ export function score(
     return total ? Math.round((count / total) * 100) : 0;
   }) as [number, number, number];
 
+  // Where the newest quarter of the playlist actually sits, as a percentage of
+  // the way through. 50 means scattered; lower means front-loaded, which is what
+  // "lead with the new" is asking for. Measured on the raw freshness rather than
+  // a rank, so a library with nothing new in it says so instead of manufacturing
+  // a gradient out of ties.
+  const placeOfNewest = (values: SeqInternal[]): number | null => {
+    const known = values.filter((track) => track.freshness !== null);
+    if (known.length < 8) return null;
+    const distinct = new Set(known.map((track) => track.freshness!.toFixed(3))).size;
+    if (distinct < 4) return null;
+    const newest = values
+      .map((track, index) => ({ index, freshness: track.freshness ?? -1 }))
+      .filter((entry) => entry.freshness >= 0)
+      .sort((a, b) => b.freshness - a.freshness)
+      .slice(0, Math.max(2, Math.round(known.length / 4)))
+      .map((entry) => entry.index)
+      .sort((a, b) => a - b);
+    const median = newest[Math.floor(newest.length / 2)];
+    return values.length > 1 ? Math.round((median / (values.length - 1)) * 100) : null;
+  };
+
+  const newUpFront = placeOfNewest(order);
+  const perSide = run.sides
+    .map((side) => placeOfNewest(side.tracks))
+    .filter((value): value is number => value !== null);
+  const newUpFrontSide = perSide.length
+    ? Math.round(perSide.reduce((a, b) => a + b, 0) / perSide.length)
+    : null;
+
   const { songs, requests } = movesNeeded(
     liveOrder,
     run.order.map((track) => track.uid)
@@ -1756,6 +1839,8 @@ export function score(
     artistRunFloor,
     languageSlab,
     discovery: strangers.length >= 3 ? bySide : null,
+    newUpFront,
+    newUpFrontSide,
     discoveryRun: strangers.length >= 3 ? thirdOf(order) : null,
     unanchored,
     strangerPairs,
@@ -1822,6 +1907,16 @@ function buildNotes(
   if (card.restlessSides < card.sideCount) {
     notes.push(
       `${card.sideCount - card.restlessSides} side${card.sideCount - card.restlessSides === 1 ? " has" : "s have"} a stretch that sits still for four songs running.`
+    );
+  }
+
+  if (card.newUpFront !== null) {
+    notes.push(
+      card.newUpFront <= 42
+        ? `The newest quarter sits ${card.newUpFront}% of the way in — front-loaded.`
+        : card.newUpFront >= 58
+          ? `The newest quarter sits ${card.newUpFront}% of the way in, toward the back. Turn "lead with the new" up.`
+          : `The newest quarter sits ${card.newUpFront}% of the way in, which is about scattered.`
     );
   }
 

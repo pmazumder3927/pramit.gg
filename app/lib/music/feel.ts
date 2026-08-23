@@ -282,7 +282,7 @@ export async function refitFeel(): Promise<{
       () =>
         supabase
           .from("music_tracks")
-          .select("track_id, artist_ids, popularity, duration_ms")
+          .select("track_id, artist_ids, popularity, duration_ms, liked_at, release_year")
           .eq("shelf", "active")
           .eq("unavailable", false)
           .order("track_id"),
@@ -445,6 +445,30 @@ export async function refitFeel(): Promise<{
     return value / 100;
   };
 
+  // ---- freshness --------------------------------------------------------
+  // Two ways a song can be new, and the owner asked for either: they found it
+  // recently, or it came out recently. Exponential decay rather than a window
+  // with a floor — the version this replaces clipped everything past eighteen
+  // months to zero and then rank-normalised, which manufactured an even spread
+  // whether or not the library had one.
+  const now = Date.now();
+  const HALF_LIFE_DAYS = 180;
+  const HALF_LIFE_YEARS = 2.2;
+  const thisYear = new Date().getUTCFullYear();
+
+  const freshnessOf = (row: (typeof pool)[number]) => {
+    const likedAt = row.liked_at ? Date.parse(row.liked_at as string) : NaN;
+    const newToMe = Number.isFinite(likedAt)
+      ? Math.pow(0.5, Math.max(0, (now - likedAt) / 86_400_000) / HALF_LIFE_DAYS)
+      : 0;
+    const year = Number(row.release_year);
+    const newOut =
+      year > 1900 ? Math.pow(0.5, Math.max(0, thisYear - year) / HALF_LIFE_YEARS) : 0;
+    // Either counts. A song found last week is new to this playlist whatever
+    // year it came out, and a record released this year is new to everyone.
+    return { newToMe, newOut, freshness: Math.max(newToMe, newOut) };
+  };
+
   // ---- rows -------------------------------------------------------------
   const rows = pool.map((row) => {
     const id = row.track_id as string;
@@ -475,6 +499,14 @@ export async function refitFeel(): Promise<{
           ? null
           : Number(Math.max(0, Math.min(1, (wpm - wordLo) / (wordHi - wordLo || 1))).toFixed(4)),
       familiarity: Number(familiarityOf(row).toFixed(4)),
+      ...(() => {
+        const { newToMe, newOut, freshness } = freshnessOf(row);
+        return {
+          freshness: Number(freshness.toFixed(4)),
+          new_to_me: Number(newToMe.toFixed(4)),
+          new_out: Number(newOut.toFixed(4)),
+        };
+      })(),
       // Requires the measurement to exist. Treating an unmeasured vocal start as
       // "starts early" made this a duration filter, and put tracks with a long
       // ambient intro in the one slot where that costs most.

@@ -180,6 +180,8 @@ export interface Shape {
   movement: number;
   /** how much unfamiliar material, and how early it is allowed */
   discovery: number;
+  /** pull what you found recently, and what came out recently, toward the front */
+  leadWithNew: number;
   /** 0 = alike means what it sounds like, 1 = what it is about */
   alike: number;
   /** hold the first slot for something a stranger can walk into */
@@ -192,6 +194,7 @@ export const DEFAULT_SHAPE: Shape = {
   shape: 0.75,
   movement: 0.7,
   discovery: 0.6,
+  leadWithNew: 0.6,
   alike: 0.5,
   openStrong: true,
 };
@@ -218,6 +221,11 @@ export interface SeqTrack {
   valence: number | null;
   /** how likely a stranger is to know it, 0..1 */
   familiarity: number | null;
+  /** 0..1 — found recently, or out recently, whichever is stronger */
+  freshness: number | null;
+  /** which of the two it is, so the row can say which */
+  newToMe: number | null;
+  newOut: number | null;
   /** in the least-known third of the library */
   stranger: boolean;
   /** in the best-known quarter — the thing a stranger can be anchored to */
@@ -289,6 +297,13 @@ export interface Scorecard {
   languageSlab: number;
   /** share of strangers in each third of a side, x100 — wants to rise */
   discovery: [number, number, number] | null;
+  /**
+   * Where the newest quarter of the playlist sits, as a percentage of the way
+   * through. 50 is scattered evenly; lower is front-loaded, which is the point.
+   */
+  newUpFront: number | null;
+  /** ...and the same measured inside a side */
+  newUpFrontSide: number | null;
   /** ...and across the whole run */
   discoveryRun: [number, number, number] | null;
   /** strangers with no familiar face on either side */

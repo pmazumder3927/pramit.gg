@@ -27,6 +27,7 @@ function readShape(input: unknown): Shape | undefined {
     shape: number("shape", DEFAULT_SHAPE.shape),
     movement: number("movement", DEFAULT_SHAPE.movement),
     discovery: number("discovery", DEFAULT_SHAPE.discovery),
+    leadWithNew: number("leadWithNew", DEFAULT_SHAPE.leadWithNew),
     alike: number("alike", DEFAULT_SHAPE.alike),
     openStrong: raw.openStrong === undefined ? DEFAULT_SHAPE.openStrong : Boolean(raw.openStrong),
   };
