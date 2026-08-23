@@ -20,7 +20,7 @@ function nowIso() {
  * filing destination, never shows up on the public /music page, and never gets
  * imported back as a source of membership.
  */
-async function ensureGraveyardPlaylist(year: number): Promise<string> {
+export async function ensureGraveyardPlaylist(year: number): Promise<string> {
   const supabase = createAdminClient();
   const mapping = (await getSetting<Record<string, string>>("graveyard_playlists")) || {};
   const known = mapping[String(year)];
@@ -111,8 +111,12 @@ export async function applyDecisions(decisions: Decision[]): Promise<DecisionOut
   const shelfRoles = new Map(
     (playlistRows || []).map((row) => [row.playlist_id as string, row.role as string])
   );
+  // Only shelf playlists are ours to change. A membership row pointing at the
+  // visitor-suggestion inbox, or at a playlist that has since been unfollowed,
+  // must never end up in a remove list.
   const current = new Map<string, Set<string>>();
   for (const row of membershipRows || []) {
+    if (shelfRoles.get(row.playlist_id as string) !== "shelf") continue;
     const set = current.get(row.track_id as string) || new Set<string>();
     set.add(row.playlist_id as string);
     current.set(row.track_id as string, set);
@@ -121,6 +125,13 @@ export async function applyDecisions(decisions: Decision[]): Promise<DecisionOut
   const graveyardIds = Object.values(
     (await getSetting<Record<string, string>>("graveyard_playlists")) || {}
   );
+
+  // Resolved once, before anything runs concurrently. Called from inside the
+  // loop it would race itself on the first retire of a new year: five workers
+  // all read an empty mapping and each create their own "2027 graveyard".
+  const mirrorId = decisions.some((decision) => decision.verb === "retire")
+    ? await ensureGraveyardPlaylist(new Date().getUTCFullYear())
+    : null;
 
   let applied = 0;
 
@@ -148,11 +159,24 @@ export async function applyDecisions(decisions: Decision[]): Promise<DecisionOut
             (id) => shelfRoles.get(id) === "shelf"
           )
         );
-        const add = Array.from(target).filter((id) => !now.has(id));
-        const remove = Array.from(now).filter((id) => !target.has(id));
 
+        // Three-way merge against what the card was showing. A deck can sit
+        // open for hours; without this, filing a track into one playlist would
+        // quietly pull it out of any other it had joined in the meantime,
+        // because the client's list is the only thing the old code compared to.
+        const known = decision.knownPlaylistIds
+          ? new Set(decision.knownPlaylistIds)
+          : now;
+
+        const add = Array.from(target).filter((id) => !now.has(id));
+        const remove = Array.from(now).filter(
+          (id) => !target.has(id) && known.has(id)
+        );
+
+        // Adds land first: if anything fails, the song is in one playlist too
+        // many rather than one too few.
+        for (const id of add) await addToPlaylist(id, uri);
         await Promise.all([
-          ...add.map((id) => addToPlaylist(id, uri)),
           ...remove.map((id) => removeFromPlaylist(id, uri)),
           track.liked ? Promise.resolve() : likeOnSpotify(decision.trackId, true),
         ]);
@@ -182,13 +206,15 @@ export async function applyDecisions(decisions: Decision[]): Promise<DecisionOut
       }
 
       if (decision.verb === "retire") {
-        const year = new Date().getUTCFullYear();
-        const mirror = await ensureGraveyardPlaylist(year);
+        // The archive copy is written before the song is taken out of anything.
+        // Issued together, a failure to reach the graveyard still left the
+        // removals and the unlike applied, and Spotify has no undo for either.
+        if (!mirrorId) throw new Error("no graveyard to retire into");
+        await addToPlaylist(mirrorId, uri);
 
         await Promise.all([
           ...Array.from(now).map((id) => removeFromPlaylist(id, uri)),
           track.liked ? likeOnSpotify(decision.trackId, false) : Promise.resolve(),
-          addToPlaylist(mirror, uri),
         ]);
 
         await supabase
@@ -247,46 +273,4 @@ export async function applyDecisions(decisions: Decision[]): Promise<DecisionOut
   });
 
   return { applied, failures };
-}
-
-/** Put the most recent decision back the way it was. */
-export async function undoLastDecision(): Promise<{ trackId: string } | null> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("music_decisions")
-    .select("id, track_id, verb, before")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!data) return null;
-
-  const before = (data.before || {}) as {
-    liked?: boolean;
-    shelf?: string;
-    playlistIds?: string[];
-  };
-
-  await applyDecisions([
-    before.shelf === "retired"
-      ? { trackId: data.track_id as string, verb: "retire" }
-      : {
-          trackId: data.track_id as string,
-          verb: "file",
-          playlistIds: before.playlistIds || [],
-        },
-  ]);
-
-  if (before.liked === false && before.shelf !== "retired") {
-    await api(`/me/tracks?ids=${encodeURIComponent(data.track_id as string)}`, {
-      method: "DELETE",
-    }).catch(() => {});
-    await supabase
-      .from("music_tracks")
-      .update({ liked: false })
-      .eq("track_id", data.track_id as string);
-  }
-
-  await supabase.from("music_decisions").delete().eq("id", data.id);
-  return { trackId: data.track_id as string };
 }

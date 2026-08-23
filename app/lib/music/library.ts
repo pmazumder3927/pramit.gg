@@ -76,10 +76,14 @@ async function loadPlaylistIndex() {
   ]);
 
   const shelves = (playlists || []).filter((p) => p.role === "shelf");
+  const shelfIds = new Set(shelves.map((p) => p.playlist_id as string));
   const byTrack = new Map<string, string[]>();
   const byPlaylist = new Map<string, Array<{ trackId: string; position: number }>>();
 
   for (const row of memberships || []) {
+    // A row pointing at an unfollowed or non-shelf playlist is not a home: it
+    // would keep the track out of the unfiled pile with nowhere to open.
+    if (!shelfIds.has(row.playlist_id as string)) continue;
     const list = byTrack.get(row.track_id as string) || [];
     list.push(row.playlist_id as string);
     byTrack.set(row.track_id as string, list);
@@ -157,24 +161,18 @@ export async function getDesk(): Promise<DeskSnapshot> {
 
   const [
     { data: tracks },
-    { count: lyricsKnown },
-    { count: soundKnown },
-    { count: senseKnown },
+    { data: lyricRows },
+    { data: soundRows },
+    { data: senseRows },
     sequences,
     lastSync,
   ] = await Promise.all([
       supabase
         .from("music_tracks")
         .select("track_id, liked, shelf, liked_at, affinity, reviewed_at, unavailable"),
-      supabase
-        .from("music_track_lyrics")
-        .select("track_id", { count: "exact", head: true }),
-      supabase
-        .from("music_track_sound")
-        .select("track_id", { count: "exact", head: true }),
-      supabase
-        .from("music_track_sense")
-        .select("track_id", { count: "exact", head: true }),
+      supabase.from("music_track_lyrics").select("track_id"),
+      supabase.from("music_track_sound").select("track_id"),
+      supabase.from("music_track_sense").select("track_id"),
       supabase
         .from("music_sequences")
         .select("playlist_id, order_uids, updated_at, applied_at"),
@@ -187,9 +185,15 @@ export async function getDesk(): Promise<DeskSnapshot> {
   const open = active.filter((t) => !settled(t.reviewed_at as string | null));
   const openLiked = open.filter((t) => t.liked);
 
-  const unfiled = openLiked.filter((t) => !byTrack.has(t.track_id as string));
-  const orphans = open.filter((t) => !t.liked && !byTrack.has(t.track_id as string));
-  const fresh = openLiked.filter((t) => (daysSince(t.liked_at as string) ?? 9999) <= 60);
+  const unfiled = openLiked.filter(
+    (t) => !t.unavailable && !byTrack.has(t.track_id as string)
+  );
+  const orphans = open.filter(
+    (t) => !t.unavailable && !t.liked && !byTrack.has(t.track_id as string)
+  );
+  const fresh = openLiked.filter(
+    (t) => !t.unavailable && (daysSince(t.liked_at as string) ?? 9999) <= 60
+  );
   const cold = open.filter(
     (t) =>
       !t.unavailable &&
@@ -197,7 +201,15 @@ export async function getDesk(): Promise<DeskSnapshot> {
       t.affinity === null &&
       (daysSince(t.liked_at as string) ?? 0) > COLD_AFTER_DAYS
   );
-  const gone = active.filter((t) => t.unavailable);
+  const gone = open.filter((t) => t.unavailable);
+
+  // Coverage is counted against the songs that can actually be analysed, so a
+  // leftover row for a delisted or retired track can't push a bar past 100%.
+  const analysable = new Set(
+    active.filter((t) => !t.unavailable).map((t) => t.track_id as string)
+  );
+  const covered = (rows: Array<{ track_id: unknown }> | null) =>
+    (rows || []).filter((row) => analysable.has(row.track_id as string)).length;
 
   const sequenceMap = new Map(
     (sequences.data || []).map((row: any) => [row.playlist_id as string, row])
@@ -284,13 +296,13 @@ export async function getDesk(): Promise<DeskSnapshot> {
       tracks: active.length,
       // Delisted tracks can't be read, embedded or listened to, so they don't
       // belong in the denominator of any coverage bar.
-      analysable: active.filter((t) => !t.unavailable).length,
+      analysable: analysable.size,
       liked: liked.length,
       unfiled: unfiled.length,
       retired: retired.length,
-      lyricsKnown: lyricsKnown ?? 0,
-      soundKnown: soundKnown ?? 0,
-      senseKnown: senseKnown ?? 0,
+      lyricsKnown: covered(lyricRows),
+      soundKnown: covered(soundRows),
+      senseKnown: covered(senseRows),
     },
     decks,
     playlists: managed,
@@ -431,7 +443,10 @@ export async function getGraveyard(): Promise<GraveyardSnapshot> {
         year,
         playlistId: mirror?.playlist_id || null,
         playlistUrl: mirror?.url || null,
-        pending: Math.max(0, tracks.length - (mirror?.track_count || 0)),
+        // Whether a mirror exists at all. How many tracks are missing from it
+        // is a question only Spotify can answer, so the page asks for a
+        // dry-run rather than guessing from a stale count.
+        mirrored: Boolean(mirror),
         tracks: tracks.map((row) => ({
           id: row.track_id,
           title: row.title,

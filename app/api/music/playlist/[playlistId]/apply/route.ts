@@ -19,8 +19,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       return NextResponse.json({ error: "No order to apply" }, { status: 400 });
     }
 
-    const strategy = body?.strategy === "rewrite" ? "rewrite" : "reorder";
-    return NextResponse.json(await applySetlist(playlistId, order, strategy));
+    return NextResponse.json(await applySetlist(playlistId, order));
   } catch (error) {
     return failed(error, "Could not write that order to Spotify");
   }

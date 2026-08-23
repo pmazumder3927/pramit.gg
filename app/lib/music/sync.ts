@@ -167,6 +167,9 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
       .from("music_playlists")
       .update({ active: false })
       .in("playlist_id", goneIds);
+    // Its songs are not filed anywhere any more; leaving the rows behind would
+    // keep them out of the "unfiled" pile with no playlist to open.
+    await supabase.from("music_playlist_tracks").delete().in("playlist_id", goneIds);
   }
 
   // ---- tracks --------------------------------------------------------------
@@ -251,8 +254,16 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
     (existing || []).map((row) => [row.track_id as string, row])
   );
 
+  // Only shelf playlists count as "the owner put this back". A mirror that
+  // stopped matching /^\d{4} graveyard$/ — renamed to "2026 Graveyard vol 2",
+  // say — would otherwise be read as an ordinary playlist and revive every
+  // song in it, losing all their burial dates in one sync.
+  const knownMirrors = new Set(
+    Object.values((await getSetting<Record<string, string>>("graveyard_playlists")) || {})
+  );
   const filedTrackIds = new Set<string>();
-  for (const rows of Array.from(shelfMembership.values())) {
+  for (const [playlistId, rows] of Array.from(shelfMembership.entries())) {
+    if (knownMirrors.has(playlistId)) continue;
     for (const row of rows) filedTrackIds.add(row.track_id);
   }
 
@@ -278,8 +289,16 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
       retiredAt = year ? new Date(Date.UTC(year, 0, 1)).toISOString() : nowIso();
     }
 
+    // Spotify serves a delisted track as an id with an empty name, so writing
+    // the payload straight through would blank the title, artist and album of
+    // a song that was fine yesterday.
+    const descriptive =
+      base.unavailable && prior
+        ? { track_id: base.track_id, uri: base.uri, unavailable: true }
+        : base;
+
     return {
-      ...base,
+      ...descriptive,
       liked,
       liked_at: likedAt.get(base.track_id) || null,
       last_played_at:
@@ -315,6 +334,22 @@ export async function syncLibrary(options?: { force?: boolean }): Promise<SyncRe
   // ---- memberships ---------------------------------------------------------
   // Rebuilt per playlist so a failure can only affect the playlist it was on.
   for (const [playlistId, rows] of Array.from(shelfMembership.entries())) {
+    // An empty read is far more likely to be Spotify hiccuping than the owner
+    // emptying a playlist, and the delete used to run before this was checked —
+    // one 200-with-no-items wiped every membership row the playlist had.
+    if (rows.length === 0) {
+      const { count } = await supabase
+        .from("music_playlist_tracks")
+        .select("track_id", { count: "exact", head: true })
+        .eq("playlist_id", playlistId);
+      if ((count ?? 0) > 0) {
+        console.warn(
+          `[music sync] ${playlistId} came back empty but has ${count} rows on file; leaving them alone`
+        );
+        continue;
+      }
+    }
+
     await supabase.from("music_playlist_tracks").delete().eq("playlist_id", playlistId);
     if (rows.length === 0) continue;
     for (const batch of chunk(rows, 500)) {

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import { api, chunk, fetchPlaylistTracks } from "./spotify-api";
+import { ensureGraveyardPlaylist } from "./decisions";
 import { getSetting } from "./settings";
 
 /**
@@ -35,11 +36,26 @@ export async function mirrorGraveyard(options?: { dryRun?: boolean }): Promise<{
     wanted.set(year, set);
   }
 
+  // A year with retirees but no mirror — the playlist was deleted on Spotify,
+  // or this is the first burial of the year — gets one made, otherwise the page
+  // would report "already matching" forever while nothing was ever written.
+  for (const year of Array.from(wanted.keys())) {
+    if (!mapping[String(year)] && (wanted.get(year)?.size ?? 0) > 0) {
+      mapping[String(year)] = await ensureGraveyardPlaylist(year);
+    }
+  }
+
   let added = 0;
   let removed = 0;
 
   for (const [year, playlistId] of Object.entries(mapping)) {
     const target = wanted.get(Number(year)) || new Set<string>();
+
+    // Nothing is retired for this year, so there is nothing to reconcile it
+    // against. Emptying the playlist wholesale is never the right reading — it
+    // means a shelf playlist got named like a graveyard, or the DB lost its
+    // retirees — so leave it exactly as it is.
+    if (target.size === 0) continue;
     const items = await fetchPlaylistTracks(playlistId);
     const live = new Set(
       items.map((item) => item.track?.uri).filter(Boolean) as string[]

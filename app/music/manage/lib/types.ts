@@ -111,14 +111,20 @@ export interface Decision {
   verb: DecisionVerb;
   /** for `file`: the complete set of playlists the track should end up in */
   playlistIds?: string[];
+  /**
+   * for `file`: the memberships the card was showing when the choice was made.
+   * The server only unfiles what was on this list, so a playlist you joined
+   * elsewhere while the deck sat open is left alone instead of being stripped.
+   */
+  knownPlaylistIds?: string[];
 }
 
 export interface GraveyardYear {
   year: number;
   playlistId: string | null;
   playlistUrl: string | null;
-  /** tracks in the DB that the Spotify mirror playlist doesn't have yet */
-  pending: number;
+  /** whether a mirror playlist for this year exists on Spotify at all */
+  mirrored: boolean;
   tracks: Array<{
     id: string;
     title: string;
@@ -229,11 +235,12 @@ export interface Section {
   uids: string[];
 }
 
+/** Every number here is null when there isn't enough measured data to mean it. */
 export interface Scorecard {
-  /** 0-100, how alike each song is to the one after it */
-  flow: number;
-  /** 0-100, how far toward the front the newest material sits */
-  newUpFront: number;
+  /** 0-100, share of handovers that go to one of that song's nearest quarter */
+  flow: number | null;
+  /** 0-100, where the newest quarter sits; 50 is scattered evenly */
+  newUpFront: number | null;
   /** adjacent pairs by the same artist */
   artistClumps: number;
   /** points where the language changes */
@@ -243,9 +250,11 @@ export interface Scorecard {
   /** 0-100, how evenly your most-played songs are dealt out; null if too few */
   favoriteSpread: number | null;
   /** 0-100, how well wordiness follows the chosen curve */
-  wordFit: number;
+  wordFit: number | null;
   /** how many songs would move if you applied this */
   moves: number;
+  /** ...in how many requests to Spotify, since runs move together */
+  requests: number;
   /** songs with no lyric data, so the word rules can't see them */
   unknownWords: number;
   /** songs Spotify has delisted, parked at the end */

@@ -10,7 +10,7 @@ import {
   type Shape,
   type WordCurve,
 } from "@/app/music/manage/lib/types";
-import { api, chunk, fetchPlaylistMeta, fetchPlaylistTracks } from "./spotify-api";
+import { api, fetchPlaylistMeta, fetchPlaylistTracks } from "./spotify-api";
 
 /**
  * Playlist sequencing.
@@ -453,12 +453,32 @@ function costAt(order: SeqInternal[], i: number, bench: Bench): number {
   return cost;
 }
 
-/** Only the terms a change at `p` can touch. */
-function windowCost(order: SeqInternal[], p: number, bench: Bench): number {
-  const lo = Math.max(0, p - ARTIST_WINDOW);
-  const hi = Math.min(order.length - 1, p + ARTIST_WINDOW);
+/**
+ * The terms a change at `p` or `q` can touch, counted once. Summing two
+ * separate windows double-counts wherever they overlap, which let the descent
+ * accept swaps of nearby positions that actually made the order worse.
+ */
+function windowCost(
+  order: SeqInternal[],
+  p: number,
+  q: number,
+  bench: Bench
+): number {
+  const last = order.length - 1;
+  const spans: Array<[number, number]> = (
+    [
+      [Math.max(0, p - ARTIST_WINDOW), Math.min(last, p + ARTIST_WINDOW)],
+      [Math.max(0, q - ARTIST_WINDOW), Math.min(last, q + ARTIST_WINDOW)],
+    ] as Array<[number, number]>
+  ).sort((a, b) => a[0] - b[0]);
+
   let sum = 0;
-  for (let i = lo; i <= hi; i++) sum += costAt(order, i, bench);
+  let cursor = -1;
+  for (const [lo, hi] of spans) {
+    const from = Math.max(lo, cursor + 1);
+    for (let i = from; i <= hi; i++) sum += costAt(order, i, bench);
+    cursor = Math.max(cursor, hi);
+  }
   return sum;
 }
 
@@ -466,7 +486,11 @@ function windowCost(order: SeqInternal[], p: number, bench: Bench): number {
 // Ordering
 // ---------------------------------------------------------------------------
 
-export function sequence(tracks: SeqInternal[], shape: Shape): SeqInternal[] {
+export function sequence(
+  tracks: SeqInternal[],
+  shape: Shape,
+  reuse?: Bench
+): SeqInternal[] {
   // Delisted tracks carry no signal and can't be played; they go to the end
   // rather than distorting every rule with a run of blanks.
   const gone = tracks.filter((track) => track.unavailable);
@@ -475,7 +499,7 @@ export function sequence(tracks: SeqInternal[], shape: Shape): SeqInternal[] {
   const n = live.length;
   if (n < 3) return [...live, ...gone];
 
-  const bench = makeBench(live, shape);
+  const bench = reuse ?? makeBench(live, shape);
 
   // Greedy seed: start from the best opener, then keep taking whichever song
   // costs least to say next.
@@ -518,9 +542,9 @@ export function sequence(tracks: SeqInternal[], shape: Shape): SeqInternal[] {
     improved = false;
     for (let p = 0; p < n && Date.now() < deadline; p++) {
       for (let q = p + 1; q < Math.min(n, p + 14); q++) {
-        const before = windowCost(order, p, bench) + windowCost(order, q, bench);
+        const before = windowCost(order, p, q, bench);
         [order[p], order[q]] = [order[q], order[p]];
-        const after = windowCost(order, p, bench) + windowCost(order, q, bench);
+        const after = windowCost(order, p, q, bench);
         if (after < before - 0.001) improved = true;
         else [order[p], order[q]] = [order[q], order[p]];
       }
@@ -662,7 +686,11 @@ function describeRun(
   return { label: `stretch ${index + 1}`, reason: `${size} songs` };
 }
 
-export function buildSections(order: SeqInternal[], shape: Shape): Section[] {
+export function buildSections(
+  order: SeqInternal[],
+  shape: Shape,
+  reuse?: Bench
+): Section[] {
   const gone = order.filter((track) => track.unavailable);
   const live = order.filter((track) => !track.unavailable);
   const tail: Section[] = gone.length
@@ -691,7 +719,7 @@ export function buildSections(order: SeqInternal[], shape: Shape): Section[] {
 
   // Cut where consecutive songs stop resembling each other — the same measure
   // the ordering optimised, read back as structure.
-  const bench = makeBench(live, shape);
+  const bench = reuse ?? makeBench(live, shape);
   const seams: Array<{ index: number; strength: number }> = [];
   for (let i = 1; i < n; i++) {
     seams.push({ index: i, strength: 1 - likenessOf(bench, live[i - 1], live[i]) });
@@ -766,28 +794,62 @@ export function buildSections(order: SeqInternal[], shape: Shape): Section[] {
 // ---------------------------------------------------------------------------
 
 /**
- * How many songs `applySetlist` would actually have to move — simulated against
- * the same selection sort it runs, so the number the UI shows is the number of
- * requests it will make.
+ * How many songs `applySetlist` would actually have to move, and how many
+ * requests that takes — the same run-batched selection sort it runs, so the
+ * numbers the UI shows are the ones that will happen.
  */
-export function movesNeeded(liveOrder: string[], target: string[]): number {
-  const working = [...liveOrder];
-  const wanted = target.filter((uid) => working.includes(uid));
-  let moves = 0;
-
-  for (let targetIndex = 0; targetIndex < wanted.length; targetIndex++) {
-    const uid = wanted[targetIndex];
-    const currentIndex = working.indexOf(uid);
-    if (currentIndex === targetIndex) continue;
-    working.splice(currentIndex, 1);
-    working.splice(targetIndex, 0, uid);
-    moves++;
+export function movesNeeded(
+  liveOrder: string[],
+  target: string[]
+): { songs: number; requests: number } {
+  const present = new Set(liveOrder);
+  const wanted: string[] = [];
+  const taken = new Set<string>();
+  for (const uid of target) {
+    if (!present.has(uid) || taken.has(uid)) continue;
+    taken.add(uid);
+    wanted.push(uid);
+  }
+  for (const uid of liveOrder) {
+    if (!taken.has(uid)) {
+      taken.add(uid);
+      wanted.push(uid);
+    }
   }
 
-  return moves;
+  const working = [...liveOrder];
+  let songs = 0;
+  let requests = 0;
+
+  for (let at = 0; at < wanted.length; at++) {
+    if (working[at] === wanted[at]) continue;
+    const from = working.indexOf(wanted[at]);
+    if (from < 0) continue;
+
+    let length = 1;
+    while (
+      at + length < wanted.length &&
+      from + length < working.length &&
+      working[from + length] === wanted[at + length]
+    ) {
+      length++;
+    }
+
+    working.splice(at, 0, ...working.splice(from, length));
+    songs += length;
+    requests++;
+    at += length - 1;
+  }
+
+  return { songs, requests };
 }
 
-export function score(full: SeqInternal[], liveOrder: string[], shape: Shape): Scorecard {
+export function score(
+  full: SeqInternal[],
+  liveOrder: string[],
+  shape: Shape,
+  reuse?: Bench
+): Scorecard {
   const gone = full.filter((track) => track.unavailable).length;
   // The rules only speak about songs that exist; the move count is about the
   // whole playlist, delisted slots included.
@@ -812,9 +874,12 @@ export function score(full: SeqInternal[], liveOrder: string[], shape: Shape): S
   // share of handovers where the next song is in that song's nearest quarter of
   // the playlist. A shuffle scores about 25; a mean similarity would be a
   // number with no scale a person could read.
-  let flow = 0;
-  if (n >= 3) {
-    const bench = makeBench(order, shape);
+  // With nothing measured, every pair is neutral and every handover would count
+  // as "close" — a confident 100 about a playlist we know nothing about.
+  const measured = order.filter((track) => track.heard || track.read).length;
+  let flow: number | null = null;
+  if (n >= 3 && measured >= 3) {
+    const bench = reuse ?? makeBench(order, shape);
     const slots = order.map((track) => bench.slot.get(track.uid) ?? 0);
     let close = 0;
     for (let i = 1; i < n; i++) {
@@ -833,8 +898,9 @@ export function score(full: SeqInternal[], liveOrder: string[], shape: Shape): S
   // Where the newest quarter lands, as a percentage of the way through. 50 is
   // "scattered evenly"; lower is front-loaded. Ranked on raw freshness, not the
   // within-playlist rank, so ties at the old end can't drift into the sample.
-  let newUpFront = 50;
-  if (n >= 8) {
+  let newUpFront: number | null = null;
+  const distinctFreshness = new Set(order.map((track) => track.freshness.toFixed(3))).size;
+  if (n >= 8 && distinctFreshness >= 4) {
     const freshest = order
       .map((track, index) => ({ index, freshness: track.freshness }))
       .sort((a, b) => b.freshness - a.freshness)
@@ -844,24 +910,29 @@ export function score(full: SeqInternal[], liveOrder: string[], shape: Shape): S
     newUpFront = Math.round((median / (n - 1)) * 100);
   }
 
+  // Measured against where the favourites WOULD sit if they were dealt evenly
+  // across the whole run. Scoring gap uniformity alone gave a perfect 100 to
+  // five favourites bunched in the first five slots, which is the opposite of
+  // dealt out.
   const favoritePositions = order
     .map((track, index) => (track.favorite ? index : -1))
     .filter((index) => index >= 0);
   let favoriteSpread: number | null = null;
-  if (favoritePositions.length >= 3) {
-    const gaps: number[] = [];
-    for (let i = 1; i < favoritePositions.length; i++) {
-      gaps.push(favoritePositions[i] - favoritePositions[i - 1]);
-    }
-    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    const variance = gaps.reduce((sum, gap) => sum + (gap - mean) ** 2, 0) / gaps.length;
+  if (favoritePositions.length >= 3 && n > 1) {
+    const count = favoritePositions.length;
+    const drift =
+      favoritePositions.reduce((sum, position, slot) => {
+        const ideal = ((slot + 0.5) / count) * (n - 1);
+        return sum + Math.abs(position - ideal);
+      }, 0) / count;
+    // Half the average spacing is the tolerance; beyond that it reads as clumped.
     favoriteSpread = Math.round(
-      100 * Math.max(0, 1 - Math.sqrt(variance) / Math.max(mean, 1))
+      100 * Math.max(0, 1 - drift / Math.max(n / (2 * count), 1))
     );
   }
 
   const withWords = order.filter((track) => track.words !== null);
-  let wordFit = 100;
+  let wordFit: number | null = null;
   if (withWords.length >= 4 && n > 1) {
     const error =
       order.reduce((sum, track, index) => {
@@ -879,10 +950,13 @@ export function score(full: SeqInternal[], liveOrder: string[], shape: Shape): S
     cushionedSwitches,
     favoriteSpread,
     wordFit,
-    moves: movesNeeded(
-      liveOrder,
-      full.map((track) => track.uid)
-    ),
+    ...(() => {
+      const { songs, requests } = movesNeeded(
+        liveOrder,
+        full.map((track) => track.uid)
+      );
+      return { moves: songs, requests };
+    })(),
     unknownWords: order.filter((track) => track.words === null).length,
     gone,
     heard: order.filter((track) => track.heard).length,
@@ -907,13 +981,15 @@ function buildNotes(full: SeqInternal[], sections: Section[], card: Scorecard): 
   }
   if (closer) notes.push(`Lands on ${closer.title}.`);
 
-  notes.push(
-    card.newUpFront <= 42
-      ? `The newest quarter sits ${card.newUpFront}% of the way in — front-loaded.`
-      : card.newUpFront >= 58
-        ? `The newest quarter sits ${card.newUpFront}% of the way in, toward the back. Turn "lead with the new" up.`
-        : "The newest quarter sits around the middle."
-  );
+  if (card.newUpFront !== null) {
+    notes.push(
+      card.newUpFront <= 42
+        ? `The newest quarter sits ${card.newUpFront}% of the way in — front-loaded.`
+        : card.newUpFront >= 58
+          ? `The newest quarter sits ${card.newUpFront}% of the way in, toward the back. Turn "lead with the new" up.`
+          : "The newest quarter sits around the middle."
+    );
+  }
 
   notes.push(
     card.artistClumps > 0
@@ -951,7 +1027,7 @@ function buildNotes(full: SeqInternal[], sections: Section[], card: Scorecard): 
   notes.push(
     card.moves === 0
       ? "Spotify already looks like this."
-      : `Applying moves ${card.moves} song${card.moves === 1 ? "" : "s"}.`
+      : `Applying moves ${card.moves} song${card.moves === 1 ? "" : "s"}, in ${card.requests} request${card.requests === 1 ? "" : "s"}.`
   );
 
   return notes;
@@ -994,6 +1070,13 @@ export async function getSetlist(
   };
 
   const byUid = new Map(tracks.map((track) => [track.uid, track]));
+  // One likeness matrix for the whole request. Ordering, sectioning and scoring
+  // all want the same n² of 1536-dimension dot products; building it three
+  // times cost ~110ms per load on a 215-track playlist.
+  const bench = makeBench(
+    tracks.filter((track) => !track.unavailable),
+    shape
+  );
   let ordered: SeqInternal[];
 
   if (options?.order?.length) {
@@ -1012,11 +1095,11 @@ export async function getSetlist(
     // wiping the saved order, which is what the old engine did.
     for (const track of tracks) if (!present.has(track.uid)) ordered.push(track);
   } else {
-    ordered = sequence(tracks, shape);
+    ordered = sequence(tracks, shape, bench);
   }
 
-  const sections = buildSections(ordered, shape);
-  const card = score(ordered, liveOrder, shape);
+  const sections = buildSections(ordered, shape, bench);
+  const card = score(ordered, liveOrder, shape, bench);
 
   return {
     playlist: {
@@ -1067,76 +1150,124 @@ export async function saveSetlist(
 /**
  * Write the order back to Spotify.
  *
- * Two strategies, chosen by cost. Reordering keeps every item's `added_at` but
- * needs one sequential request per displaced song; rewriting the playlist costs
- * a handful of requests regardless of size but resets when things were added.
- * The caller picks; the UI shows the count first.
+ * Only ever by moving things. There was a second strategy that replaced the
+ * playlist wholesale — one PUT of the first hundred URIs, then POSTs for the
+ * rest — which is far fewer requests but leaves a 216-song playlist holding 100
+ * songs if anything fails in between, with no record of the rest. A reorder
+ * cannot lose a song no matter where it stops, so it is the only strategy now;
+ * contiguous runs move in a single request, which brings the cost back down.
+ *
+ * Indices are Spotify's, which count EVERY item in the playlist — podcast
+ * episodes and the null placeholders it returns for items it can no longer
+ * resolve, not just the tracks we know about. Numbering from a filtered list
+ * would silently shift every move.
  */
 export async function applySetlist(
   playlistId: string,
-  order: string[],
-  strategy: "reorder" | "rewrite"
-): Promise<{ moved: number; strategy: string }> {
+  order: string[]
+): Promise<{ moved: number; requests: number }> {
   const supabase = createAdminClient();
+
+  // Only a shelf playlist is ours to reorder. The visitor-suggestion inbox is
+  // linked from the desk like any other, and applying to it would rewrite
+  // membership rows that the sorter then reads as real filings.
+  const { data: playlist } = await supabase
+    .from("music_playlists")
+    .select("role, name")
+    .eq("playlist_id", playlistId)
+    .maybeSingle();
+  if (playlist && playlist.role !== "shelf") {
+    throw new Error(
+      `"${playlist.name}" is a ${playlist.role} playlist — those aren't ordered from here.`
+    );
+  }
+
   const items = await fetchPlaylistTracks(playlistId);
-  const live = items
-    .map((item) => item.track)
-    .filter((track): track is NonNullable<typeof track> => Boolean(track?.id));
-  const liveIds = live.map((track) => track.id!);
-  const liveUids = occurrenceUids(liveIds);
-  const uriByUid = new Map(liveUids.map((uid, index) => [uid, live[index].uri!]));
 
-  const target = order.filter((uid) => uriByUid.has(uid));
-  for (const uid of liveUids) if (!target.includes(uid)) target.push(uid);
+  // One slot per playlist item. Anything that isn't a track we can identify
+  // gets a slot with no uid: it holds its position and is never moved.
+  const seenIds = new Map<string, number>();
+  const slots = items.map((item) => {
+    const id = item.track?.id;
+    if (!id) return { uid: null as string | null, addedAt: item.added_at };
+    const n = (seenIds.get(id) || 0) + 1;
+    seenIds.set(id, n);
+    return { uid: n === 1 ? id : `${id}#${n}`, addedAt: item.added_at };
+  });
 
+  const placed = new Set(slots.map((slot) => slot.uid).filter(Boolean) as string[]);
+  const addedAtByUid = new Map(
+    slots.filter((s) => s.uid).map((s) => [s.uid as string, s.addedAt])
+  );
+
+  // A uid may appear once. A repeat would make `indexOf` find the wrong slot
+  // and desync every move after it.
+  const wanted: string[] = [];
+  const taken = new Set<string>();
+  for (const uid of order) {
+    if (!placed.has(uid) || taken.has(uid)) continue;
+    taken.add(uid);
+    wanted.push(uid);
+  }
+  for (const slot of slots) {
+    if (slot.uid && !taken.has(slot.uid)) {
+      taken.add(slot.uid);
+      wanted.push(slot.uid);
+    }
+  }
+
+  // The positions the tracks occupy, in playlist order. Everything else stays
+  // exactly where it is, so we only permute within these slots.
+  const trackSlots = slots
+    .map((slot, index) => ({ ...slot, index }))
+    .filter((slot) => slot.uid);
+  const working = trackSlots.map((slot) => slot.uid as string);
+  const positionOf = trackSlots.map((slot) => slot.index);
+
+  let snapshot = (await fetchPlaylistMeta(playlistId)).snapshot_id || null;
   let moved = 0;
+  let requests = 0;
 
-  if (strategy === "rewrite") {
-    const uris = target.map((uid) => uriByUid.get(uid)!);
-    const batches = chunk(uris, 100);
-    await api(`/playlists/${playlistId}/tracks`, {
-      method: "PUT",
-      body: JSON.stringify({ uris: batches[0] || [] }),
-    });
-    for (const batch of batches.slice(1)) {
-      await api(`/playlists/${playlistId}/tracks`, {
-        method: "POST",
-        body: JSON.stringify({ uris: batch }),
-      });
+  for (let at = 0; at < wanted.length; at++) {
+    if (working[at] === wanted[at]) continue;
+    const from = working.indexOf(wanted[at]);
+    if (from < 0) continue;
+
+    // How much of the run starting here is already in the order we want? Moving
+    // it as one range costs one request instead of `length`.
+    let length = 1;
+    while (
+      at + length < wanted.length &&
+      from + length < working.length &&
+      working[from + length] === wanted[at + length]
+    ) {
+      length++;
     }
-    moved = uris.length;
-  } else {
-    let snapshot = (await fetchPlaylistMeta(playlistId)).snapshot_id || null;
-    const working = [...liveUids];
 
-    for (let targetIndex = 0; targetIndex < target.length; targetIndex++) {
-      const uid = target[targetIndex];
-      const currentIndex = working.indexOf(uid);
-      if (currentIndex === targetIndex || currentIndex === -1) continue;
+    const response = await api<{ snapshot_id: string }>(
+      `/playlists/${playlistId}/tracks`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          range_start: positionOf[from],
+          insert_before: positionOf[at],
+          range_length: length,
+          ...(snapshot ? { snapshot_id: snapshot } : {}),
+        }),
+      }
+    );
+    snapshot = response?.snapshot_id || snapshot;
 
-      const response = await api<{ snapshot_id: string }>(
-        `/playlists/${playlistId}/tracks`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            range_start: currentIndex,
-            insert_before: targetIndex,
-            range_length: 1,
-            ...(snapshot ? { snapshot_id: snapshot } : {}),
-          }),
-        }
-      );
-      snapshot = response?.snapshot_id || snapshot;
-      working.splice(currentIndex, 1);
-      working.splice(targetIndex, 0, uid);
-      moved++;
-    }
+    working.splice(at, 0, ...working.splice(from, length));
+    moved += length;
+    requests++;
+    at += length - 1;
   }
 
   await supabase.from("music_sequences").upsert(
     {
       playlist_id: playlistId,
-      order_uids: target,
+      order_uids: wanted,
       applied_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
@@ -1144,21 +1275,29 @@ export async function applySetlist(
   );
 
   // One membership row per track — a playlist that holds the same song twice
-  // still only belongs to it once.
-  const seen = new Set<string>();
-  const rows = target
-    .map((uid, index) => ({ trackId: uid.split("#")[0], index }))
-    .filter(({ trackId }) => !seen.has(trackId) && seen.add(trackId))
-    .map(({ trackId, index }) => ({
+  // still only belongs to it once. Written before the delete so a failure here
+  // can't leave the playlist looking empty, which is what the sorter reads to
+  // decide "unfiled" and "adrift".
+  const written = new Set<string>();
+  const rows = wanted
+    .map((uid, index) => ({ trackId: uid.split("#")[0], uid, index }))
+    .filter(({ trackId }) => !written.has(trackId) && written.add(trackId))
+    .map(({ trackId, uid, index }) => ({
       playlist_id: playlistId,
       track_id: trackId,
       position: index,
+      added_at: addedAtByUid.get(uid) ?? null,
     }));
 
-  await supabase.from("music_playlist_tracks").delete().eq("playlist_id", playlistId);
   if (rows.length > 0) {
-    await supabase.from("music_playlist_tracks").insert(rows);
+    await supabase.from("music_playlist_tracks").delete().eq("playlist_id", playlistId);
+    const { error } = await supabase.from("music_playlist_tracks").insert(rows);
+    if (error) {
+      throw new Error(
+        `Spotify was reordered, but the local copy of "${playlistId}" could not be rewritten: ${error.message}. Re-read Spotify from the desk.`
+      );
+    }
   }
 
-  return { moved, strategy };
+  return { moved, requests };
 }

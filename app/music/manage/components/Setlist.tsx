@@ -150,7 +150,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
     }
   }
 
-  async function apply(strategy: "reorder" | "rewrite") {
+  async function apply() {
     if (!view) return;
     setBusy("applying");
     setMessage(null);
@@ -158,7 +158,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
       const response = await fetch(`/api/music/playlist/${playlistId}/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: view.order, strategy }),
+        body: JSON.stringify({ order: view.order }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error);
@@ -208,9 +208,6 @@ export function Setlist({ playlistId }: { playlistId: string }) {
   }
 
   const card = view.scorecard;
-  // Rewriting the playlist in one shot is far fewer requests, but it re-adds
-  // every track by URI — which delisted tracks would not survive.
-  const canRewrite = card.moves > 90 && card.gone === 0;
   const positions = new Map(view.order.map((uid, index) => [uid, index]));
   const sectionStarts = new Map(
     view.sections.map((section) => [section.uids[0], section])
@@ -237,7 +234,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
             {busy === "saving" ? "keeping…" : "keep this order"}
           </Button>
           <Button
-            onClick={() => apply(canRewrite ? "rewrite" : "reorder")}
+            onClick={apply}
             disabled={Boolean(busy) || card.moves === 0}
             tone="ink"
           >
@@ -250,20 +247,10 @@ export function Setlist({ playlistId }: { playlistId: string }) {
         </div>
       </div>
 
-      {canRewrite && (
-        <p className="mt-3 rounded border border-accent-orange/40 bg-accent-orange/5 px-3 py-2 text-xs text-ink-soft">
-          That&rsquo;s a big change. Applying will rewrite the playlist in one go
-          rather than make {card.moves} separate moves — faster, but it resets
-          the &ldquo;date added&rdquo; on every song.
-        </p>
-      )}
-      {card.moves > 90 && card.gone > 0 && (
+      {card.requests > 40 && (
         <p className="mt-3 rounded border border-line bg-paper-2 px-3 py-2 text-xs text-ink-soft">
-          {card.moves} moves, one request each. It would be quicker to rewrite the
-          playlist wholesale, but {card.gone} delisted track
-          {card.gone === 1 ? "" : "s"} here can&rsquo;t be re-added by URI, so
-          that would drop {card.gone === 1 ? "it" : "them"}. Clear the
-          &ldquo;gone&rdquo; pile first if you want the fast path.
+          That&rsquo;s {card.requests} requests to Spotify, one after another, so
+          it will take a moment. Runs that are already in order move together.
         </p>
       )}
 
@@ -271,15 +258,15 @@ export function Setlist({ playlistId }: { playlistId: string }) {
       <Sheet className="mt-5 p-4">
         <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
           <Score
-            value={`${card.flow}%`}
+            value={card.flow === null ? "—" : `${card.flow}%`}
             name="handed to a near neighbour"
-            good={card.flow >= 50}
+            good={card.flow === null || card.flow >= 50}
             note="a shuffle scores about 25"
           />
           <Score
-            value={`${card.newUpFront}%`}
+            value={card.newUpFront === null ? "—" : `${card.newUpFront}%`}
             name="where the newest quarter sits"
-            good={card.newUpFront <= 40}
+            good={card.newUpFront === null || card.newUpFront <= 40}
             note="50 is scattered evenly"
           />
           <Score
@@ -293,9 +280,9 @@ export function Setlist({ playlistId }: { playlistId: string }) {
             good={card.favoriteSpread === null || card.favoriteSpread >= 60}
           />
           <Score
-            value={`${card.wordFit}%`}
+            value={card.wordFit === null ? "—" : `${card.wordFit}%`}
             name={`follows "${WORD_CURVE_LABELS[view.shape.wordCurve]}"`}
-            good={card.wordFit >= 60}
+            good={card.wordFit === null || card.wordFit >= 60}
           />
         </div>
 

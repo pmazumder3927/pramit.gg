@@ -165,7 +165,14 @@ export function Sorter() {
 
       const decision: Decision =
         verb === "file"
-          ? { trackId: card.id, verb: "file", playlistIds: filing }
+          ? {
+              trackId: card.id,
+              verb: "file",
+              playlistIds: filing,
+              // what this card was showing, so the server unfiles only what we
+              // actually saw and leaves anything filed elsewhere since alone
+              knownPlaylistIds: card.playlistIds,
+            }
           : { trackId: card.id, verb };
 
       enqueue(decision);

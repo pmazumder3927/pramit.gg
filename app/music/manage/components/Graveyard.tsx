@@ -30,7 +30,7 @@ export function Graveyard() {
 
   const years = data?.years || [];
   const activeYear = open ?? years[0]?.year ?? null;
-  const pending = years.reduce((sum, year) => sum + year.pending, 0);
+  const unmirrored = years.filter((year) => !year.mirrored).length;
 
   /**
    * Mirroring removes as well as adds — the year playlists carry leftovers from
@@ -98,7 +98,7 @@ export function Graveyard() {
             <Button
               onClick={() => mirror(false)}
               disabled={mirroring || Boolean(plan)}
-              tone={pending > 0 ? "warm" : "plain"}
+              tone={unmirrored > 0 ? "warm" : "plain"}
             >
               {mirroring ? "checking…" : "mirror to spotify"}
             </Button>
@@ -153,7 +153,7 @@ export function Graveyard() {
                 <span className="font-mono text-[11px] tabular-nums text-ink-faint">
                   {year.tracks.length}
                 </span>
-                {year.pending > 0 && <Tag tone="warm">{year.pending} not mirrored</Tag>}
+                {!year.mirrored && <Tag tone="warm">no playlist yet</Tag>}
                 {year.playlistUrl && (
                   <a
                     href={year.playlistUrl}
