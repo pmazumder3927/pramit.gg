@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { failed, requireOwner, unauthorized } from "../../_auth";
 import { getSetlist, saveSetlist } from "@/app/lib/music/sequence";
-import {
-  DEFAULT_SHAPE,
-  WORD_CURVES,
-  type Shape,
-} from "@/app/music/manage/lib/types";
+import { ARCS, DEFAULT_SHAPE, type Shape } from "@/app/music/manage/lib/types";
 
 interface RouteProps {
   params: Promise<{ playlistId: string }>;
@@ -19,17 +15,20 @@ function readShape(input: unknown): Shape | undefined {
     return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
   };
 
+  const minutes = Number(raw.sideMinutes);
+
   return {
-    flow: number("flow", DEFAULT_SHAPE.flow),
-    likeness: number("likeness", DEFAULT_SHAPE.likeness),
-    spreadArtists: number("spreadArtists", DEFAULT_SHAPE.spreadArtists),
-    spreadFavorites: number("spreadFavorites", DEFAULT_SHAPE.spreadFavorites),
-    leadWithNew: number("leadWithNew", DEFAULT_SHAPE.leadWithNew),
-    wordCurve: WORD_CURVES.includes(raw.wordCurve as never)
-      ? (raw.wordCurve as Shape["wordCurve"])
-      : DEFAULT_SHAPE.wordCurve,
+    arc: ARCS.includes(raw.arc as never) ? (raw.arc as Shape["arc"]) : DEFAULT_SHAPE.arc,
+    // A side shorter than 20 minutes is not a journey and one longer than two
+    // hours is not a session; outside that the arc stops describing anything.
+    sideMinutes: Number.isFinite(minutes)
+      ? Math.min(120, Math.max(20, Math.round(minutes)))
+      : DEFAULT_SHAPE.sideMinutes,
+    shape: number("shape", DEFAULT_SHAPE.shape),
+    movement: number("movement", DEFAULT_SHAPE.movement),
+    discovery: number("discovery", DEFAULT_SHAPE.discovery),
+    alike: number("alike", DEFAULT_SHAPE.alike),
     openStrong: raw.openStrong === undefined ? DEFAULT_SHAPE.openStrong : Boolean(raw.openStrong),
-    landSoft: raw.landSoft === undefined ? DEFAULT_SHAPE.landSoft : Boolean(raw.landSoft),
   };
 }
 
@@ -66,7 +65,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     });
 
     if (!body?.preview) {
-      await saveSetlist(playlistId, setlist.shape, setlist.order, setlist.sections);
+      await saveSetlist(playlistId, setlist.shape, setlist.order, setlist.sides);
     }
 
     return NextResponse.json(setlist);

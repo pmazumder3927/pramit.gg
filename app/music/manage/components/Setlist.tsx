@@ -5,13 +5,16 @@ import Link from "next/link";
 import useSWR from "swr";
 import { Reorder } from "motion/react";
 import {
+  ARCS,
+  ARC_BLURBS,
+  ARC_LABELS,
   DEFAULT_SHAPE,
-  WORD_CURVES,
-  WORD_CURVE_BLURBS,
-  WORD_CURVE_LABELS,
+  type Arc,
+  type Scorecard,
   type SeqTrack,
   type Setlist as SetlistSnapshot,
   type Shape,
+  type Side,
 } from "../lib/types";
 import {
   Art,
@@ -26,40 +29,34 @@ import {
   formatDuration,
 } from "./paper";
 
-type KnobKey = "flow" | "leadWithNew" | "spreadArtists" | "spreadFavorites";
+type KnobKey = "shape" | "movement" | "discovery";
 
 const KNOBS: Array<{ key: KnobKey; label: string; blurb: string }> = [
   {
-    key: "flow",
-    label: "keep neighbours alike",
-    blurb: "How much each song should resemble the one after it.",
+    key: "shape",
+    label: "how much arc",
+    blurb: "How hard each side is pulled onto its contour — hot open, drift down, lift two thirds in.",
   },
   {
-    key: "leadWithNew",
-    label: "lead with the new",
-    blurb: "Pull what's new to you, and newly released, toward the front.",
+    key: "movement",
+    label: "how much movement",
+    blurb: "How much contrast is demanded between neighbours, and how much every four songs must move. This is the cure for bland.",
   },
   {
-    key: "spreadArtists",
-    label: "spread the artists",
-    blurb: "Keep the same name from turning up twice in a row.",
-  },
-  {
-    key: "spreadFavorites",
-    label: "deal the favourites",
-    blurb: "Spread the ones you actually play across the whole run.",
+    key: "discovery",
+    label: "how much discovery",
+    blurb: "How many songs almost nobody knows a side can carry, and how early they are allowed in.",
   },
 ];
 
 /**
  * The setlist.
  *
- * Every rule here is one sentence and checkable by eye. Nothing claims to know
- * how a song sounds: Spotify's audio-features, recommendations and
- * related-artists endpoints all answer 403/404 now, and /artists returns empty
- * genres, so the old engine's "energy" and "emotional tone" were regexes over
- * song titles. What's left is real — who made it, what language it's in, how
- * many words a minute, what year, and how often you play it.
+ * Other people press play on these from the top, so the room is built around
+ * two things you can look at and disagree with: the shape of each side, drawn
+ * as the arousal it actually has against the arousal the contour asked for, and
+ * a scorecard of things that are true about the order rather than a readout of
+ * the numbers the optimiser was minimising.
  */
 export function Setlist({ playlistId }: { playlistId: string }) {
   const { data, error, isLoading, mutate } = useSWR<SetlistSnapshot>(
@@ -123,7 +120,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
       const merged = { ...(shape ?? DEFAULT_SHAPE), ...next };
       setShape(merged);
       if (reshapeTimer.current) clearTimeout(reshapeTimer.current);
-      reshapeTimer.current = setTimeout(() => void reshape(merged, true), 260);
+      reshapeTimer.current = setTimeout(() => void reshape(merged, true), 320);
     },
     [shape, reshape]
   );
@@ -191,7 +188,10 @@ export function Setlist({ playlistId }: { playlistId: string }) {
       <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
         <Sheet className="p-6">
           <p className="text-sm text-ink-soft">{error.message}</p>
-          <Link href="/music/manage" className="mt-3 inline-block font-mono text-[11px] text-accent-orange">
+          <Link
+            href="/music/manage"
+            className="mt-3 inline-block font-mono text-[11px] text-accent-orange"
+          >
             back to the desk →
           </Link>
         </Sheet>
@@ -209,9 +209,6 @@ export function Setlist({ playlistId }: { playlistId: string }) {
 
   const card = view.scorecard;
   const positions = new Map(view.order.map((uid, index) => [uid, index]));
-  const sectionStarts = new Map(
-    view.sections.map((section) => [section.uids[0], section])
-  );
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
@@ -235,59 +232,39 @@ export function Setlist({ playlistId }: { playlistId: string }) {
           </Button>
           <Button
             onClick={apply}
-            disabled={Boolean(busy) || card.moves === 0}
+            disabled={Boolean(busy) || card.moves === 0 || view.offline}
             tone="ink"
           >
             {busy === "applying"
               ? "writing…"
-              : card.moves === 0
-                ? "spotify matches"
-                : `apply · ${card.moves} moves`}
+              : view.offline
+                ? "spotify unreachable"
+                : card.moves === 0
+                  ? "spotify matches"
+                  : `apply · ${card.moves} moves`}
           </Button>
         </div>
       </div>
 
-      {card.requests > 40 && (
-        <p className="mt-3 rounded border border-line bg-paper-2 px-3 py-2 text-xs text-ink-soft">
-          That&rsquo;s {card.requests} requests to Spotify, one after another, so
-          it will take a moment. Runs that are already in order move together.
+      {view.offline && (
+        <p className="mt-3 rounded border border-accent-rust/40 bg-accent-rust/5 px-3 py-2 text-xs text-ink-soft">
+          Spotify wouldn&rsquo;t answer, so this is the copy of the playlist read at
+          the last sync. You can still shape it and keep the order; applying is off,
+          because an order is written as moves between live positions and these
+          might not be them any more.
         </p>
       )}
 
-      {/* ---- what's true about this order ---- */}
-      <Sheet className="mt-5 p-4">
-        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Score
-            value={card.flow === null ? "—" : `${card.flow}%`}
-            name="handed to a near neighbour"
-            good={card.flow === null || card.flow >= 50}
-            note="a shuffle scores about 25"
-          />
-          <Score
-            value={card.newUpFront === null ? "—" : `${card.newUpFront}%`}
-            name="where the newest quarter sits"
-            good={card.newUpFront === null || card.newUpFront <= 40}
-            note="50 is scattered evenly"
-          />
-          <Score
-            value={card.artistClumps}
-            name="artists back to back"
-            good={card.artistClumps === 0}
-          />
-          <Score
-            value={card.favoriteSpread === null ? "—" : `${card.favoriteSpread}%`}
-            name="favourites evenly dealt"
-            good={card.favoriteSpread === null || card.favoriteSpread >= 60}
-          />
-          <Score
-            value={card.wordFit === null ? "—" : `${card.wordFit}%`}
-            name={`follows "${WORD_CURVE_LABELS[view.shape.wordCurve]}"`}
-            good={card.wordFit === null || card.wordFit >= 60}
-          />
-        </div>
+      {!view.offline && card.requests > 40 && (
+        <p className="mt-3 rounded border border-line bg-paper-2 px-3 py-2 text-xs text-ink-soft">
+          That&rsquo;s {card.requests} requests to Spotify, one after another, so it will
+          take a moment. Runs that are already in order move together.
+        </p>
+      )}
 
-        <Rule className="my-3.5" />
+      <Ledger card={card} />
 
+      <Sheet className="mt-3 p-4">
         <ul className="space-y-1">
           {view.notes.map((note) => (
             <li key={note} className="text-xs leading-relaxed text-ink-soft">
@@ -295,154 +272,38 @@ export function Setlist({ playlistId }: { playlistId: string }) {
             </li>
           ))}
         </ul>
-
-        {view.lyricsPending > 0 && (
+        {(view.lyricsPending > 0 || view.feelPending > 0) && (
           <p className="mt-2.5 font-mono text-[10px] text-accent-rust">
-            {view.lyricsPending} song{view.lyricsPending === 1 ? "" : "s"} still need lyrics
-            — read them from the desk to sharpen the language and word rules.
+            {view.feelPending > 0 && `${view.feelPending} never measured. `}
+            {view.lyricsPending > 0 && `${view.lyricsPending} still need lyrics. `}
+            Read and measure the library from the desk.
           </p>
         )}
       </Sheet>
 
-      {/* ---- the bench ---- */}
-      <div className="mt-6 flex items-baseline justify-between">
-        <div className="flex items-baseline gap-3">
-          <h2 className="font-serif text-lg text-ink">the bench</h2>
-          <Margin>turn a knob, it re-shapes</Margin>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowBench((v) => !v)}
-          className="font-mono text-[11px] text-ink-faint transition-colors hover:text-ink"
-        >
-          {showBench ? "fold away" : "open"}
-        </button>
-      </div>
+      <Bench
+        shape={shape}
+        card={card}
+        show={showBench}
+        onToggle={() => setShowBench((v) => !v)}
+        onNudge={nudge}
+        onReshape={() => void reshape(shape, true)}
+        busy={busy}
+        trackCount={view.playlist.trackCount}
+      />
 
-      {showBench && (
-        <Sheet className="mt-2 p-4">
-          <div className="grid gap-5 sm:grid-cols-2">
-            {KNOBS.map((knob) => (
-              <div key={knob.key}>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-ink">{knob.label}</span>
-                  <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-                    {Math.round(shape[knob.key] * 100)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(shape[knob.key] * 100)}
-                  onChange={(event) =>
-                    nudge({ [knob.key]: Number(event.target.value) / 100 } as Partial<Shape>)
-                  }
-                  className="mt-1.5 w-full accent-[rgb(var(--accent-orange))]"
-                />
-                <p className="mt-1 text-xs leading-snug text-ink-faint">{knob.blurb}</p>
-              </div>
-            ))}
-          </div>
-
-          <Rule className="my-4" />
-
-          {/* what "alike" means */}
-          <div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-ink">what counts as alike</span>
-              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-                {Math.round((1 - shape.likeness) * 100)} sound / {Math.round(shape.likeness * 100)} sense
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(shape.likeness * 100)}
-              onChange={(event) => nudge({ likeness: Number(event.target.value) / 100 })}
-              className="mt-1.5 w-full accent-[rgb(var(--accent-purple))]"
-            />
-            <div className="mt-1 flex justify-between text-xs text-ink-faint">
-              <span>how it sounds — tempo, loudness, brightness, timbre</span>
-              <span>what it&rsquo;s about — an embedding of the lyrics</span>
-            </div>
-            <p className="mt-2 font-mono text-[10px] text-ink-faint">
-              {card.heard} of {view.playlist.trackCount} listened to ·{" "}
-              {card.read} embedded
-            </p>
-          </div>
-
-          <Rule className="my-4" />
-
-          <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-            <div>
-              <Label>wordiness across the run</Label>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {WORD_CURVES.map((curve) => (
-                  <button
-                    key={curve}
-                    type="button"
-                    onClick={() => nudge({ wordCurve: curve })}
-                    className={`rounded-md border px-2.5 py-1 text-[12px] transition ${
-                      shape.wordCurve === curve
-                        ? "border-accent-orange bg-accent-orange/10 text-ink"
-                        : "border-line text-ink-faint hover:border-ink/30 hover:text-ink-soft"
-                    }`}
-                  >
-                    {WORD_CURVE_LABELS[curve]}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1.5 max-w-xs text-xs leading-snug text-ink-faint">
-                {WORD_CURVE_BLURBS[shape.wordCurve]}
-              </p>
-            </div>
-
-            <div>
-              <Label>ends</Label>
-              <div className="mt-1.5 flex flex-col gap-1.5">
-                <Toggle
-                  on={shape.openStrong}
-                  onClick={() => nudge({ openStrong: !shape.openStrong })}
-                  label="open on one you play"
-                />
-                <Toggle
-                  on={shape.landSoft}
-                  onClick={() => nudge({ landSoft: !shape.landSoft })}
-                  label="land on something long and sparse"
-                />
-              </div>
-            </div>
-
-            <div className="ml-auto flex items-center gap-2">
-              <Button onClick={() => reshape(shape, true)} disabled={Boolean(busy)} tone="warm">
-                {busy === "shaping" ? "shaping…" : "shape it again"}
-              </Button>
-            </div>
-          </div>
-        </Sheet>
-      )}
-
-      {/* ---- the running order ---- */}
+      {/* ---- the running order, a side at a time ---- */}
       <div className="mt-8 flex items-baseline gap-3">
-        <h2 className="font-serif text-lg text-ink">running order</h2>
-        <Margin>drag inside a stretch, or nudge with the arrows</Margin>
+        <h2 className="font-serif text-lg text-ink">the running order</h2>
+        <Margin>drag inside a side, or nudge with the arrows</Margin>
       </div>
 
-      <div className="mt-3 space-y-6">
-        {view.sections.map((section) => {
-          const uids = section.uids.filter((uid) => positions.has(uid));
+      <div className="mt-3 space-y-7">
+        {view.sides.map((side, index) => {
+          const uids = side.uids.filter((uid) => positions.has(uid));
           return (
-            <div key={section.id}>
-              <div className="flex items-baseline gap-3 px-1">
-                <span className="font-hand text-[17px] text-accent-purple">
-                  {section.label}
-                </span>
-                <span className="h-px flex-1 bg-line" />
-                <Label>{section.reason}</Label>
-              </div>
-
+            <section key={side.id}>
+              <SideHead side={side} index={index} total={view.sides.length} />
               <Reorder.Group
                 axis="y"
                 values={uids}
@@ -457,7 +318,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
                   });
                   setDirty(true);
                 }}
-                className="mt-1.5 space-y-1"
+                className="mt-2 space-y-1"
               >
                 {uids.map((uid) => {
                   const track = byUid.get(uid);
@@ -468,17 +329,101 @@ export function Setlist({ playlistId }: { playlistId: string }) {
                         track={track}
                         index={positions.get(uid)! + 1}
                         onMove={(delta) => move(uid, delta)}
-                        startsSection={sectionStarts.has(uid)}
                       />
                     </Reorder.Item>
                   );
                 })}
               </Reorder.Group>
-            </div>
+            </section>
           );
         })}
       </div>
     </main>
+  );
+}
+
+/**
+ * What is measurably true about the order.
+ *
+ * The first number is the one that matters: adjacent songs should be 5-15%
+ * closer together than two songs picked at random from the same playlist, which
+ * is what 704,166 real playlists do. Under 80 is the over-smoothed order that
+ * reads as bland — it is the complaint, stated as a number.
+ */
+function Ledger({ card }: { card: Scorecard }) {
+  const band = (value: number | null, lo: number, hi: number) =>
+    value === null || (value >= lo && value <= hi);
+
+  return (
+    <Sheet className="mt-5 p-4">
+      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Score
+          value={card.adjacency === null ? "—" : `${card.adjacency}`}
+          name="how close neighbours sit"
+          good={band(card.adjacency, 82, 97)}
+          note="85–95 is where real playlists are; under 80 is bland"
+        />
+        <Score
+          value={card.alternation === null ? "—" : `${card.alternation}%`}
+          name="of steps change direction"
+          good={band(card.alternation, 58, 78)}
+          note="real albums sit at 66–70"
+        />
+        <Score
+          value={`${card.restlessSides}/${card.sideCount}`}
+          name="sides that never sit still"
+          good={card.restlessSides === card.sideCount}
+          note="four flat songs is fourteen minutes"
+        />
+        <Score
+          value={card.discovery ? `${card.discovery[2]}%` : "—"}
+          name="strangers by a side's last third"
+          good={!card.discovery || card.discovery[2] >= card.discovery[0]}
+          note={
+            card.discovery
+              ? `${card.discovery[0]}% → ${card.discovery[1]}% → ${card.discovery[2]}%`
+              : "too few to shape"
+          }
+        />
+        <Score
+          value={card.unanchored}
+          name="strangers left on their own"
+          good={card.unanchored === 0}
+          note={`of ${card.strangers}, and ${card.strangerPairs} back to back`}
+        />
+      </div>
+
+      <Rule className="my-3.5" />
+
+      <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[10px] text-ink-faint">
+        <span>{card.abrupt} abrupt handovers</span>
+        <span>{card.artistClumps} artists back to back</span>
+        <span
+          className={
+            card.artistTriples > 0 && card.artistRunFloor <= 2 ? "text-accent-rust" : undefined
+          }
+          title={
+            card.artistRunFloor > 2
+              ? `with this few artists, ${card.artistRunFloor} in a row is the best anything could do`
+              : undefined
+          }
+        >
+          {card.artistTriples} three deep
+          {card.artistRunFloor > 2 ? ` · ${card.artistRunFloor} is the floor here` : ""}
+        </span>
+        <span>longest one-way run {card.longestRun}</span>
+        <span>longest language run {card.languageSlab}</span>
+        <span>
+          {card.heard} heard · {card.read} read · {card.felt} measured
+        </span>
+      </div>
+
+      {card.suspended.length > 0 && (
+        <p className="mt-2 font-mono text-[10px] text-accent-rust">
+          switched off here — {card.suspended.join("; ")}
+        </p>
+      )}
+    </Sheet>
   );
 }
 
@@ -501,8 +446,306 @@ function Score({
         {value}
       </p>
       <Label className="mt-1 block">{name}</Label>
-      {note && <p className="mt-0.5 text-[10px] text-ink-faint/80">{note}</p>}
+      {note && <p className="mt-0.5 text-[10px] leading-snug text-ink-faint/80">{note}</p>}
     </div>
+  );
+}
+
+/**
+ * The shape of one side, drawn.
+ *
+ * The solid line is the arousal the side actually has, song by song. The dashed
+ * one behind it is what the contour asked for. They are not supposed to sit on
+ * top of each other — the contour is fitted to a five-song moving average, so
+ * the solid line ought to zig-zag across it. A solid line that hugs the dashed
+ * one is a side with no local movement at all, which is the thing that reads as
+ * lifeless.
+ */
+/**
+ * The shape of one side, drawn.
+ *
+ * A column per song, standing up from the library average — above the line
+ * drives harder than the library, below it drives softer. The dashed line is
+ * what the contour asked for. The two are not supposed to sit on top of each
+ * other: the contour is fitted to a five-song moving average, so the columns
+ * ought to zig-zag across it. Columns that hug the dashed line are a side with
+ * no local movement at all, which is the thing that reads as lifeless.
+ */
+function Sparkline({ side }: { side: Side }) {
+  const values = side.arousal;
+  if (values.length < 3) return null;
+  const width = Math.max(values.length * 6, 60);
+  const height = 40;
+
+  // Symmetric around the library average so the zero line means something, and
+  // never tighter than ±1.2 SD, so a genuinely flat side looks flat rather than
+  // being stretched into a shape it does not have.
+  const reach = Math.max(1.2, ...values.map(Math.abs), ...side.wanted.map(Math.abs)) + 0.25;
+  const step = width / values.length;
+  const x = (i: number) => (i + 0.5) * step;
+  const y = (v: number) => height / 2 - (v / reach) * (height / 2);
+  const peak = values.indexOf(Math.max(...values));
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="h-10 w-full text-ink"
+      role="img"
+      aria-label={`how hard each song drives across the side, peaking at song ${peak + 1} of ${values.length}`}
+    >
+      <line
+        x1={0}
+        x2={width}
+        y1={height / 2}
+        y2={height / 2}
+        stroke="currentColor"
+        strokeOpacity="0.16"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+      {values.map((v, i) => (
+        <line
+          key={i}
+          x1={x(i)}
+          x2={x(i)}
+          y1={height / 2}
+          y2={y(v)}
+          stroke={i === peak ? "rgb(var(--accent-orange))" : "currentColor"}
+          strokeOpacity={i === peak ? 0.95 : 0.4}
+          strokeWidth={Math.max(1.4, step * 0.4)}
+          strokeLinecap="butt"
+        />
+      ))}
+      <path
+        d={side.wanted
+          .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(2)},${y(v).toFixed(2)}`)
+          .join(" ")}
+        fill="none"
+        stroke="rgb(var(--accent-purple))"
+        strokeOpacity="0.8"
+        strokeWidth="1.25"
+        strokeDasharray="3 3"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function SideHead({ side, index, total }: { side: Side; index: number; total: number }) {
+  if (side.id === "gone") {
+    return (
+      <Sheet className="flex items-baseline gap-3 px-3 py-2">
+        <span className="font-hand text-[17px] text-ink-faint">{side.label}</span>
+        <span className="h-px flex-1 bg-line" />
+        <Label>{side.reason}</Label>
+      </Sheet>
+    );
+  }
+
+  const readings: Array<{ text: string; off: boolean }> = [];
+  if (side.ramp !== null) {
+    readings.push({ text: `drifts ${side.ramp <= 0 ? "down" : "up"} ${Math.abs(side.ramp).toFixed(2)}`, off: side.ramp > -0.03 });
+  }
+  if (side.peakAt !== null) {
+    readings.push({
+      text: `peaks ${Math.round(side.peakAt * 100)}% in`,
+      off: side.peakAt < 0.55 || side.peakAt > 0.8,
+    });
+  }
+  if (side.peakLift !== null) {
+    readings.push({ text: `lifts ${side.peakLift.toFixed(1)} SD`, off: side.peakLift < 0.8 });
+  }
+  if (!side.restless) readings.push({ text: "sits still somewhere", off: true });
+
+  return (
+    <Sheet className="px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-mono text-[10px] text-ink-faint">
+          {index + 1}/{total}
+        </span>
+        <span className="font-hand text-[18px] leading-none text-accent-purple">
+          {side.label}
+        </span>
+        <Label>
+          {side.uids.length} songs · {side.minutes} min · {side.reason}
+        </Label>
+      </div>
+      <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <Sparkline side={side} />
+        </div>
+        <ul className="flex flex-none flex-wrap gap-x-3 font-mono text-[10px] leading-snug sm:w-52 sm:flex-col sm:gap-x-0 sm:text-right">
+          {readings.map((reading) => (
+            <li
+              key={reading.text}
+              className={reading.off ? "text-accent-rust" : "text-ink-faint"}
+            >
+              {reading.text}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Sheet>
+  );
+}
+
+function Bench({
+  shape,
+  card,
+  show,
+  onToggle,
+  onNudge,
+  onReshape,
+  busy,
+  trackCount,
+}: {
+  shape: Shape;
+  card: Scorecard;
+  show: boolean;
+  onToggle: () => void;
+  onNudge: (next: Partial<Shape>) => void;
+  onReshape: () => void;
+  busy: string | null;
+  trackCount: number;
+}) {
+  return (
+    <>
+      <div className="mt-6 flex items-baseline justify-between">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-serif text-lg text-ink">the bench</h2>
+          <Margin>turn a knob, it re-shapes</Margin>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="font-mono text-[11px] text-ink-faint transition-colors hover:text-ink"
+        >
+          {show ? "fold away" : "open"}
+        </button>
+      </div>
+
+      {show && (
+        <Sheet className="mt-2 p-4">
+          {/* the contour */}
+          <div>
+            <Label>the shape of a side</Label>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {ARCS.map((arc) => (
+                <button
+                  key={arc}
+                  type="button"
+                  onClick={() => onNudge({ arc })}
+                  className={`rounded-md border px-2.5 py-1 text-[12px] transition ${
+                    shape.arc === arc
+                      ? "border-accent-orange bg-accent-orange/10 text-ink"
+                      : "border-line text-ink-faint hover:border-ink/30 hover:text-ink-soft"
+                  }`}
+                >
+                  {ARC_LABELS[arc as Arc]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 max-w-lg text-xs leading-snug text-ink-faint">
+              {ARC_BLURBS[shape.arc]}
+            </p>
+          </div>
+
+          <Rule className="my-4" />
+
+          {/* how long a side runs before the shape starts again */}
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-ink">how long a side runs</span>
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {shape.sideMinutes} min · {Math.max(1, Math.round((trackCount * 3.5) / shape.sideMinutes))} sides
+              </span>
+            </div>
+            <input
+              type="range"
+              min={20}
+              max={120}
+              step={2}
+              value={shape.sideMinutes}
+              onChange={(event) => onNudge({ sideMinutes: Number(event.target.value) })}
+              className="mt-1.5 w-full accent-[rgb(var(--accent-purple))]"
+            />
+            <p className="mt-1 text-xs leading-snug text-ink-faint">
+              A twelve-hour playlist cannot have one arc, because nobody hears twelve hours.
+              It gets an arc per side instead, so whenever someone gives up they have heard a
+              whole shape. About an hour is a car ride.
+            </p>
+          </div>
+
+          <Rule className="my-4" />
+
+          <div className="grid gap-5 sm:grid-cols-3">
+            {KNOBS.map((knob) => (
+              <div key={knob.key}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm text-ink">{knob.label}</span>
+                  <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                    {Math.round(shape[knob.key] * 100)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(shape[knob.key] * 100)}
+                  onChange={(event) =>
+                    onNudge({ [knob.key]: Number(event.target.value) / 100 } as Partial<Shape>)
+                  }
+                  className="mt-1.5 w-full accent-[rgb(var(--accent-orange))]"
+                />
+                <p className="mt-1 text-xs leading-snug text-ink-faint">{knob.blurb}</p>
+              </div>
+            ))}
+          </div>
+
+          <Rule className="my-4" />
+
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-ink">what counts as alike</span>
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {Math.round((1 - shape.alike) * 100)} sound / {Math.round(shape.alike * 100)} sense
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(shape.alike * 100)}
+              onChange={(event) => onNudge({ alike: Number(event.target.value) / 100 })}
+              className="mt-1.5 w-full accent-[rgb(var(--accent-purple))]"
+            />
+            <div className="mt-1 flex justify-between text-xs text-ink-faint">
+              <span>how it sounds — loudness, brightness, timbre, tempo</span>
+              <span>what it&rsquo;s about — an embedding of the words</span>
+            </div>
+          </div>
+
+          <Rule className="my-4" />
+
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Toggle
+              on={shape.openStrong}
+              onClick={() => onNudge({ openStrong: !shape.openStrong })}
+              label="hold slot one for something a stranger can walk into"
+            />
+            <span className="font-mono text-[10px] text-ink-faint">
+              {card.felt} of {trackCount} measured
+            </span>
+            <div className="ml-auto">
+              <Button onClick={onReshape} disabled={Boolean(busy)} tone="warm">
+                {busy === "shaping" ? "shaping…" : "shape it again"}
+              </Button>
+            </div>
+          </div>
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -544,18 +787,34 @@ function Toggle({
   );
 }
 
+/** A short inked column: how hard this one drives, against the library. */
+function Drive({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="w-4 flex-none text-center font-mono text-[9px] text-ink-faint">?</span>;
+  }
+  const height = Math.max(2, Math.min(16, Math.round(((value + 2.2) / 4.4) * 16)));
+  return (
+    <span
+      className="flex h-4 w-4 flex-none items-end justify-center"
+      title={`${value >= 0 ? "+" : ""}${value.toFixed(2)} SD`}
+    >
+      <span
+        className="w-[3px] rounded-t-[1px] bg-ink/45"
+        style={{ height: `${height}px` }}
+      />
+    </span>
+  );
+}
+
 function Row({
   track,
   index,
   onMove,
-  startsSection,
 }: {
   track: SeqTrack;
   index: number;
   onMove: (delta: number) => void;
-  startsSection: boolean;
 }) {
-  const facts: string[] = [];
   if (track.unavailable) {
     return (
       <div className="flex items-center gap-3 rounded-lg border border-dashed border-line bg-paper-2 px-3 py-2">
@@ -569,6 +828,8 @@ function Row({
       </div>
     );
   }
+
+  const facts: string[] = [];
   if (track.releaseYear) facts.push(String(track.releaseYear));
   if (track.bpm) facts.push(`${Math.round(track.bpm)} bpm`);
   if (track.instrumental) facts.push("instrumental");
@@ -576,30 +837,30 @@ function Row({
   facts.push(formatDuration(track.durationMs));
 
   return (
-    <div
-      className={`group flex cursor-grab items-center gap-3 rounded-lg border bg-card px-3 py-2 shadow-paper transition-colors active:cursor-grabbing ${
-        startsSection ? "border-accent-purple/30" : "border-line"
-      } hover:border-ink/25`}
-    >
+    <div className="group flex cursor-grab items-center gap-3 rounded-lg border border-line bg-card px-3 py-2 shadow-paper transition-colors hover:border-ink/25 active:cursor-grabbing">
       <span className="w-6 flex-none text-right font-mono text-[10px] tabular-nums text-ink-faint">
         {index}
       </span>
+      <Drive value={track.arousal} />
       <Art src={track.art} alt="" size={34} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm text-ink">{track.title}</span>
-          {(track.affinity ?? 0) >= 0.45 && (
-            <span className="flex-none text-[11px] text-accent-orange" title="one you actually play">
-              ★
-            </span>
-          )}
-          {track.freshness >= 0.7 && (
+          {track.stranger && (
             <span
               className="flex-none font-mono text-[10px] text-accent-purple"
-              title="new to you, or newly out"
+              title="in the least-known third of the library — a stranger to a visitor"
             >
-              new
+              new to them
+            </span>
+          )}
+          {track.anchor && (
+            <span
+              className="flex-none font-mono text-[10px] text-ink-faint"
+              title="in the best-known quarter — this is what a stranger gets anchored to"
+            >
+              known
             </span>
           )}
         </div>
@@ -608,7 +869,7 @@ function Row({
 
       <div className="hidden flex-none items-center gap-1.5 sm:flex">
         {track.language && <Tag tone="cool">{track.language}</Tag>}
-        {!track.heard && <Tag>not listened to</Tag>}
+        {!track.felt && <Tag>not measured</Tag>}
         {track.kin.slice(0, 1).map((name) => (
           <Tag key={name}>also in {name}</Tag>
         ))}
@@ -618,7 +879,7 @@ function Row({
         {facts.join(" · ")}
       </span>
 
-      <div className="flex flex-none flex-col opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="flex flex-none flex-col opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <button
           type="button"
           onClick={() => onMove(-1)}

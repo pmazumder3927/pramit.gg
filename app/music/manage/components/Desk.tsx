@@ -162,7 +162,7 @@ export function Desk() {
             every one of these is a real measurement and the gaps are real
             gaps. */}
         {total > 0 && (
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Coverage
               name="lyrics read"
               known={data!.counts.lyricsKnown}
@@ -191,6 +191,15 @@ export function Desk() {
               total={total}
               blurb="tempo, loudness, brightness, timbre — off a real preview"
               hint="npm run music:audio"
+            />
+            <Coverage
+              name="measured"
+              known={data!.counts.feelKnown}
+              total={total}
+              blurb="how hard it drives and how bleak it is, on one scale for the whole library — what the arc is drawn in"
+              action="measure them"
+              busy={enriching}
+              onRun={() => runPass("/api/music/feel", 0, () => true)}
             />
           </div>
         )}

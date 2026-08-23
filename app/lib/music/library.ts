@@ -164,6 +164,7 @@ export async function getDesk(): Promise<DeskSnapshot> {
     { data: lyricRows },
     { data: soundRows },
     { data: senseRows },
+    { data: feelRows },
     sequences,
     lastSync,
   ] = await Promise.all([
@@ -173,6 +174,7 @@ export async function getDesk(): Promise<DeskSnapshot> {
       supabase.from("music_track_lyrics").select("track_id"),
       supabase.from("music_track_sound").select("track_id"),
       supabase.from("music_track_sense").select("track_id"),
+      supabase.from("music_track_feel").select("track_id"),
       supabase
         .from("music_sequences")
         .select("playlist_id, order_uids, updated_at, applied_at"),
@@ -303,6 +305,7 @@ export async function getDesk(): Promise<DeskSnapshot> {
       lyricsKnown: covered(lyricRows),
       soundKnown: covered(soundRows),
       senseKnown: covered(senseRows),
+      feelKnown: covered(feelRows),
     },
     decks,
     playlists: managed,
