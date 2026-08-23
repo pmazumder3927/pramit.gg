@@ -418,8 +418,15 @@ async function loadPreview(track) {
   if (!response.ok) throw new Error(`preview ${response.status}`);
   const mp3 = Buffer.from(await response.arrayBuffer());
   fs.mkdirSync(CACHE, { recursive: true });
-  fs.writeFileSync(mp3Path, mp3);
+  // Provenance first, then the audio under a temporary name and a rename. A
+  // rename inside one directory is atomic, so an interrupt or a full disk leaves
+  // a .part nobody looks at rather than a half-written mp3 that decodes to two
+  // seconds, clears the only length guard, and is written down as that song's
+  // permanent measurement.
   fs.writeFileSync(matchPath, JSON.stringify(found.hit));
+  const partial = `${mp3Path}.part`;
+  fs.writeFileSync(partial, mp3);
+  fs.renameSync(partial, mp3Path);
   return { mp3, match: found.hit };
 }
 
