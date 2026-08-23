@@ -248,8 +248,10 @@ export interface Side {
   reason: string;
   uids: string[];
   minutes: number;
-  /** arousal per track, for the sparkline */
-  arousal: number[];
+  /** arousal per track, for the sparkline; null where it was never measured */
+  arousal: Array<number | null>;
+  /** how many of them were actually measured */
+  measured: number;
   /** what the contour wanted, same length, drawn behind it */
   wanted: number[];
   /** Spearman of position against arousal — wants -0.30..-0.05 */

@@ -72,12 +72,22 @@ export function Setlist({ playlistId }: { playlistId: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [showBench, setShowBench] = useState(true);
   const reshapeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const repriceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Two knob turns 300ms apart put two shapings in flight, and whichever
+  // answered last won — including the one for a knob position already moved
+  // away from. Only the newest run may write state or clear `busy`.
+  const latest = useRef(0);
 
   useEffect(() => {
     if (!data) return;
     setShape((current) => current ?? data.shape);
     setOrder((current) => current ?? data.order);
   }, [data]);
+
+  const orderRef = useRef<string[] | null>(null);
+  useEffect(() => {
+    orderRef.current = order;
+  }, [order]);
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -92,6 +102,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
   /** Ask the server to re-run the sequencer; the browser never optimises. */
   const reshape = useCallback(
     async (nextShape: Shape, resequence: boolean) => {
+      const run = ++latest.current;
       setBusy("shaping");
       setMessage(null);
       try {
@@ -101,19 +112,53 @@ export function Setlist({ playlistId }: { playlistId: string }) {
           body: JSON.stringify({ shape: nextShape, resequence, preview: true }),
         });
         const payload = await response.json();
+        if (run !== latest.current) return;
         if (!response.ok) throw new Error(payload.error);
         await mutate(payload, { revalidate: false });
         setOrder(payload.order);
         setShape(payload.shape);
         setDirty(true);
       } catch (failure) {
+        if (run !== latest.current) return;
         setMessage(failure instanceof Error ? failure.message : "could not reshape");
       } finally {
-        setBusy(null);
+        if (run === latest.current) setBusy(null);
       }
     },
     [playlistId, mutate]
   );
+
+  /**
+   * Ask the server what the hand-edited order actually scores.
+   *
+   * The ledger, the notes and every sparkline come from the last server reply,
+   * so after a drag they described the order before it — while the apply button
+   * was already offering to write the order after it. The route will re-read an
+   * order without writing, which is exactly this.
+   */
+  const reprice = useCallback(() => {
+    if (repriceTimer.current) clearTimeout(repriceTimer.current);
+    repriceTimer.current = setTimeout(async () => {
+      const current = orderRef.current;
+      if (!current) return;
+      const run = ++latest.current;
+      setBusy("reading");
+      try {
+        const response = await fetch(`/api/music/playlist/${playlistId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: current, preview: true }),
+        });
+        const payload = await response.json();
+        if (run !== latest.current || !response.ok) return;
+        await mutate(payload, { revalidate: false });
+      } catch {
+        /* the numbers stay as they were; the order is still the owner's */
+      } finally {
+        if (run === latest.current) setBusy(null);
+      }
+    }, 420);
+  }, [playlistId, mutate]);
 
   const nudge = useCallback(
     (next: Partial<Shape>) => {
@@ -181,6 +226,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
       return next;
     });
     setDirty(true);
+    reprice();
   }
 
   if (error) {
@@ -300,23 +346,34 @@ export function Setlist({ playlistId }: { playlistId: string }) {
 
       <div className="mt-3 space-y-7">
         {view.sides.map((side, index) => {
-          const uids = side.uids.filter((uid) => positions.has(uid));
+          // Membership comes from the side; sequence comes from the order being
+          // edited. Rendering the server's frozen `side.uids` meant a drag or an
+          // arrow renumbered the rows and changed what apply would write without
+          // moving anything on screen.
+          const members = new Set(side.uids);
+          const uids = view.order.filter((uid) => members.has(uid));
           return (
             <section key={side.id}>
-              <SideHead side={side} index={index} total={view.sides.length} />
+              <SideHead side={side} index={index} total={card.sideCount} />
               <Reorder.Group
                 axis="y"
                 values={uids}
                 onReorder={(next) => {
                   setOrder((current) => {
                     if (!current) return current;
-                    const slot = current.findIndex((uid) => uids.includes(uid));
-                    const rest = current.filter((uid) => !uids.includes(uid));
-                    const merged = [...rest];
-                    merged.splice(slot, 0, ...next);
+                    // Drop the reordered uids back into the positions this side
+                    // already holds. Splicing at an index found in one array and
+                    // applied to another only worked while a side's slots were
+                    // one contiguous block, which the arrows can break.
+                    const merged = [...current];
+                    let taken = 0;
+                    for (let i = 0; i < merged.length; i++) {
+                      if (members.has(merged[i])) merged[i] = next[taken++];
+                    }
                     return merged;
                   });
                   setDirty(true);
+                  reprice();
                 }}
                 className="mt-2 space-y-1"
               >
@@ -324,7 +381,7 @@ export function Setlist({ playlistId }: { playlistId: string }) {
                   const track = byUid.get(uid);
                   if (!track) return null;
                   return (
-                    <Reorder.Item key={uid} value={uid} drag={!track.unavailable}>
+                    <Reorder.Item key={uid} value={uid} drag={track.unavailable ? false : "y"}>
                       <Row
                         track={track}
                         index={positions.get(uid)! + 1}
@@ -480,11 +537,20 @@ function Sparkline({ side }: { side: Side }) {
   // Symmetric around the library average so the zero line means something, and
   // never tighter than ±1.2 SD, so a genuinely flat side looks flat rather than
   // being stretched into a shape it does not have.
-  const reach = Math.max(1.2, ...values.map(Math.abs), ...side.wanted.map(Math.abs)) + 0.25;
+  const known = values.filter((v): v is number => v !== null);
+  const reach =
+    Math.max(1.2, ...known.map(Math.abs), ...side.wanted.map(Math.abs)) + 0.25;
   const step = width / values.length;
   const x = (i: number) => (i + 0.5) * step;
   const y = (v: number) => height / 2 - (v / reach) * (height / 2);
-  const peak = values.indexOf(Math.max(...values));
+  // Among the songs that were actually measured; an unmeasured one gets no
+  // column and cannot be crowned the loudest moment of a side it was never
+  // listened to for.
+  let peak = -1;
+  values.forEach((v, i) => {
+    if (v === null) return;
+    if (peak < 0 || v > (values[peak] as number)) peak = i;
+  });
 
   return (
     <svg
@@ -492,7 +558,11 @@ function Sparkline({ side }: { side: Side }) {
       preserveAspectRatio="none"
       className="h-10 w-full text-ink"
       role="img"
-      aria-label={`how hard each song drives across the side, peaking at song ${peak + 1} of ${values.length}`}
+      aria-label={
+        peak >= 0
+          ? `how hard each song drives across the side, peaking at song ${peak + 1} of ${values.length}`
+          : "none of this side has been measured"
+      }
     >
       <line
         x1={0}
@@ -504,19 +574,30 @@ function Sparkline({ side }: { side: Side }) {
         strokeWidth="1"
         vectorEffect="non-scaling-stroke"
       />
-      {values.map((v, i) => (
-        <line
-          key={i}
-          x1={x(i)}
-          x2={x(i)}
-          y1={height / 2}
-          y2={y(v)}
-          stroke={i === peak ? "rgb(var(--accent-orange))" : "currentColor"}
-          strokeOpacity={i === peak ? 0.95 : 0.4}
-          strokeWidth={Math.max(1.4, step * 0.4)}
-          strokeLinecap="butt"
-        />
-      ))}
+      {values.map((v, i) =>
+        v === null ? (
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={height / 2}
+            r={Math.max(0.7, step * 0.14)}
+            fill="currentColor"
+            fillOpacity="0.25"
+          />
+        ) : (
+          <line
+            key={i}
+            x1={x(i)}
+            x2={x(i)}
+            y1={height / 2}
+            y2={y(v)}
+            stroke={i === peak ? "rgb(var(--accent-orange))" : "currentColor"}
+            strokeOpacity={i === peak ? 0.95 : 0.4}
+            strokeWidth={Math.max(1.4, step * 0.4)}
+            strokeLinecap="butt"
+          />
+        )
+      )}
       <path
         d={side.wanted
           .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(2)},${y(v).toFixed(2)}`)
@@ -557,6 +638,12 @@ function SideHead({ side, index, total }: { side: Side; index: number; total: nu
     readings.push({ text: `lifts ${side.peakLift.toFixed(1)} SD`, off: side.peakLift < 0.8 });
   }
   if (!side.restless) readings.push({ text: "sits still somewhere", off: true });
+  if (side.measured < side.uids.length) {
+    readings.push({
+      text: `${side.uids.length - side.measured} never measured`,
+      off: true,
+    });
+  }
 
   return (
     <Sheet className="px-3 py-2.5">
