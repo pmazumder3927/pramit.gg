@@ -132,12 +132,30 @@ export function spearman(values: ArrayLike<number>): number {
   const n = values.length;
   if (n < 3) return 0;
   const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => values[a] - values[b]);
+
+  // Ties share a midrank. Without this an array of identical values sorts to the
+  // identity permutation and reports a perfect +1.00 ramp — which is exactly
+  // what a side of never-measured tracks looks like, so the arc readout was
+  // confidently describing a shape derived from no data at all.
   const rank = new Float64Array(n);
-  order.forEach((index, r) => (rank[index] = r));
+  for (let i = 0; i < n; ) {
+    let j = i;
+    while (j + 1 < n && values[order[j + 1]] === values[order[i]]) j++;
+    const mid = (i + j) / 2;
+    for (let k = i; k <= j; k++) rank[order[k]] = mid;
+    i = j + 1;
+  }
+
   const middle = (n - 1) / 2;
   let sum = 0;
-  for (let i = 0; i < n; i++) sum += (i - middle) * (rank[i] - middle);
-  return sum / ((n * (n * n - 1)) / 12);
+  let spread = 0;
+  for (let i = 0; i < n; i++) {
+    sum += (i - middle) * (rank[i] - middle);
+    spread += (rank[i] - middle) ** 2;
+  }
+  const positions = (n * (n * n - 1)) / 12;
+  const denominator = Math.sqrt(positions * spread);
+  return denominator > 1e-9 ? sum / denominator : 0;
 }
 
 const quantile = (sorted: ArrayLike<number>, p: number): number =>
@@ -361,6 +379,7 @@ export type Bench = {
   n: number;
   d: Float32Array;
   meanPair: number;
+  sdPair: number;
   shape: Shape;
   small: boolean;
   opening: boolean;
@@ -369,6 +388,7 @@ export type Bench = {
   tauLo: number;
   tauHi: number;
   tauAbrupt: number;
+  tauNeighbourhood: number;
   floorTarget: number;
   spread: number;
   arousal: Float64Array;
@@ -440,13 +460,18 @@ export function makeBench(
     n,
     d,
     meanPair: mean(pairs),
+    sdPair: deviation(pairs) || 1,
     shape,
     small: n < 12,
     opening: prefix.length === 0,
     artistRun: Math.max(2, limits.artistRun ?? 2),
     tauLo: quantile(pairs, 0.25 * width),
     tauHi: quantile(pairs, 1 - 0.2 * width),
+    // Compared against the MEAN of up to ten neighbour distances, so it has to
+    // sit on the mean-of-ten scale. Against the 90th percentile of single pairs
+    // the hinge sat past anything reachable and never opened.
     tauAbrupt: quantile(pairs, 0.9),
+    tauNeighbourhood: mean(pairs) + 1.2 * (deviation(pairs) || 0),
     // The flatness floor has to be reachable. A side whose own spread of arousal
     // is 0.46 SD cannot show 0.40 SD inside every four tracks while also fitting
     // a contour, and asking anyway just makes the search break some other rule
@@ -580,13 +605,16 @@ export function cost(order: Int32Array | number[], b: Bench): number {
       surprise[i - 4] = toHere / 4;
       uncertainty[i - 4] = within / 6;
     }
-    const sMean = mean(surprise);
-    const sSd = deviation(surprise) || 1;
-    const uMean = mean(uncertainty);
-    const uSd = deviation(uncertainty) || 1;
+    // Standardised against the side's own pairwise distances, which do not
+    // depend on the order, rather than against this candidate order's own mean.
+    // Standardising against itself made the sums of the first two terms
+    // identically zero for every permutation — the whole thing collapsed to the
+    // interaction, so two thirds of the one term aimed squarely at blandness
+    // could not distinguish any order from any other.
+    const scale = b.sdPair || 1;
     for (let k = 0; k < surprise.length; k++) {
-      const s = (surprise[k] - sMean) / sSd;
-      const u = (uncertainty[k] - uMean) / uSd;
+      const s = (surprise[k] - b.meanPair) / scale;
+      const u = (uncertainty[k] - b.meanPair) / scale;
       J -= W.surprise * move * (0.327 * s - 0.143 * u - 0.124 * s * u);
     }
   }
@@ -604,7 +632,7 @@ export function cost(order: Int32Array | number[], b: Bench): number {
       count++;
     }
     if (count) {
-      const out = sum / count - b.tauAbrupt;
+      const out = sum / count - b.tauNeighbourhood;
       if (out > 0) J += W.outlier * out * out;
     }
   }
@@ -729,8 +757,11 @@ export function cost(order: Int32Array | number[], b: Bench): number {
         anchors += b.anchor[order[j]];
       }
       const allowed = i < 5 ? 0 : i < 20 ? 1 : 2;
+      // The knob already sets the allowance. Scaling the penalty by it as well
+      // meant turning discovery down to zero set the allowance to zero and the
+      // enforcement to zero with it, so the strictest setting enforced nothing.
       const over = strangers - Math.round(allowed * (0.5 + shape.discovery));
-      if (over > 0) J += W.strangerBudget * shape.discovery * over;
+      if (over > 0) J += W.strangerBudget * over;
       if (anchors < 2) J += W.strangerAnchor * 0.35 * (2 - anchors);
     }
   }
@@ -742,7 +773,10 @@ export function cost(order: Int32Array | number[], b: Bench): number {
   // reaches side seven is starting a session too, just one that already went
   // well, so the rule holds there at a third of the weight.
   {
-    const weight = b.opening ? W.strangerEarly : W.strangerEarly / 3;
+    // Weaker on a later side than at the very top, because someone who has
+    // reached side seven has already decided to stay — but not so weak that it
+    // never binds, which is what a third of the weight turned out to mean.
+    const weight = b.opening ? W.strangerEarly : W.strangerEarly * 0.6;
     for (let i = 0; i < Math.min(5, n); i++) {
       if (b.stranger[order[i]]) J += weight * (5 - i);
     }
@@ -754,7 +788,7 @@ export function cost(order: Int32Array | number[], b: Bench): number {
   // compares candidates one slot at a time.
   if (n > 1) {
     for (let i = 0; i < n; i++) {
-      if (b.stranger[order[i]]) J -= W.strangerLate * shape.discovery * (i / (n - 1));
+      if (b.stranger[order[i]]) J -= W.strangerLate * (0.25 + shape.discovery) * (i / (n - 1));
     }
   }
 
@@ -1125,20 +1159,29 @@ export function fitToPlaylist(
         "the familiar-neighbour rule now reads against this playlist rather than the library — nothing here is widely known"
       );
     }
-    if (strangers > n * 0.45) {
+    if (strangers > known.length * 0.45) {
       strangerBelow = Math.min(strangerBelow, quantile(known, 0.4));
       suspended.push("almost everything here is obscure, so \"a stranger\" means obscure for this playlist");
     }
   }
 
-  // With `a` distinct artists over `n` tracks nothing can do better than
-  // ceil(n/a) of them in a row, so asking for two is asking for the impossible.
-  const artists = new Set(tracks.map((track) => track.artistId).filter(Boolean));
-  const floor = artists.size > 0 ? Math.ceil(n / artists.size) : 1;
-  const artistRun = Math.max(2, floor);
+  // What forces a run is the single busiest artist, not the average share. With
+  // `top` of `n` tracks by one name, the other `n - top` open `n - top + 1` gaps
+  // to spread them through, so ceil(top / (n - top + 1)) in a row is the best any
+  // order can do. Using n/artists instead relaxed the rule on playlists that
+  // could have kept it, and printed an impossibility that wasn't one.
+  const counts = new Map<string, number>();
+  for (const track of tracks) {
+    if (!track.artistId) continue;
+    counts.set(track.artistId, (counts.get(track.artistId) ?? 0) + 1);
+  }
+  const top = counts.size ? Math.max(...Array.from(counts.values())) : 0;
+  const artistRun = top > 0 ? Math.max(2, Math.ceil(top / Math.max(1, n - top + 1))) : 2;
   if (artistRun > 2) {
+    const busiest = Array.from(counts.entries()).find((entry) => entry[1] === top);
+    void busiest;
     suspended.push(
-      `artist separation — ${artists.size} artist${artists.size === 1 ? "" : "s"} across ${n} songs cannot do better than ${artistRun} in a row`
+      `artist separation — one artist has ${top} of these ${n} songs, so ${artistRun} in a row is the best any order can do`
     );
   }
 
@@ -1161,14 +1204,13 @@ export function sequence(
 
   const slot = new Map(tracks.map((track, i) => [track.uid, i]));
 
+  // Still needs a side, even if there is nothing to shape: the running order is
+  // rendered from the sides, so handing back none drew an empty page and
+  // reported every discovery number as zero.
   if (tracks.length < 6) {
-    return {
-      order: [...tracks, ...gone],
-      sides: [],
-      distance,
-      slot,
-      suspended: ["too short to shape at all"],
-    };
+    const run = rebuildFrom(all, shape, limits);
+    run.suspended.push("everything — too few songs to shape at all");
+    return run;
   }
 
   // Some playlists cannot obey these rules and it is not their fault. `jojoi` is
@@ -1433,21 +1475,34 @@ export function describeSides(run: Sequenced): Side[] {
   const sides: Side[] = run.sides.map((side, index) => {
     const tracks = side.tracks;
     const n = tracks.length;
-    const arousal = tracks.map((track) => track.arousal ?? 0);
+    // Kept nullable all the way to the page. Filling a never-measured track in
+    // as the library average made it indistinguishable from one measured at
+    // exactly average, and the readouts then reported an arc drawn from nothing.
+    const arousal = tracks.map((track) => track.arousal);
+    const known = arousal.filter((value): value is number => value !== null);
     const wanted = tracks.map((_, i) =>
       contourArousal(run.sides[index].bench.shape.arc, n > 1 ? i / (n - 1) : 0)
     );
-    let peak = 0;
-    for (let i = 1; i < n; i++) if (arousal[i] > arousal[peak]) peak = i;
+    const enough = known.length >= 6 && known.length >= n * 0.6;
+
+    let peak = -1;
+    for (let i = 0; i < n; i++) {
+      if (arousal[i] === null) continue;
+      if (peak < 0 || (arousal[i] as number) > (arousal[peak] as number)) peak = i;
+    }
     let before = 0;
     let counted = 0;
-    for (let j = Math.max(0, peak - 3); j < peak; j++) {
-      before += arousal[j];
-      counted++;
+    if (peak > 0) {
+      for (let j = Math.max(0, peak - 3); j < peak; j++) {
+        if (arousal[j] === null) continue;
+        before += arousal[j] as number;
+        counted++;
+      }
     }
     let restless = true;
+    const filled = tracks.map((track) => track.arousal ?? 0);
     for (let i = 0; i + 4 <= n; i++) {
-      if (deviation(arousal.slice(i, i + 4)) < side.bench.floorTarget - 0.02) restless = false;
+      if (deviation(filled.slice(i, i + 4)) < side.bench.floorTarget - 0.02) restless = false;
     }
     const { label, reason } = nameSide(tracks, index, run.sides.length, dominant?.value ?? null, taken);
     taken.add(label);
@@ -1458,11 +1513,15 @@ export function describeSides(run: Sequenced): Side[] {
       reason,
       uids: tracks.map((track) => track.uid),
       minutes: Math.round(tracks.reduce((sum, t) => sum + (t.durationMs || 0), 0) / 60_000),
-      arousal: arousal.map((v) => Number(v.toFixed(2))),
+      arousal: arousal.map((v) => (v === null ? null : Number(v.toFixed(2)))),
       wanted: wanted.map((v) => Number(v.toFixed(2))),
-      ramp: n >= 6 ? Number(spearman(arousal).toFixed(2)) : null,
-      peakAt: n >= 6 ? Number((peak / (n - 1)).toFixed(2)) : null,
-      peakLift: n >= 6 ? Number((arousal[peak] - (counted ? before / counted : 0)).toFixed(2)) : null,
+      ramp: enough ? Number(spearman(known).toFixed(2)) : null,
+      peakAt: enough && peak >= 0 && n > 1 ? Number((peak / (n - 1)).toFixed(2)) : null,
+      peakLift:
+        enough && peak >= 0
+          ? Number(((arousal[peak] as number) - (counted ? before / counted : 0)).toFixed(2))
+          : null,
+      measured: known.length,
       restless,
     };
   });
@@ -1480,6 +1539,7 @@ export function describeSides(run: Sequenced): Side[] {
       ramp: null,
       peakAt: null,
       peakLift: null,
+      measured: 0,
       restless: true,
     });
   }
@@ -1710,18 +1770,31 @@ export function score(
   };
 }
 
-function buildNotes(run: Sequenced, sides: Side[], card: Scorecard, shape: Shape): string[] {
+function buildNotes(
+  run: Sequenced,
+  sides: Side[],
+  card: Scorecard,
+  shape: Shape,
+  limits: FeelThresholds
+): string[] {
   const notes: string[] = [];
   const order = run.order.filter((track) => !track.unavailable);
   const opener = order[0];
   const real = sides.filter((side) => side.id !== "gone");
 
   if (opener) {
-    const why = opener.anchor
+    // Against the library, not the relaxed playlist-local flag. On exactly the
+    // playlists where the scorecard says nothing here is widely known, `anchor`
+    // has been rewritten to mean "well known for this playlist", and claiming
+    // most people will know it contradicts the line underneath.
+    const widelyKnown = (opener.familiarity ?? 0) >= limits.anchorAbove;
+    const why = widelyKnown
       ? "one most people will know"
-      : opener.opensWell
-        ? "the voice is in early"
-        : "nothing here opened cleanly, so this is the best of a bad set";
+      : opener.anchor
+        ? "about as known as anything here gets"
+        : opener.opensWell
+          ? "the voice is in early"
+          : "nothing here opened cleanly, so this is the best of a bad set";
     notes.push(`Opens on ${opener.title} — ${why}.`);
   }
 
@@ -1813,7 +1886,7 @@ export async function getSetlist(
 
   const { data: saved } = await supabase
     .from("music_sequences")
-    .select("shape, order_uids, updated_at, applied_at")
+    .select("shape, order_uids, sides, updated_at, applied_at")
     .eq("playlist_id", playlistId)
     .maybeSingle();
 
@@ -1833,6 +1906,13 @@ export async function getSetlist(
   const seed = seedOf(`${playlistId}|${JSON.stringify(shape)}`);
   const byUid = new Map(tracks.map((track) => [track.uid, track]));
 
+  // How the saved order was cut, if it was saved by this engine.
+  const savedSides = Array.isArray(saved?.sides)
+    ? (saved.sides as Array<{ id?: string; uids?: string[] }>)
+        .filter((side) => side?.id !== "gone" && Array.isArray(side?.uids))
+        .map((side) => side.uids!.length)
+    : undefined;
+
   let run: Sequenced;
   if (options?.order?.length) {
     const wanted = new Set(options.order);
@@ -1840,7 +1920,7 @@ export async function getSetlist(
       .map((uid) => byUid.get(uid))
       .filter((track): track is SeqInternal => Boolean(track));
     for (const track of tracks) if (!wanted.has(track.uid)) held.push(track);
-    run = rebuildFrom(held, shape, limits);
+    run = rebuildFrom(held, shape, limits, savedSides);
   } else if (!options?.resequence && !stale && saved?.order_uids?.length) {
     const savedOrder = saved.order_uids as string[];
     const held = savedOrder
@@ -1850,7 +1930,7 @@ export async function getSetlist(
     // Songs added since the last save land at the end rather than silently
     // wiping the saved order.
     for (const track of tracks) if (!present.has(track.uid)) held.push(track);
-    run = rebuildFrom(held, shape, limits);
+    run = rebuildFrom(held, shape, limits, savedSides);
   } else {
     run = sequence(tracks, shape, limits, seed);
   }
@@ -1872,7 +1952,7 @@ export async function getSetlist(
     sides,
     shape,
     scorecard: card,
-    notes: buildNotes(run, sides, card, shape),
+    notes: buildNotes(run, sides, card, shape, limits),
     savedAt: (saved?.updated_at as string) || null,
     appliedAt: (saved?.applied_at as string) || null,
     lyricsPending: tracks.filter((track) => !track.unavailable && track.wordsPerMin === null).length,
@@ -1886,7 +1966,12 @@ export async function getSetlist(
  * cut it into sides at the same places the sequencer would, so the arc readouts
  * describe what is actually there rather than what the machine would have done.
  */
-function rebuildFrom(order: SeqInternal[], shape: Shape, limits: FeelThresholds): Sequenced {
+function rebuildFrom(
+  order: SeqInternal[],
+  shape: Shape,
+  limits: FeelThresholds,
+  keep?: number[]
+): Sequenced {
   const gone = order.filter((track) => track.unavailable);
   const live = order.filter((track) => !track.unavailable);
   const distance = buildDistance(live, shape.alike);
@@ -1903,7 +1988,12 @@ function rebuildFrom(order: SeqInternal[], shape: Shape, limits: FeelThresholds)
     track.anchor = familiarity !== null && familiarity >= local.anchorAbove;
   }
 
-  const sizes = planSides(live, shape.sideMinutes);
+  // Prefer the boundaries this order was saved with. Re-cutting it by minutes
+  // would move the seams every time a song was dragged, so the same order came
+  // back described as a different record depending on how it was loaded.
+  const planned = planSides(live, shape.sideMinutes);
+  const sizes =
+    keep && keep.length && keep.reduce((a, b) => a + b, 0) === live.length ? keep : planned;
   const sides: Array<{ tracks: SeqInternal[]; bench: Bench }> = [];
   let at = 0;
   let tail: number[] = [];
@@ -2019,41 +2109,67 @@ export async function applySetlist(
     }
   }
 
-  // The positions the tracks occupy, in playlist order. Everything else stays
-  // exactly where it is, so we only permute within these slots.
-  const trackSlots = slots
-    .map((slot, index) => ({ ...slot, index }))
-    .filter((slot) => slot.uid);
-  const working = trackSlots.map((slot) => slot.uid as string);
-  const positionOf = trackSlots.map((slot) => slot.index);
+  // One model of Spotify's own item space — a uid per track, null for anything
+  // we cannot identify — kept in step with every move as it lands.
+  //
+  // This used to number its requests from a map of track-slot to playlist
+  // position taken once, before anything moved, on the belief stated in the
+  // comment above: that an item we don't recognise holds its position. Spotify's
+  // reorder does not honour that. It shifts every item in the range, ours or
+  // not, so one podcast episode or one local file anywhere in the playlist made
+  // the map stale after the first request and every request after it moved the
+  // wrong thing — while `working` went on reporting success. "pensive tunes"
+  // has exactly one such item, at position 127.
+  const live: Array<string | null> = slots.map((slot) => slot.uid);
 
   let snapshot = (await fetchPlaylistMeta(playlistId)).snapshot_id || null;
   let moved = 0;
   let requests = 0;
 
+  /** Where the k-th identifiable track currently sits, in item positions. */
+  const nth = (k: number): number => {
+    let seen = 0;
+    for (let i = 0; i < live.length; i++) {
+      if (live[i] === null) continue;
+      if (seen === k) return i;
+      seen++;
+    }
+    return live.length;
+  };
+
   for (let at = 0; at < wanted.length; at++) {
-    if (working[at] === wanted[at]) continue;
-    const from = working.indexOf(wanted[at]);
+    const want = nth(at);
+    const from = live.indexOf(wanted[at]);
     if (from < 0) continue;
+    if (from === want) continue;
 
     // How much of the run starting here is already in the order we want? Moving
-    // it as one range costs one request instead of `length`.
+    // it as one range costs one request instead of one each. Items we cannot
+    // identify inside the range come along, which is harmless — they carry no
+    // meaning and no rule refers to them — but a run must not *end* on one.
     let length = 1;
-    while (
-      at + length < wanted.length &&
-      from + length < working.length &&
-      working[from + length] === wanted[at + length]
-    ) {
+    let matched = 1;
+    let lastMatch = 1;
+    while (from + length < live.length && at + matched < wanted.length) {
+      const item = live[from + length];
+      if (item === null) {
+        length++;
+        continue;
+      }
+      if (item !== wanted[at + matched]) break;
       length++;
+      matched++;
+      lastMatch = length;
     }
+    length = lastMatch;
 
     const response = await api<{ snapshot_id: string }>(
       `/playlists/${playlistId}/tracks`,
       {
         method: "PUT",
         body: JSON.stringify({
-          range_start: positionOf[from],
-          insert_before: positionOf[at],
+          range_start: from,
+          insert_before: want,
           range_length: length,
           ...(snapshot ? { snapshot_id: snapshot } : {}),
         }),
@@ -2061,10 +2177,13 @@ export async function applySetlist(
     );
     snapshot = response?.snapshot_id || snapshot;
 
-    working.splice(at, 0, ...working.splice(from, length));
-    moved += length;
+    // `want` is always at or before `from`: everything ahead of it is already
+    // the order we asked for, so the range only ever travels backwards, and
+    // removing then inserting matches what Spotify did.
+    live.splice(want, 0, ...live.splice(from, length));
+    moved += matched;
     requests++;
-    at += length - 1;
+    at += matched - 1;
   }
 
   await supabase.from("music_sequences").upsert(
