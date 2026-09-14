@@ -20,6 +20,14 @@ export interface TokenResponse {
   expires_in: number;
 }
 
+/** The owner needs to complete OAuth again before Spotify can serve data. */
+export class SpotifyReconnectRequiredError extends Error {
+  constructor() {
+    super("Spotify authorization has been revoked. Reconnect Spotify in the dashboard.");
+    this.name = "SpotifyReconnectRequiredError";
+  }
+}
+
 /**
  * Get Spotify credentials from environment variables
  */
@@ -113,6 +121,12 @@ export async function refreshAccessToken(
 
   if (!response.ok) {
     const error = await response.text();
+    // A revoked refresh token cannot recover on its own. Keep a distinct error
+    // so the dashboard can offer reconnection rather than claiming the stale
+    // credentials are still healthy.
+    if (response.status === 400 && /"error"\s*:\s*"invalid_grant"/.test(error)) {
+      throw new SpotifyReconnectRequiredError();
+    }
     throw new Error(`Failed to refresh token: ${error}`);
   }
 
@@ -239,8 +253,11 @@ export async function exchangeCodeForTokens(
  */
 export async function isSpotifyConnected(): Promise<boolean> {
   try {
-    const stored = await getStoredTokens();
-    return stored !== null;
+    // A credential row alone is not a connection: Spotify can revoke its
+    // refresh token at any time. Checking through the normal token path lets
+    // the dashboard immediately show the reconnect action in that case.
+    await getAccessToken();
+    return true;
   } catch {
     return false;
   }
