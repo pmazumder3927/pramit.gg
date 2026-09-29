@@ -183,8 +183,8 @@ const config: Config = {
         'glow': '0 0 24px rgb(var(--accent-orange) / 0.32)',
         'glow-purple': '0 0 24px rgb(var(--accent-purple) / 0.32)',
         'glow-subtle': '0 0 10px rgb(var(--fg) / 0.08)',
-        'paper': '2px 5px 16px -6px rgb(var(--fg) / 0.30)',
-        'paper-lg': '6px 12px 30px -10px rgb(var(--fg) / 0.32)',
+        'paper': 'var(--shadow-paper)',
+        'paper-lg': 'var(--shadow-paper-lg)',
       },
       spacing: {
         '18': '4.5rem',

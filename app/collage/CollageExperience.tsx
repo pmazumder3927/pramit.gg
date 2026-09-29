@@ -125,7 +125,7 @@ export default function CollageExperience({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgb(var(--accent-purple)/0.06),transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_78%,rgb(var(--accent-orange)/0.06),transparent_55%)]" />
 
-      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-8 pt-16 md:pt-24">
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-8 pt-12 md:pt-16">
         {/* ── handwritten header, scribbled at the top of the wall ── */}
         <motion.header
           initial={{ opacity: 0, y: 20 }}
@@ -183,18 +183,18 @@ export default function CollageExperience({
                 <NavButton
                   onClick={goPrev}
                   direction="left"
-                  className="absolute left-0 top-1/2 z-30 hidden -translate-x-[calc(100%+1.5rem)] -translate-y-1/2 md:flex"
+                  className="absolute left-0 top-1/2 z-30 hidden -translate-x-[calc(100%+1.5rem)] -translate-y-1/2 xl:flex"
                 />
                 <NavButton
                   onClick={goNext}
                   direction="right"
-                  className="absolute right-0 top-1/2 z-30 hidden translate-x-[calc(100%+1.5rem)] -translate-y-1/2 md:flex"
+                  className="absolute right-0 top-1/2 z-30 hidden translate-x-[calc(100%+1.5rem)] -translate-y-1/2 xl:flex"
                 />
               </>
             )}
 
             {/* the taped polaroid-style frame */}
-            <div className="relative mx-auto max-w-3xl -rotate-[0.8deg] bg-card p-3 pb-5 shadow-paper-lg sm:p-4 sm:pb-6 [border:1px_solid_rgb(var(--line))] transition-transform duration-300 hover:rotate-0">
+            <div className="relative mx-auto max-w-3xl -rotate-[0.35deg] bg-card p-3 pb-5 shadow-paper-lg sm:p-4 sm:pb-6 [border:1px_solid_rgb(var(--line))] transition-transform duration-300 hover:rotate-0">
               {/* tape at the corners */}
               <Tape
                 tone="orange"
@@ -265,14 +265,14 @@ export default function CollageExperience({
                   onClick={goPrev}
                   disabled={total < 2}
                   aria-label="previous"
-                  className="absolute inset-y-0 left-0 z-10 w-1/3 md:hidden"
+                  className="absolute inset-y-0 left-0 z-10 w-1/3 xl:hidden"
                 />
                 <button
                   type="button"
                   onClick={goNext}
                   disabled={total < 2}
                   aria-label="next"
-                  className="absolute inset-y-0 right-0 z-10 w-1/3 md:hidden"
+                  className="absolute inset-y-0 right-0 z-10 w-1/3 xl:hidden"
                 />
               </div>
 
@@ -287,7 +287,7 @@ export default function CollageExperience({
                   className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1"
                 >
                   <span className="font-hand text-2xl text-ink-soft">
-                    {isLatest ? "tonight's painting" : dateLong}
+                    {isLatest ? "latest collage" : dateLong}
                   </span>
                   <span className="flex items-baseline gap-2 font-hand text-xl text-ink-faint">
                     <span className="text-accent-orange tabular-nums">
@@ -366,7 +366,7 @@ export default function CollageExperience({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="relative mx-auto mt-28 md:mt-36 max-w-md"
+          className="relative mx-auto mt-16 md:mt-24 max-w-md"
         >
           <div className="relative rounded-[3px] border border-line bg-card px-7 py-9 text-center shadow-paper">
             <TornEdge position="top" />
@@ -379,9 +379,7 @@ export default function CollageExperience({
               strokeWidth={2.5}
             />
             <p className="font-serif text-base italic text-ink-soft mb-6 leading-relaxed">
-              every faint drawing floating behind the pages of this site was
-              left by a visitor. leave a sketch and yours will also be forever
-              imprinted in this very mid website background.
+              leave a drawing for the next collage.
             </p>
             <Link href="/connect" className="btn-sketch btn-sketch-solid group">
               leave a sketch
@@ -418,7 +416,7 @@ function NavButton({
     <button
       type="button"
       onClick={onClick}
-      aria-label={direction === "left" ? "previous" : "next"}
+      aria-label={direction === "left" ? "previous collage" : "next collage"}
       className={`flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-line bg-card/80 text-ink-soft backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-accent-orange/60 hover:bg-card hover:text-accent-orange ${className ?? ""}`}
     >
       <svg
@@ -455,10 +453,14 @@ function ThumbnailStrip({
   useEffect(() => {
     const node = itemRefs.current[currentIndex];
     if (!node) return;
-    node.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
+    const strip = node.parentElement;
+    if (!strip) return;
+    // Only move the thumbnail strip; scrollIntoView also moved the whole page.
+    const item = node.getBoundingClientRect();
+    const frame = strip.getBoundingClientRect();
+    strip.scrollTo({
+      left: strip.scrollLeft + item.left - frame.left - (frame.width - item.width) / 2,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
     });
   }, [currentIndex]);
 

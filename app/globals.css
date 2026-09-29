@@ -13,11 +13,14 @@
   --surface-2: 239 229 205;   /* #efe5cd paper-2          */
   --fg: 35 32 27;             /* #23201b ink              */
   --fg-soft: 70 65 58;        /* #46413a ink-soft         */
-  --fg-faint: 122 114 100;    /* #7a7264 ink-faint        */
+  --fg-faint: 100 92 79;    /* #645c4f ink-faint        */
   --line: 205 191 159;        /* #cdbf9f hairline         */
   --accent-orange: 199 86 35; /* #c75623 sunset (legible) */
   --accent-purple: 91 86 168; /* #5b56a8 flower (legible) */
   --accent-rust: 176 73 41;   /* #b04929 climb bridge     */
+  --shadow-paper: 0 2px 6px rgb(35 32 27 / 0.05);
+  --shadow-paper-lg: 0 4px 14px rgb(35 32 27 / 0.065);
+  --shadow-paper-hover: 0 5px 16px rgb(35 32 27 / 0.09);
   --album-rgb: var(--accent-orange); /* current track's album color (set by JS) */
 
   /* warm gray ramp — higher number = more contrast vs paper */
@@ -33,7 +36,7 @@
   --gray-900: 35 32 27;
   --gray-950: 26 23 19;
 
-  --grain-opacity: 0.04;
+  --grain-opacity: 0.03;
   color-scheme: light;
 }
 
@@ -49,11 +52,15 @@
   --surface-2: 16 15 23;      /* #100f17 recessed, near-canvas  */
   --fg: 211 204 191;          /* #d3ccbf dimmed chalk, no glare */
   --fg-soft: 154 147 137;     /* #9a9389 low secondary text     */
-  --fg-faint: 112 106 100;    /* #706a64 faint marginalia       */
+  --fg-faint: 153 144 133;    /* #999085 marginalia       */
   --line: 48 45 58;           /* #302d3a dim violet hairline    */
   --accent-orange: 255 140 86;/* #ff8c56 ember glow             */
   --accent-purple: 178 158 255;/*#b29eff arcane lavender        */
   --accent-rust: 232 132 90;  /* #e8845a                        */
+  --shadow-paper: 0 2px 8px rgb(0 0 0 / 0.18);
+  --shadow-paper-lg: 0 4px 16px rgb(0 0 0 / 0.24);
+  --shadow-paper-hover: 0 6px 20px rgb(0 0 0 / 0.3);
+  --on-accent: #23201b;
   --album-rgb: var(--accent-orange);
 
   /* ramp pulled toward the dark so borders + recessed surfaces stop
@@ -70,7 +77,7 @@
   --gray-900: 24 22 31;
   --gray-950: 16 15 23;
 
-  --grain-opacity: 0.06;
+  --grain-opacity: 0.04;
   color-scheme: dark;
 }
 
@@ -214,30 +221,22 @@
     background: rgb(var(--surface));
     border: 1.5px solid rgb(var(--line) / 0.9);
     border-radius: 8px;
-    box-shadow: 1px 3px 10px -4px rgb(var(--fg) / 0.18);
+    box-shadow: var(--shadow-paper);
     transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
   }
-  .sketch-card:hover {
-    transform: translateY(-4px) rotate(0deg);
-    box-shadow: 4px 10px 24px -8px rgb(var(--fg) / 0.28);
+  .sketch-card:is(a, button):hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-paper-hover);
     border-color: rgb(var(--fg) / 0.22);
   }
-  /* At night a light-colored shadow only hazes the card — give it a real
-     drop-shadow into the dark, a faint warm rim along the top edge so it
-     catches the lamp, and an ember glow when lifted. */
+  /* Night cards use dark shadows rather than a pale glow. */
   .dark .sketch-card {
     border-color: rgb(var(--line) / 0.85);
-    box-shadow:
-      inset 0 1px 0 rgb(var(--fg) / 0.045),
-      0 2px 8px -6px rgb(0 0 0 / 0.6),
-      0 12px 30px -14px rgb(0 0 0 / 0.75);
+    box-shadow: var(--shadow-paper);
   }
-  .dark .sketch-card:hover {
+  .dark .sketch-card:is(a, button):hover {
     border-color: rgb(var(--fg) / 0.2);
-    box-shadow:
-      inset 0 1px 0 rgb(var(--fg) / 0.07),
-      0 18px 44px -18px rgb(0 0 0 / 0.85),
-      0 0 34px -12px rgb(var(--accent-orange) / 0.22);
+    box-shadow: var(--shadow-paper-hover);
   }
 
   /* a strip of "tape" for taped cards */
@@ -267,13 +266,14 @@
     background: transparent;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
   }
-  .btn-sketch:hover { transform: translate(-1px, -2px); box-shadow: 3px 4px 0 rgb(var(--fg)); }
+  .btn-sketch:not(:disabled):hover { transform: translateY(-1px); box-shadow: var(--shadow-paper-hover); }
+  .btn-sketch:disabled { cursor: not-allowed; opacity: 0.5; }
   .btn-sketch-solid {
     background: rgb(var(--fg)); color: rgb(var(--bg)); border-color: rgb(var(--fg));
   }
-  .btn-sketch-solid:hover {
+  .btn-sketch-solid:not(:disabled):hover {
     background: rgb(var(--accent-orange)); border-color: rgb(var(--accent-orange));
-    color: var(--on-accent, #fff); box-shadow: 3px 4px 0 rgb(var(--accent-purple));
+    color: var(--on-accent, #fff); box-shadow: var(--shadow-paper-hover);
   }
 
   /* a hand-drawn SVG stroke that draws itself in on load */
@@ -289,7 +289,7 @@
   @media (prefers-reduced-motion: reduce) { .rise { animation: none; opacity: 1; transform: none; } }
 
   .card-hover { @apply transition-all duration-500 ease-out; }
-  .card-hover:hover { @apply -translate-y-1.5 shadow-paper-lg; }
+  .card-hover:hover { @apply -translate-y-0.5 shadow-paper-lg; }
 
   /* ---------- paper sheet (the "Deckle" ground the doodles rest on) ---------- */
   .paper-tooth { background-size: 220px 220px; opacity: 0.07; }
@@ -510,3 +510,25 @@
 .hljs-deletion { color: rgb(var(--accent-pink)); }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 700; }
+
+/* A quieter desk: the approved homepage treatment, using shared paper tokens. */
+.home-intro { padding-bottom: 8px; }
+.home-intro h1 { line-height: 1.08; }
+.home-featured > p { line-height: 1.85; }
+.home-rail { gap: 36px; }
+.home-post { transform: rotate(-0.35deg); }
+.home-post:nth-child(even) { transform: rotate(0.35deg); }
+.home-post .sketch-card { padding: 26px 24px 22px; }
+.home-post h3 { line-height: 1.45; }
+.home-post-decor { opacity: 0.65; }
+@media (min-width: 768px) {
+  .home-spread { column-gap: 64px; }
+}
+@media (max-width: 767px) {
+  .home-post { transform: none; }
+  .home-post:nth-child(even) { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eq-bars span { animation: none; }
+  .sketch-card:is(a, button):hover, .btn-sketch:not(:disabled):hover, .card-hover:hover { transform: none; }
+}

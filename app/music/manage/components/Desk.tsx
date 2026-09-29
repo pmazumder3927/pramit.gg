@@ -208,7 +208,7 @@ export function Desk() {
       {/* ---- piles to work ---- */}
       <div className="mt-10 flex items-baseline gap-3">
         <h2 className="font-serif text-lg text-ink">piles</h2>
-        <Margin>finite. you can finish them.</Margin>
+        <Margin>ready to sort</Margin>
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -232,7 +232,7 @@ export function Desk() {
           ))}
         {data && data.decks.filter((d) => d.kind !== "playlist").length === 0 && (
           <Sheet className="p-4 sm:col-span-2">
-            <Margin>nothing loose. the whole library is filed.</Margin>
+            <Margin>all tracks filed</Margin>
           </Sheet>
         )}
       </div>
@@ -246,7 +246,7 @@ export function Desk() {
 
         {arranging ? (
           <div className="flex items-center gap-2">
-            <Label>drag to set the order on /music</Label>
+            <Label>drag to reorder the public shelf</Label>
             <Button onClick={saveArrangement} disabled={saving} tone="ink">
               {saving ? "saving…" : "keep this order"}
             </Button>
@@ -370,7 +370,7 @@ function PlaylistRow({
           </Link>
           {playlist.role === "inbox" && <Tag tone="cool">suggestions</Tag>}
           {!playlist.isPublic && <Tag>private</Tag>}
-          {playlist.hidden && <Tag tone="cool">off /music</Tag>}
+          {playlist.hidden && <Tag tone="cool">hidden</Tag>}
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-ink-faint">
@@ -388,7 +388,7 @@ function PlaylistRow({
 
       <div className="flex flex-none items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         {playlist.isPublic && (
-          <Button onClick={onToggleHidden} title="show or hide on the public /music page">
+          <Button onClick={onToggleHidden} title="show or hide on the music page">
             {playlist.hidden ? "show" : "hide"}
           </Button>
         )}

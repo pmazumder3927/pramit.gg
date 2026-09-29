@@ -42,7 +42,7 @@ function NavLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`group relative inline-flex flex-col items-center font-hand text-2xl leading-none transition-colors ${
+      className={`group relative inline-flex min-h-11 justify-center flex-col items-center font-hand text-2xl leading-none transition-colors ${
         active ? "" : "text-ink-soft hover:text-ink"
       }`}
       style={active ? { color: c } : undefined}
@@ -113,7 +113,7 @@ export default function SketchbookNav() {
           </Link>
 
           {/* desktop links */}
-          <nav className="hidden items-center gap-8 md:flex">
+          <nav aria-label="Main navigation" className="hidden items-center gap-8 md:flex">
             {LINKS.map((l) => (
               <NavLink key={l.href} {...l} active={isActive(pathname, l.href)} />
             ))}

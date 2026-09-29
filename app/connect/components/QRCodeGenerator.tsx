@@ -48,6 +48,8 @@ export default function QRCodeGenerator({
   if (isLoading) {
     return (
       <div
+        role="status"
+        aria-label="Creating QR code"
         className={`${className} flex items-center justify-center rounded-xl border-[1.6px] border-line bg-card`}
         style={{ width: size, height: size }}
       >
@@ -71,7 +73,7 @@ export default function QRCodeGenerator({
       {qrCodeDataUrl ? (
         <Image
           src={qrCodeDataUrl}
-          alt="QR Code"
+          alt="Scan to open the contact page"
           width={size}
           height={size}
           className="h-full w-full object-cover"
@@ -79,7 +81,7 @@ export default function QRCodeGenerator({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-card">
-          <span className="text-xs text-ink-faint">QR Error</span>
+          <span className="text-xs text-ink-faint">couldn’t create QR</span>
         </div>
       )}
     </motion.div>

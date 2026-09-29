@@ -42,7 +42,7 @@ export default function TurtleGallery() {
       setError(null);
     } catch (loadError) {
       console.error("Gallery load error:", loadError);
-      setError("the gallery is hiding. try again in a moment.");
+      setError("couldn’t load the drawings.");
     }
   }, []);
 
@@ -74,20 +74,18 @@ export default function TurtleGallery() {
           <Doodle name="star" tone="orange" className="h-5 w-5" strokeWidth={2} />
         </div>
         <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
-          what other adventurers left behind
+          visitor sketches
         </h2>
-        <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          sketches from previous visitors.
-        </p>
       </motion.div>
 
       {error ? (
         <div className="rounded-2xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 p-5 text-center text-sm text-accent-rust">
-          {error}
+          <p role="status">{error}</p>
+          <button type="button" onClick={() => void load()} className="mt-2 min-h-11 font-hand text-lg underline underline-offset-4">try again</button>
         </div>
       ) : drawings === null ? (
         <div className="rounded-2xl border-[1.4px] border-dashed border-line bg-card p-8 text-center font-hand text-xl text-ink-faint">
-          gathering drawings...
+          loading sketches…
         </div>
       ) : drawings.length === 0 ? (
         <div className="rounded-2xl border-[1.4px] border-dashed border-line bg-card p-8 text-center font-hand text-xl text-ink-faint">
@@ -104,7 +102,7 @@ export default function TurtleGallery() {
                 duration: 0.4,
                 delay: Math.min(index * 0.03, 0.4),
               }}
-              style={{ rotate: `${(index % 3) - 1}deg` }}
+              style={{ rotate: `${((index % 3) - 1) * 0.35}deg` }}
               className="group relative rounded-[3px] border-[1.4px] border-line bg-card p-2 pt-3 shadow-paper transition-all duration-300 hover:rotate-0 hover:border-accent-orange/50 hover:shadow-paper-lg"
             >
               <Tape
@@ -118,11 +116,11 @@ export default function TurtleGallery() {
                 strokes={drawing.strokes}
                 prompt={drawing.prompt}
               />
-              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] text-ink-faint">
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-xs text-ink-faint">
                 <span className="truncate font-hand text-sm text-accent-rust">
                   {drawing.prompt ?? "a turtle"}
                 </span>
-                <span className="tabular-nums text-ink-faint/80">
+                <span className="tabular-nums text-ink-faint">
                   {formatDate(drawing.created_at)}
                 </span>
               </div>

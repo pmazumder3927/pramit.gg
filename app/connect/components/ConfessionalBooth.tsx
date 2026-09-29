@@ -184,7 +184,7 @@ export default function ConfessionalBooth() {
       >
         <div className="flex items-center gap-2">
           <HandNote tone="purple" rotate={-3} className="text-2xl">
-            leave a doodle in my sketchbook
+            leave a note
           </HandNote>
           <Doodle
             name="arrow"
@@ -194,17 +194,13 @@ export default function ConfessionalBooth() {
           />
         </div>
         <h2 className="mt-1 font-serif text-2xl font-medium text-ink md:text-3xl">
-          draw me something, whisper something
+          a note and a doodle
         </h2>
         <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-          anonymous. sketch on the page, drop a note, and the council decides if
-          it stays. say hi, leave a burning rant or feedback, whatever u want
-          dude.
+          say hi, leave feedback, or get something off your chest.
         </p>
         <p className="mt-3 max-w-md -rotate-1 font-hand text-lg leading-snug text-accent-purple">
-          psst — the faint drawings drifting behind every page of this site?
-          visitors drew them, right here. if the council approves, yours joins
-          them.
+          approved drawings join the site’s background. your note stays private.
         </p>
       </motion.div>
 
@@ -249,7 +245,8 @@ export default function ConfessionalBooth() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="p-12 text-center"
+              role="status"
+              className="p-8 text-center sm:p-12"
             >
               <motion.div
                 initial={{ scale: 0 }}
@@ -276,7 +273,7 @@ export default function ConfessionalBooth() {
                 message received
               </h3>
               <p className="font-hand text-lg text-accent-rust">
-                the council waves you on. whispered into the void.
+                thanks for leaving a note.
               </p>
             </motion.div>
           ) : (
@@ -293,12 +290,14 @@ export default function ConfessionalBooth() {
                     rotate={-1.5}
                     className="mb-1.5 block text-lg"
                   >
-                    1 · jot a note (only i can see these)
+                    1 · write a note
                   </HandNote>
                   <textarea
                     value={message}
                     onChange={handleMessageChange}
-                    placeholder="speak your truth..."
+                    aria-label="Your private note"
+                    maxLength={maxLength}
+                    placeholder="what’s on your mind?"
                     className="h-28 w-full resize-none rounded-[3px] border-[1.6px] border-line bg-paper-2/60 p-4 font-serif text-base text-ink placeholder-ink-faint transition-colors duration-300 focus:border-accent-orange/60 focus:outline-none"
                   />
                   <div className="absolute bottom-3 right-3 text-xs tabular-nums text-ink-faint">
@@ -320,7 +319,7 @@ export default function ConfessionalBooth() {
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     />
                   </svg>
-                  <span>completely anonymous · no tracking</span>
+                  <span>no name required · only i can read your note</span>
                 </div>
 
                 <HandNote
@@ -328,7 +327,7 @@ export default function ConfessionalBooth() {
                   rotate={-1.5}
                   className="mx-auto mb-2 block max-w-3xl text-lg"
                 >
-                  2 · draw a little something
+                  2 · add a doodle
                 </HandNote>
                 <div className="mb-6">
                   <DrawingCaptcha
@@ -344,7 +343,7 @@ export default function ConfessionalBooth() {
                 </div>
 
                 {submitError ? (
-                  <div className="mx-auto mb-6 max-w-3xl rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 px-4 py-3 text-sm text-accent-rust">
+                  <div role="alert" className="mx-auto mb-6 max-w-3xl rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 px-4 py-3 text-sm text-accent-rust">
                     {submitError}
                   </div>
                 ) : null}
@@ -361,8 +360,8 @@ export default function ConfessionalBooth() {
                   }}
                 >
                   {captchaReady
-                    ? "submit to the council"
-                    : "draw something for the council first"}
+                    ? "send note"
+                    : "add a doodle to send"}
                 </motion.button>
               </RuledPaper>
             </motion.div>

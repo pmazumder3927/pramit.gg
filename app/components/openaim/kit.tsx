@@ -173,7 +173,7 @@ export function Toggle({
       }}
       aria-pressed={on}
       disabled={!hydrated}
-      className="min-h-8 rounded-full border px-3.5 py-1.5 font-sans text-sm font-medium leading-none transition-colors disabled:opacity-30"
+      className="min-h-11 rounded-full border px-3.5 py-1.5 font-sans text-sm font-medium leading-none transition-colors disabled:opacity-30"
       style={{
         borderColor: on ? accent : C.lineA(0.9),
         color: on ? accent : C.faint,
@@ -202,7 +202,7 @@ export function Btn({
         onClick();
       }}
       disabled={!hydrated}
-      className="min-h-8 rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-sans text-sm font-medium leading-none text-accent-orange transition-colors hover:bg-accent-orange/25 disabled:opacity-30"
+      className="min-h-11 rounded-full border border-accent-orange/40 bg-accent-orange/15 px-4 py-1.5 font-sans text-sm font-medium leading-none text-accent-orange transition-colors hover:bg-accent-orange/25 disabled:opacity-30"
     >
       {children}
     </button>

@@ -88,7 +88,7 @@ function DashboardContent() {
           className="w-8 h-8 border-2 border-accent-orange border-t-transparent rounded-full"
         />
         <p className="font-hand text-xl text-ink-soft">
-          opening the sketchbook...
+          loading the desk…
         </p>
       </div>
     );
@@ -120,12 +120,12 @@ function DashboardContent() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-10 flex flex-wrap items-center gap-4"
         >
-          <Link href="/write" className="btn-sketch-solid">
-            ✎ start a fresh page
+          <Link href="/write" className="btn-sketch btn-sketch-solid">
+            ✎ new post
           </Link>
           {drafts.length === 0 && (
             <HandNote tone="rust" rotate={-2} className="text-lg">
-              no half-written things. suspicious.
+              no drafts yet.
             </HandNote>
           )}
         </motion.div>
@@ -135,7 +135,7 @@ function DashboardContent() {
           <section className="mb-12">
             <div className="mb-4 flex items-baseline gap-3">
               <h2 className="font-serif text-2xl font-medium text-ink">
-                still wet
+                drafts
               </h2>
               <span className="font-hand text-lg -rotate-2 text-accent-rust">
                 — pick one back up ✎
@@ -152,25 +152,29 @@ function DashboardContent() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.04 + i * 0.03 }}
                   >
-                    <Link
-                      href={`/write/${post.id}`}
+                    <div
                       className="sketch-card relative block p-4"
                       style={{ transform: `rotate(${c.rotate}deg)` }}
                     >
+                      <Link
+                        href={`/write/${post.id}`}
+                        aria-label={`Edit ${post.title || "untitled draft"}`}
+                        className="absolute inset-0 z-10 rounded-lg"
+                      />
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <Stamp tone="rust" rotate={-3}>
-                          wet ink
+                          draft
                         </Stamp>
                         <button
                           type="button"
-                          title="tear it out"
+                          aria-label={`Delete ${post.title || "untitled draft"}`}
                           onClick={(e) => {
                             e.preventDefault();
                             void deletePost(post);
                           }}
-                          className="font-hand text-base text-ink-faint transition-colors hover:text-accent-rust"
+                          className="relative z-20 min-h-11 px-2 font-hand text-base text-ink-faint transition-colors hover:text-accent-rust"
                         >
-                          tear out
+                          delete
                         </button>
                       </div>
                       <h3 className="font-serif text-lg font-medium leading-snug text-ink line-clamp-2">
@@ -179,7 +183,7 @@ function DashboardContent() {
                       <p className="mt-2 font-hand text-base text-ink-faint">
                         {wordCount} words · touched {touched(post)}
                       </p>
-                    </Link>
+                    </div>
                   </motion.div>
                 );
               })}
@@ -263,7 +267,7 @@ function DashboardContent() {
                             onClick={() => void deletePost(post)}
                             className="text-ink-faint transition-colors hover:text-accent-rust"
                           >
-                            tear out
+                            delete
                           </button>
                         </div>
                       </div>

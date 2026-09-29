@@ -49,7 +49,7 @@ function ChaoticPlaylistCardImpl({
   };
 
   const tapeTone = TAPE_TONES[index % TAPE_TONES.length];
-  const baseRot = style.rotation * 0.5;
+  const baseRot = style.rotation * 0.2;
 
   return (
     <motion.div
@@ -68,7 +68,7 @@ function ChaoticPlaylistCardImpl({
         ease: [0.34, 1.56, 0.64, 1],
       }}
       style={{ zIndex: isHovered ? 50 : 1 }}
-      whileHover={{ scale: 1.04, rotate: 0, zIndex: 50 }}
+      whileHover={{ scale: 1.01, rotate: 0, zIndex: 50 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -92,8 +92,8 @@ function ChaoticPlaylistCardImpl({
             ...paperTextureStyle(chaosFor(playlist.id).paper),
             minHeight: sizeVariant === "large" ? "320px" : "160px",
             boxShadow: isHovered
-              ? `0 18px 40px -16px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`
-              : "2px 5px 16px -7px rgb(var(--fg) / 0.30)",
+              ? "var(--shadow-paper-hover)"
+              : "var(--shadow-paper)",
           }}
         >
           {/* at-rest album-color edge — each mixtape wears its own art */}
@@ -133,7 +133,7 @@ function ChaoticPlaylistCardImpl({
               className={`font-hand leading-tight text-ink transition-colors duration-300 ${
                 sizeVariant === "large" ? "text-2xl md:text-3xl" : "text-xl"
               } line-clamp-2`}
-              style={{ color: isHovered ? albumColor : undefined }}
+              style={{ color: isHovered ? "rgb(var(--accent-rust))" : undefined }}
             >
               {playlist.name}
             </h3>

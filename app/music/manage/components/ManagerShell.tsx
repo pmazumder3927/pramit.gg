@@ -20,8 +20,8 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen page-reveal">
-      <header className="sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur-[2px]">
-        <div className="mx-auto flex max-w-5xl items-baseline gap-5 px-4 py-2.5 sm:px-6">
+      <header className="sticky top-14 z-20 border-b border-line bg-paper/95 backdrop-blur-[2px]">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:px-6">
           <Link
             href="/music/manage"
             className="font-hand text-lg leading-none text-accent-rust transition-opacity hover:opacity-70"
@@ -29,7 +29,7 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
             it&rsquo;s 3am
           </Link>
 
-          <nav className="flex items-baseline gap-4">
+          <nav aria-label="Music management" className="flex flex-wrap items-center gap-4">
             {ROOMS.map((room) => {
               const active = room.exact
                 ? pathname === room.href
@@ -38,7 +38,8 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={room.href}
                   href={room.href}
-                  className={`relative font-mono text-[11px] lowercase tracking-wide transition-colors ${
+                  aria-current={active ? "page" : undefined}
+                  className={`relative inline-flex min-h-11 items-center font-mono text-xs lowercase tracking-wide transition-colors ${
                     active ? "text-ink" : "text-ink-faint hover:text-ink-soft"
                   }`}
                 >
@@ -73,13 +74,13 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-baseline gap-4">
             <Link
               href="/music"
-              className="font-mono text-[11px] lowercase tracking-wide text-ink-faint transition-colors hover:text-ink-soft"
+              className="inline-flex min-h-11 items-center font-mono text-xs lowercase tracking-wide text-ink-faint transition-colors hover:text-ink-soft"
             >
               public
             </Link>
             <Link
               href="/dashboard"
-              className="font-mono text-[11px] lowercase tracking-wide text-ink-faint transition-colors hover:text-ink-soft"
+              className="inline-flex min-h-11 items-center font-mono text-xs lowercase tracking-wide text-ink-faint transition-colors hover:text-ink-soft"
             >
               dashboard
             </Link>

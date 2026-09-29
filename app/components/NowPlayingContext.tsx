@@ -49,6 +49,7 @@ const fetcher = async (url: string) => {
   // no-store: never let the browser serve a stale body (its frozen serverNow
   // would make the playhead un-compensatable). Each poll is a fresh sample.
   const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("Listening status unavailable");
   const data = await res.json();
   return { ...data, clientLatency: (performance.now() - start) / 2 };
 };
@@ -68,7 +69,7 @@ function getVariantFromTrack(title: string): VisualVariant {
 }
 
 export function NowPlayingProvider({ children }: { children: ReactNode }) {
-  const { data: track, error, isLoading } = useSWR<SpotifyTrack>(
+  const { data: track, isLoading } = useSWR<SpotifyTrack>(
     "/api/spotify/now-playing",
     fetcher,
     {
@@ -82,7 +83,7 @@ export function NowPlayingProvider({ children }: { children: ReactNode }) {
 
   const albumColor = useAlbumColor(track?.albumImageUrl || null);
   const variant = track ? getVariantFromTrack(track.title) : "minimal";
-  const hasTrack = !error && !!track;
+  const hasTrack = !!track && !!(track.artist || track.songUrl);
 
   return (
     <NowPlayingContext.Provider

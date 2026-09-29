@@ -40,7 +40,7 @@ export function Label({
 }) {
   return (
     <span
-      className={`font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint ${className}`}
+      className={`font-mono text-[11px] uppercase tracking-[0.18em] text-ink-faint ${className}`}
     >
       {children}
     </span>
@@ -83,7 +83,7 @@ export function Tag({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.12em] ${tones[tone]} ${className}`}
     >
       {children}
     </span>
@@ -128,7 +128,7 @@ export function Button({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-[11px] tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${className}`}
+      className={`inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 py-2 font-mono text-xs tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${className}`}
     >
       {children}
     </button>

@@ -497,7 +497,7 @@ export function GhostPalette({
                 onClick={onClose}
                 className="font-hand text-lg text-ink-faint transition-colors hover:text-accent-rust"
               >
-                rest ✦
+                close
               </button>
             </div>
 
@@ -517,8 +517,9 @@ export function GhostPalette({
                   key={m}
                   type="button"
                   disabled={!available}
+                  aria-pressed={mode === m}
                   onClick={() => setMode(m)}
-                  className={`rounded-full border px-3 py-1 font-mono text-[0.65rem] lowercase tracking-[0.08em] transition-colors ${
+                  className={`min-h-11 rounded-full border px-3 py-2 font-mono text-[0.65rem] lowercase tracking-[0.08em] transition-colors ${
                     mode === m
                       ? "border-ink bg-ink/10 text-ink"
                       : available
@@ -543,8 +544,9 @@ export function GhostPalette({
                     void summon();
                   }
                 }}
+                aria-label="Writing instructions"
                 placeholder={MODE_HINTS[mode]}
-                className="w-full rounded-md border border-line bg-paper-2/60 px-3 py-2 font-serif text-sm text-ink placeholder:italic placeholder:text-ink-faint focus:border-ink/50 focus:outline-none focus-visible:ring-0"
+                className="w-full rounded-md border border-line bg-paper-2/60 px-3 py-2 font-serif text-base text-ink placeholder:italic placeholder:text-ink-faint focus:border-ink/50 focus:outline-none focus-visible:ring-0"
               />
               <button
                 type="button"

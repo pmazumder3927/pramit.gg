@@ -54,7 +54,7 @@ export interface Chaos {
   highlight: boolean;
 }
 
-const ROTATIONS = [-2.4, -1.7, -1.1, -0.6, 0.6, 1.1, 1.7, 2.4];
+const ROTATIONS = [-0.7, -0.5, -0.35, -0.2, 0.2, 0.35, 0.5, 0.7];
 const TONES: ChaosTone[] = ["orange", "purple", "rust"];
 // weighted: plain shows up more often so the variety reads as accents, not noise
 const PAPERS: PaperVariant[] = ["plain", "plain", "plain", "ruled", "grid", "dotted"];

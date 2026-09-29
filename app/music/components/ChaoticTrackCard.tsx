@@ -42,8 +42,8 @@ const CARD = "rgb(var(--surface))";
 const LINE = "rgb(var(--line))";
 const SUB = "rgb(var(--fg-soft))";
 const FAINT = "rgb(var(--fg-faint))";
-const SOFT_REST = "2px 4px 12px -7px rgb(var(--fg) / 0.28)";
-const SOFT_HOVER = "5px 11px 26px -10px rgb(var(--fg) / 0.34)";
+const SOFT_REST = "var(--shadow-paper)";
+const SOFT_HOVER = "var(--shadow-paper-hover)";
 
 // legible ink/cream for text sitting directly on an album-colored surface
 function onColor(hex: string): "#1b1610" | "#fbf6ea" {
@@ -76,15 +76,15 @@ function getTrackSkin(seed: string, albumColor: string): Skin {
   const on = onColor(albumColor);
   const isDarkOn = on === "#1b1610";
   const onSub = isDarkOn ? "rgba(27,22,16,0.74)" : "rgba(251,246,234,0.80)";
-  const onFaint = isDarkOn ? "rgba(27,22,16,0.55)" : "rgba(251,246,234,0.6)";
+  const onFaint = isDarkOn ? "rgba(27,22,16,0.8)" : "rgba(251,246,234,0.85)";
 
   // album-color wash — the whole row wears the song's color (the boldest skin)
   if (roll < 0.17) {
     return {
       kind: "wash", bg: albumColor, borderClass: "border-2",
       borderColor: "rgba(0,0,0,0.22)", text: on, sub: onSub, faint: onFaint,
-      shadowRest: "4px 4px 0 0 rgb(var(--fg) / 0.8)",
-      shadowHover: "7px 7px 0 0 rgb(var(--fg))",
+      shadowRest: "1px 2px 0 0 rgb(var(--fg) / 0.8)",
+      shadowHover: "2px 3px 0 0 rgb(var(--fg))",
       spine: false, hoverAccent: on, artBorder: "rgba(0,0,0,0.3)", texture: false,
     };
   }
@@ -93,8 +93,8 @@ function getTrackSkin(seed: string, albumColor: string): Skin {
     return {
       kind: "invert", bg: INK, borderClass: "border", borderColor: INK,
       text: PAPER, sub: "rgb(var(--bg) / 0.78)", faint: "rgb(var(--bg) / 0.55)",
-      shadowRest: "3px 6px 18px -8px rgb(var(--fg) / 0.5)",
-      shadowHover: "5px 11px 26px -10px rgb(var(--fg) / 0.6)",
+      shadowRest: SOFT_REST,
+      shadowHover: SOFT_HOVER,
       spine: true, hoverAccent: albumColor, artBorder: "rgba(255,255,255,0.2)",
       texture: false,
     };
@@ -104,8 +104,8 @@ function getTrackSkin(seed: string, albumColor: string): Skin {
     return {
       kind: "brutalist", bg: CARD, borderClass: "border-2", borderColor: INK,
       text: INK, sub: SUB, faint: FAINT,
-      shadowRest: `4px 4px 0 0 ${albumColor}`,
-      shadowHover: `7px 7px 0 0 ${albumColor}`,
+      shadowRest: `1px 2px 0 0 ${albumColor}`,
+      shadowHover: `2px 3px 0 0 ${albumColor}`,
       spine: false, hoverAccent: albumColor, artBorder: LINE, texture: true,
     };
   }
@@ -155,7 +155,7 @@ function ChaoticTrackCardImpl({
   const { rotate, big, tape, tapeTone, numTilt } = useMemo(() => {
     const ch = chaosFor(seed);
     return {
-      rotate: range(seed, -1.4, 1.4, 20),
+      rotate: range(seed, -0.4, 0.4, 20),
       big: chance(seed, 0.22, 21),
       tape: chance(seed, 0.26, 22),
       tapeTone: ch.tapeTone,
@@ -181,7 +181,7 @@ function ChaoticTrackCardImpl({
         ease: [0.34, 1.56, 0.64, 1],
       }}
       style={{ zIndex: isHovered ? 50 : 1 }}
-      whileHover={{ scale: 1.02, rotate: 0, zIndex: 50 }}
+      whileHover={{ scale: 1.005, rotate: 0, zIndex: 50 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className="group cursor-pointer"

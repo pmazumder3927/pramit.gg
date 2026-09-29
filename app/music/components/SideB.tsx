@@ -212,7 +212,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
 
     if (outcome === "error") {
       setPhase("idle"); // card settles back, track preserved
-      setErrorMsg("the mailbox jammed — try once more?");
+      setErrorMsg("couldn’t send the song — try once more?");
       return;
     }
 
@@ -261,8 +261,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
               suggest me a song
             </h3>
             <p className="mt-1.5 max-w-md font-serif text-sm italic text-ink-soft">
-              search spotify for a song recommendation for me. it will randomly
-              enter my playlist one day and I will wonder if I have dementia.
+              send me a song for my playlist.
             </p>
           </div>
           {onClose && (
@@ -428,7 +427,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                           // aborts the in-flight request per keystroke, so
                           // typing mid-search always searches the latest query
                           // (a disabled input just eats clicks and reads dead)
-                          placeholder="search a song — title, artist, lyric..."
+                          placeholder="song, artist, or lyric…"
                           autoComplete="off"
                           aria-label="search for a song to suggest"
                           className="min-w-0 flex-1 border-0 bg-transparent p-0 font-hand text-lg text-ink placeholder:text-ink-faint focus:outline-none focus:ring-0"
@@ -451,8 +450,8 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                           className="text-base text-ink-faint"
                         >
                           {searching
-                            ? "rummaging through the crate..."
-                            : "what should i add to the playlist?"}
+                            ? "searching…"
+                            : "search for a song"}
                         </HandNote>
                       </div>
                     )}
@@ -463,7 +462,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                           rotate={-1}
                           className="text-base text-ink-faint"
                         >
-                          one song. make it count.
+                          your pick
                         </HandNote>
                         <button
                           type="button"
@@ -471,7 +470,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                           disabled={busy}
                           className="font-hand text-base text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange disabled:opacity-40"
                         >
-                          pick a different one
+                          change song
                         </button>
                       </div>
                     )}
@@ -533,7 +532,7 @@ export default function SideB({ onClose }: { onClose?: () => void } = {}) {
                         rotate={-1}
                         className="mb-1 block text-base"
                       >
-                        a line about why? (optional · only i&apos;ll read it)
+                        add a private note (optional)
                       </HandNote>
                       <input
                         value={note}

@@ -23,7 +23,7 @@ export default function SpotifyConnection({
   useEffect(() => {
     // Show initial messages from OAuth callback
     if (initialSuccess) {
-      setMessage({ type: "success", text: "Spotify connected successfully!" });
+      setMessage({ type: "success", text: "Spotify connected" });
     } else if (initialError) {
       setMessage({ type: "error", text: initialError });
     }
@@ -87,7 +87,7 @@ export default function SpotifyConnection({
       animate={{ opacity: 1, y: 0 }}
       className="sketch-card p-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {/* Spotify Logo */}
           <div className="w-12 h-12 bg-[#1DB954] rounded-full flex items-center justify-center">
@@ -120,14 +120,14 @@ export default function SpotifyConnection({
             <button
               onClick={handleDisconnect}
               disabled={disconnecting}
-              className="px-4 py-2 bg-accent-rust/15 text-accent-rust border border-accent-rust/30 rounded-lg hover:bg-accent-rust/25 transition-all disabled:opacity-50"
+              className="min-h-11 px-4 py-2 bg-accent-rust/15 text-accent-rust border border-accent-rust/30 rounded-lg hover:bg-accent-rust/25 transition-all disabled:opacity-50"
             >
               {disconnecting ? "disconnecting..." : "disconnect"}
             </button>
           ) : (
             <button
               onClick={handleConnect}
-              className="px-4 py-2 bg-[#1DB954] text-true-black font-medium rounded-lg hover:bg-[#1ed760] transition-all"
+              className="min-h-11 px-4 py-2 bg-[#1DB954] text-true-black font-medium rounded-lg hover:bg-[#1ed760] transition-all"
             >
               connect spotify
             </button>

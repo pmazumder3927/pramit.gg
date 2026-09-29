@@ -1335,7 +1335,7 @@ export default function WritingRoom({
               className={`transition-colors hover:text-accent-rust ${
                 mode === "proof" ? "text-accent-rust" : "text-ink-soft"
               }`}
-              title="see it like a reader — ⌘e"
+              title="preview — ⌘e"
             >
               {mode === "proof" ? "back to the pen" : "proof"}
             </button>
@@ -1343,7 +1343,7 @@ export default function WritingRoom({
               type="button"
               onClick={() => setVersoOpen(true)}
               className="relative text-ink-soft transition-colors hover:text-accent-rust"
-              title="the back of the page — ⌘↵"
+              title="post settings — ⌘↵"
             >
               {chromeAction}
               {(differs || status === "local") && (
@@ -1671,7 +1671,7 @@ export default function WritingRoom({
                         bodyRef.current?.setSelectionRange(0, 0);
                       }
                     }}
-                    placeholder="title this entry…"
+                    placeholder="title…"
                     aria-label="title"
                     className="mt-1 w-full resize-none overflow-hidden bg-transparent font-serif text-3xl font-medium leading-[1.08] tracking-tight text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 sm:text-4xl md:text-5xl lg:text-6xl"
                     style={{ caretColor: "rgb(var(--accent-rust))" }}
@@ -1789,7 +1789,7 @@ export default function WritingRoom({
                   onBlur={() => setBodyFocused(false)}
                   onKeyDown={onBodyKeyDown}
                   onPaste={onBodyPaste}
-                  placeholder="start anywhere. you can fix it later ✎"
+                  placeholder="start writing…"
                   aria-label="entry body (markdown)"
                   spellCheck
                   className="relative block min-h-[50vh] w-full resize-none overflow-hidden bg-transparent font-serif text-base leading-[1.75] tracking-[0.01em] text-ink-soft placeholder:italic placeholder:text-ink-faint focus:outline-none focus-visible:ring-0 md:text-lg md:leading-[1.8]"
@@ -1883,7 +1883,7 @@ export default function WritingRoom({
                 <button
                   type="button"
                   onClick={openPlates}
-                  title="drop an interactive figure or diagram into the page — ⌘/"
+                  title="insert a figure — ⌘/"
                   className="transition-colors hover:text-accent-purple"
                 >
                   press a figure ✦
@@ -1891,7 +1891,7 @@ export default function WritingRoom({
                 <button
                   type="button"
                   onClick={toggleGhost}
-                  title="the ghost offers a line when your pen rests"
+                  title="suggest a line while you pause"
                   className="transition-colors hover:text-accent-rust"
                 >
                   ghost —{" "}

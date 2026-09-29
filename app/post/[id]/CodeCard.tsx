@@ -37,7 +37,7 @@ export default function CodeCard({
             type="button"
             onClick={copy}
             aria-label={copied ? "Code copied to clipboard" : "Copy code"}
-            className="font-hand text-base leading-none text-ink-faint transition-colors hover:text-accent-orange focus-visible:text-accent-orange lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+            className="min-h-11 px-2 font-hand text-base leading-none text-ink-faint transition-colors hover:text-accent-orange focus-visible:text-accent-orange"
             style={
               copied ? { color: "rgb(var(--accent-orange))", opacity: 1 } : undefined
             }

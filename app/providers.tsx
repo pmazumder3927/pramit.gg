@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
 import { withPostHog } from "@/app/lib/track";
 
@@ -63,5 +64,5 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     });
   }, [pathname]);
 
-  return <>{children}</>;
+  return <MotionConfig reducedMotion="user">{children}</MotionConfig>;
 }

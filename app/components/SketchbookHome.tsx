@@ -46,7 +46,7 @@ function fmtDate(iso: string) {
 }
 
 function NowSpinningCard() {
-  const { track } = useNowPlayingContext();
+  const { track, isLoading } = useNowPlayingContext();
   const playing = track?.isPlaying;
   // not playing, but the last song is still replaying through the scape
   const echoing = !playing && !!track?.playedAtMs && !!track?.duration;
@@ -54,8 +54,8 @@ function NowSpinningCard() {
   return (
     <Link
       href="/music"
-      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
-      style={{ rotate: "1.2deg" }}
+      className="home-aside-card group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
+      style={{ rotate: "0deg" }}
     >
       <Tape tone="orange" rotate={-6} className="-top-3 left-6" width={64} />
       <div className="mb-3 flex items-center justify-between">
@@ -116,18 +116,18 @@ function NowSpinningCard() {
         </div>
         <div className="min-w-0">
           <div className="truncate font-serif text-[1.05rem] font-medium leading-tight text-ink">
-            {track?.title ?? "An Ocean In Between the Waves"}
+            {track?.title ?? (isLoading ? "loading…" : "nothing playing right now")}
           </div>
           <div className="truncate text-sm text-ink-faint">
-            {track?.artist ?? "The War on Drugs"}
+            {track?.artist ?? ""}
           </div>
           <div className="truncate font-serif text-xs italic text-accent-purple">
-            {track?.album ?? "Lost in the Dream"}
+            {track?.album ?? ""}
           </div>
         </div>
       </div>
       <span className="mt-3 flex items-center justify-end gap-1 font-hand text-base text-ink-faint transition-colors group-hover:text-accent-rust">
-        wander into the music →
+        more music →
       </span>
     </Link>
   );
@@ -143,13 +143,13 @@ function CollageCard({
   return (
     <Link
       href="/collage"
-      className="group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
-      style={{ rotate: "-1.4deg" }}
+      className="home-aside-card group relative block rounded-xl border border-line bg-card p-4 shadow-paper transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99]"
+      style={{ rotate: "0deg" }}
     >
       <Tape tone="purple" rotate={6} className="-top-3 right-6" width={64} />
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <span className="font-hand text-xl text-accent-orange">
-          tonight&apos;s collage
+          the collage
         </span>
         <Stamp tone="orange" rotate={-4}>
           {sketchCount > 0 ? `${sketchCount} contributions` : "open"}
@@ -180,8 +180,7 @@ function CollageCard({
         )}
       </div>
       <p className="mt-2.5 font-serif text-sm italic leading-snug text-ink-soft">
-        generated (just adds a background im sorry) from visitors&apos; drawings
-        in the background{" "}
+        visitors&apos; drawings, brought together each night.{" "}
         <span className="text-accent-rust transition-colors group-hover:text-accent-orange">
           add yours →
         </span>
@@ -212,7 +211,7 @@ function FeaturedSheet({ post }: { post: HomePost }) {
     <Link
       href={`/post/${post.slug}`}
       data-avoid-lyrics
-      className="group relative block rounded-lg border border-line bg-card p-6 shadow-paper-lg transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99] sm:p-9 sm:pt-8"
+      className="home-featured group relative block rounded-lg border border-line bg-card p-6 shadow-paper-lg transition-transform duration-300 hover:-translate-y-1 active:scale-[0.99] sm:p-9 sm:pt-8"
       style={{ rotate: "-0.4deg" }}
     >
       <PaperClip className="-top-4 left-8" rotate={-4} tone="ink" />
@@ -296,13 +295,13 @@ function PostCard({ post }: { post: HomePost }) {
   const fresh = isFreshPost(post, Date.now());
 
   return (
-    <div className="relative" style={{ transform: `rotate(${c.rotate}deg)` }}>
+    <div className="home-post relative">
       <Link
         href={`/post/${post.slug}`}
         className="sketch-card relative block overflow-visible p-5 pt-6 transition-transform active:scale-[0.99]"
         style={paperTextureStyle(c.paper)}
       >
-        <ChaosDecor chaos={c} />
+        <span className="home-post-decor" aria-hidden><ChaosDecor chaos={c} /></span>
         <div className="mb-2.5 flex items-center justify-between gap-2">
           <span
             className={`rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${meta.badge}`}
@@ -362,11 +361,11 @@ function PostCard({ post }: { post: HomePost }) {
 function FreshStack({ posts }: { posts: HomePost[] }) {
   return (
     <div
-      className="relative rounded-lg border border-line bg-card px-5 pb-3 pt-4 shadow-paper"
-      style={{ rotate: "0.6deg" }}
+      className="home-stack relative rounded-lg border border-line bg-card px-5 pb-3 pt-4 shadow-paper"
+      style={{ rotate: "0deg" }}
     >
       <span className="inline-block -rotate-1 font-hand text-xl text-accent-rust">
-        also on the table —
+        more writing
       </span>
       <ol>
         {posts.map((post, i) => {
@@ -406,7 +405,7 @@ function FreshStack({ posts }: { posts: HomePost[] }) {
         href="#feed"
         className="mb-1 inline-block font-hand text-lg text-accent-purple transition-transform duration-200 hover:translate-x-1"
       >
-        every page, below ↓
+        browse the archive ↓
       </a>
     </div>
   );
@@ -436,14 +435,14 @@ export default function SketchbookHome({
   );
 
   return (
-    <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-10 md:pt-12">
+    <main className="home-page relative mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-10 md:pt-12">
       {/* ============ THE SPREAD: identity + pages | the desk's edge ============
           one grid, so the rail (music → stack → collage) flows in a single
           column with even gaps beside the name and the open pages. */}
-      <section className="grid gap-10 md:grid-cols-[1.55fr_0.85fr] md:items-start md:gap-14">
+      <section className="home-spread grid gap-10 md:grid-cols-[1.55fr_0.85fr] md:items-start md:gap-14">
         {/* left: identity, then the open pages */}
         <div>
-          <header data-avoid-lyrics className="rise d1">
+          <header data-avoid-lyrics className="home-intro rise d1">
             <div className="flex items-center gap-2">
               <span className="font-hand text-2xl -rotate-2 text-accent-rust">
                 welcome to the sketchbook
@@ -496,7 +495,7 @@ export default function SketchbookHome({
             <div className="rise d2 mt-10" data-avoid-lyrics>
               <FeaturedSheet post={featured} />
               {pair.length > 0 && (
-                <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2">
+                <div className="home-pair mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2">
                   {pair.map((post) => (
                     <PostCard key={post.id} post={post} />
                   ))}
@@ -513,7 +512,7 @@ export default function SketchbookHome({
         {/* right: the desk's edge, one continuous rail */}
         {/* min-w-0: let the fr track shrink so long track titles truncate
             instead of blowing the grid past the viewport */}
-        <aside className="rise d2 flex min-w-0 flex-col gap-8 md:pt-4">
+        <aside className="home-rail rise d2 flex min-w-0 flex-col gap-8 md:pt-4">
           <NowSpinningCard />
           {stack.length > 0 && <FreshStack posts={stack} />}
           <CollageCard bannerImage={bannerImage} sketchCount={sketchCount} />
@@ -546,10 +545,10 @@ export default function SketchbookHome({
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 className="font-serif text-3xl font-medium text-ink">
-                every page
+                the archive
               </h2>
               <span className="font-hand text-xl -rotate-2 text-accent-purple">
-                — {posts.length} in the book
+                — {posts.length} entries
               </span>
             </div>
             {/* filter chips */}
@@ -560,6 +559,7 @@ export default function SketchbookHome({
                   <button
                     key={f.key}
                     onClick={() => setFilter(f.key)}
+                    aria-pressed={active}
                     /* before: pads the touch target to ~44px without growing the chip */
                     className={`relative rounded-full border px-4 py-1.5 text-sm transition-all duration-200 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] ${
                       active
@@ -583,7 +583,7 @@ export default function SketchbookHome({
           ) : (
             <div
               data-avoid-lyrics
-              className="mt-9 grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
+              className="home-feed-grid mt-9 grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
             >
               {shown.map((post) => (
                 <PostCard key={post.id} post={post} />

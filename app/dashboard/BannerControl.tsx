@@ -71,10 +71,10 @@ export default function BannerControl() {
             the collage
           </p>
           <h2 className="mt-1 font-serif text-xl font-medium text-ink">
-            confessional collage
+            nightly collage
           </h2>
           <p className="mt-2 text-sm text-ink-soft">
-            re-weave the sketches into a fresh painted nocturne via gpt-image-2. the latest collage is shown on /collage.
+            create a new collage from visitor sketches.
           </p>
           {loading ? null : banner ? (
             <p className="mt-3 text-xs text-ink-faint">
@@ -106,9 +106,9 @@ export default function BannerControl() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="inline-flex items-center justify-center rounded-full bg-accent-orange px-5 py-2.5 text-sm font-medium text-pure-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full bg-ink dark:bg-paper px-5 py-2.5 text-sm font-medium text-paper dark:text-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {generating ? "weaving..." : banner ? "regenerate banner" : "generate banner"}
+            {generating ? "creating…" : banner ? "refresh collage" : "create collage"}
           </button>
         </div>
       </div>

@@ -32,7 +32,7 @@ export default function Connect() {
       username: "@mazoomzoom",
       url: "https://www.instagram.com/mazoomzoom/",
       tone: "orange" as const,
-      rotate: -2.5,
+      rotate: -0.6,
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12.017 0C8.396 0 7.938.012 6.718.07 5.498.127 4.697.334 4.007.63c-.716.3-1.323.703-1.926 1.306S1.34 3.29 1.04 4.006c-.296.69-.503 1.49-.56 2.71C.422 7.936.41 8.394.41 12.015c0 3.62.012 4.078.07 5.298.057 1.22.264 2.02.56 2.71.3.715.703 1.322 1.306 1.925.603.603 1.21 1.006 1.926 1.306.69.296 1.49.503 2.71.56 1.22.058 1.678.07 5.298.07 3.62 0 4.078-.012 5.298-.07 1.22-.057 2.02-.264 2.71-.56.715-.3 1.322-.703 1.925-1.306.603-.603 1.006-1.21 1.306-1.925.296-.69.503-1.49.56-2.71.058-1.22.07-1.678.07-5.298 0-3.62-.012-4.078-.07-5.298-.057-1.22-.264-2.02-.56-2.71-.3-.715-.703-1.322-1.306-1.925C19.478.64 18.871.237 18.156-.063c-.69-.296-1.49-.503-2.71-.56C14.226.012 13.768 0 10.148 0H12.017zm-.058 2.188c3.555 0 3.976.014 5.38.072 1.297.058 2.003.27 2.47.45.622.242 1.066.532 1.532.998.466.466.756.91.998 1.532.18.467.392 1.173.45 2.47.058 1.404.072 1.825.072 5.38s-.014 3.976-.072 5.38c-.058 1.297-.27 2.003-.45 2.47-.242.622-.532 1.066-.998 1.532-.466.466-.91.756-1.532.998-.467.18-1.173.392-2.47.45-1.404.058-1.825.072-5.38.072s-3.976-.014-5.38-.072c-1.297-.058-2.003-.27-2.47-.45-.622-.242-1.066-.532-1.532-.998-.466-.466-.756-.91-.998-1.532-.18-.467-.392-1.173-.45-2.47-.058-1.404-.072-1.825-.072-5.38s.014-3.976.072-5.38c.058-1.297.27-2.003.45-2.47.242-.622.532-1.066.998-1.532.466-.466.91-.756 1.532-.998.467-.18 1.173-.392 2.47-.45 1.404-.058 1.825-.072 5.38-.072zM12 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
@@ -44,7 +44,7 @@ export default function Connect() {
       username: "@pmazumder3927",
       url: "https://github.com/pmazumder3927",
       tone: "ink" as const,
-      rotate: 2,
+      rotate: 0.5,
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -56,7 +56,7 @@ export default function Connect() {
       username: "music taste",
       url: "/music",
       tone: "purple" as const,
-      rotate: -1.5,
+      rotate: -0.4,
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
@@ -68,7 +68,7 @@ export default function Connect() {
       username: "me@pramit.gg",
       url: "mailto:me@pramit.gg",
       tone: "rust" as const,
-      rotate: 1.5,
+      rotate: 0.4,
       icon: (
         <svg
           className="w-5 h-5"
@@ -128,7 +128,7 @@ END:VCARD`;
     <div className="min-h-screen pb-6 md:pb-16">
       <main className="relative z-10">
         {/* ============ GREETING — a handwritten salutation across the page ============ */}
-        <section className="pt-16 md:pt-24">
+        <section className="pt-12 md:pt-16">
           <div className="mx-auto max-w-4xl px-6 md:px-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -193,7 +193,7 @@ END:VCARD`;
                 </HandNote>
 
                 <Polaroid
-                  rotate={-2.5}
+                  rotate={-0.7}
                   tone="orange"
                   caption={<span>dashing really cool guy</span>}
                   className="w-full"
@@ -210,7 +210,7 @@ END:VCARD`;
                 </Polaroid>
 
                 {/* the name plate, clipped under the photo */}
-                <div className="relative mx-auto mt-5 max-w-[15rem] rotate-[1.2deg] rounded-[3px] border border-line bg-card px-4 py-3 shadow-paper">
+                <div className="relative mx-auto mt-5 max-w-[15rem] rotate-[0.35deg] rounded-[3px] border border-line bg-card px-4 py-3 shadow-paper">
                   <PaperClip
                     className="-right-2 -top-4"
                     rotate={12}
@@ -240,7 +240,9 @@ END:VCARD`;
                     </motion.button>
                     <button
                       onClick={() => setShowQRCode(!showQRCode)}
-                      className="font-hand text-base text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
+                      aria-expanded={showQRCode}
+                      aria-controls="contact-qr"
+                      className="min-h-11 font-hand text-base text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
                     >
                       {showQRCode ? "hide qr" : "show qr"}
                     </button>
@@ -252,6 +254,7 @@ END:VCARD`;
                   <motion.div
                     initial={{ opacity: 0, scale: 0.85, rotate: 6 }}
                     animate={{ opacity: 1, scale: 1, rotate: 3 }}
+                    id="contact-qr"
                     className="relative mx-auto mt-5 w-fit"
                   >
                     <Tape
@@ -331,10 +334,10 @@ END:VCARD`;
                           delay: 0.3 + index * 0.06,
                         }}
                         whileHover={{
-                          y: -4,
+                          y: -2,
                           rotate:
                             link.rotate > 0 ? link.rotate - 2 : link.rotate + 2,
-                          scale: 1.04,
+                          scale: 1.01,
                         }}
                         className="group relative inline-flex items-center gap-2.5 rounded-[5px] border-[1.6px] bg-card px-3.5 py-2 shadow-paper transition-shadow hover:shadow-paper-lg"
                         style={{

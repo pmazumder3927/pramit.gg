@@ -789,7 +789,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
         <p
           className={`${councilSerif.className} text-base italic text-ink-faint`}
         >
-          summoning the council...
+          loading the drawing prompt…
         </p>
       </div>
     );
@@ -799,12 +799,12 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
     return (
       <div className="rounded-xl border-[1.4px] border-accent-rust/40 bg-accent-rust/10 p-5">
         <p className="mb-3 text-sm text-accent-rust">
-          {loadError ?? "The council is unreachable."}
+          {loadError ?? "Couldn’t load the drawing prompt."}
         </p>
         <button
           type="button"
           onClick={reload}
-          className="rounded-xl border-[1.4px] border-line bg-paper-2/50 px-4 py-2 text-sm text-ink-soft transition-colors duration-300 hover:border-accent-orange/60 hover:text-ink"
+          className="min-h-11 rounded-xl border-[1.4px] border-line bg-paper-2/50 px-4 py-2 text-sm text-ink-soft transition-colors duration-300 hover:border-accent-orange/60 hover:text-ink"
         >
           try again
         </button>
@@ -943,7 +943,7 @@ const DrawingCaptcha = forwardRef<DrawingCaptchaHandle, DrawingCaptchaProps>(
                 onClick={reload}
                 disabled={disabled || isLoading}
                 disabledTitle={
-                  isLoading ? "summoning the council..." : undefined
+                  isLoading ? "loading the drawing prompt…" : undefined
                 }
               >
                 <RefreshIcon />

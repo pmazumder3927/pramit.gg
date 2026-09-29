@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import Image from "next/image";
 import { hexToRgb, adjustBrightness } from "../lib/chaotic-styles";
-import { Doodle } from "@/app/components/sketchbook";
+import { Doodle, Stamp } from "@/app/components/sketchbook";
 
 interface NowPlayingTrack {
   isPlaying: boolean;
@@ -24,6 +24,8 @@ interface ChaoticNowPlayingProps {
    *  (with a blank-liner interior) so nothing below it shifts when data lands */
   nowPlaying: NowPlayingTrack | null;
   accentColor: string;
+  isLoading?: boolean;
+  unavailable?: boolean;
   mouseX: ReturnType<typeof useMotionValue<number>>;
   mouseY: ReturnType<typeof useMotionValue<number>>;
 }
@@ -35,28 +37,21 @@ function formatTime(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
-// a 12-point pop-art starburst
-const BURST = Array.from({ length: 24 }, (_, i) => {
-  const a = (Math.PI / 12) * i - Math.PI / 2;
-  const r = i % 2 === 0 ? 48 : 31;
-  return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
-}).join(" ");
-
 export function ChaoticNowPlaying({
   nowPlaying,
   accentColor,
+  isLoading = false,
+  unavailable = false,
   mouseX,
   mouseY,
 }: ChaoticNowPlayingProps) {
-  const x = useTransform(mouseX, [0, 1], [-12, 12]);
-  const y = useTransform(mouseY, [0, 1], [-8, 8]);
+  const x = useTransform(mouseX, [0, 1], [-3, 3]);
+  const y = useTransform(mouseY, [0, 1], [-2, 2]);
   const springX = useSpring(x, { stiffness: 100, damping: 20 });
   const springY = useSpring(y, { stiffness: 100, damping: 20 });
 
   const rgb = hexToRgb(accentColor);
   const lighterColor = adjustBrightness(accentColor, 22);
-  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-  const onAlbum = brightness > 145 ? "#1a1410" : "#fffaf2";
 
   // nothing spinning, but the song is still ECHOING — replaying on a loop in
   // the scape, anchored to when it was last played. Keep time with it here.
@@ -90,37 +85,24 @@ export function ChaoticNowPlaying({
       animate={{ opacity: 1, y: 0, rotate: -0.5 }}
       transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
       style={{ x: springX, y: springY }}
-      className="relative mx-auto mb-16 max-w-3xl md:mb-24"
+      className="relative mx-auto mb-12 max-w-3xl md:mb-16"
     >
-      {/* pop-art starburst badge — the single status label. Absolute, so it
-          pops in with the song without moving anything. */}
       {nowPlaying && (
-      <div className="absolute right-1 -top-7 z-30 h-[4.5rem] w-[4.5rem] rotate-6 md:-right-8 md:-top-10 md:h-28 md:w-28">
-        <svg viewBox="-50 -50 100 100" className="h-full w-full" style={{ filter: "drop-shadow(2px 3px 0 rgb(var(--fg) / 0.5))" }}>
-          <polygon points={BURST} fill={accentColor} stroke="rgb(var(--fg))" strokeWidth="2.5" strokeLinejoin="round" />
-        </svg>
-        {/* label is held to the burst's inner circle so it never hits a spike */}
-        <span className="absolute inset-0 grid place-items-center">
-          <span
-            className="block w-[56%] -rotate-3 text-center font-mono text-[0.58rem] font-extrabold uppercase leading-[1.05] tracking-tight md:text-[0.72rem]"
-            style={{ color: onAlbum }}
-          >
-            {/* the echo keeps the honest "last played" label — the caption under
-                the progress bar is what explains the still-moving playhead */}
+        <div className="absolute -top-3 right-6 z-30">
+          <Stamp tone="rust" rotate={-2}>
             {nowPlaying.isPlaying ? "now playing" : "last played"}
-          </span>
-        </span>
-      </div>
+          </Stamp>
+        </div>
       )}
 
-      {/* the comic panel — hard offset shadow in the album's color */}
+      {/* A paper sleeve with a faint album tint. */}
       <div
-        className="relative overflow-hidden rounded-[4px] border-[3px] border-ink bg-card px-6 py-7 md:px-10 md:py-9"
-        style={{ boxShadow: `9px 9px 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.95)` }}
+        className="relative overflow-hidden rounded-lg border border-line bg-card px-6 py-7 md:px-10 md:py-9"
+        style={{ boxShadow: "var(--shadow-paper-lg)" }}
       >
         {/* ben-day halftone dots, tinted to the album */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.16]"
+          className="pointer-events-none absolute inset-0 opacity-[0.045]"
           style={{
             backgroundImage: `radial-gradient(rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1) 1.5px, transparent 1.7px)`,
             backgroundSize: "9px 9px",
@@ -134,13 +116,13 @@ export function ChaoticNowPlaying({
 
         {nowPlaying ? (
         <div className="relative z-10 flex flex-col items-center gap-7 md:flex-row md:items-center md:gap-10">
-          {/* Album art — popped, thick frame, hard album-color shadow */}
-          <div className="relative shrink-0 -rotate-2">
+          {/* Album art, held in a light paper frame. */}
+          <div className="relative shrink-0 -rotate-[0.35deg]">
             {nowPlaying.albumImageUrl && (
               <motion.div
-                className="relative border-[3px] border-ink bg-paper"
-                style={{ boxShadow: `6px 6px 0 0 rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9)` }}
-                whileHover={{ scale: 1.04, rotate: 0 }}
+                className="relative rounded border border-line bg-paper"
+                style={{ boxShadow: "var(--shadow-paper)" }}
+                whileHover={{ scale: 1.01, rotate: 0 }}
                 transition={{ duration: 0.3 }}
               >
                 <div className="relative h-40 w-40 overflow-hidden md:h-48 md:w-48">
@@ -149,12 +131,12 @@ export function ChaoticNowPlaying({
                     alt={nowPlaying.album}
                     fill
                     className="object-cover"
-                    style={{ filter: "saturate(1.35) contrast(1.08)" }}
+
                     sizes="(max-width: 768px) 160px, 192px"
                   />
                   {/* halftone over the art for that printed-comic feel */}
                   <div
-                    className="pointer-events-none absolute inset-0 mix-blend-multiply opacity-30"
+                    className="pointer-events-none absolute inset-0 mix-blend-multiply opacity-10"
                     style={{
                       backgroundImage: "radial-gradient(rgba(0,0,0,0.5) 1px, transparent 1.2px)",
                       backgroundSize: "5px 5px",
@@ -166,7 +148,7 @@ export function ChaoticNowPlaying({
           </div>
 
           {/* Track info */}
-          <div className="flex flex-1 flex-col text-center md:text-left">
+          <div className="flex min-w-0 flex-1 flex-col text-center md:text-left">
             {nowPlaying.isPlaying && (
               <div className="mb-3 flex justify-center md:justify-start">
                 <span className="eq-bars" aria-label="now playing">
@@ -179,7 +161,7 @@ export function ChaoticNowPlaying({
             )}
 
             <motion.h2
-              className="font-serif text-3xl font-semibold leading-[0.98] tracking-tight text-ink md:text-[2.7rem]"
+              className="font-serif text-3xl font-medium leading-[1.12] tracking-tight text-ink md:text-[2.7rem]"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -224,7 +206,7 @@ export function ChaoticNowPlaying({
                   <span>{formatTime(echoing ? echoProgress : nowPlaying.progress ?? 0)}</span>
                   {echoing && (
                     <span className="font-serif normal-case italic tracking-normal">
-                      still echoing through the page
+                      replaying
                     </span>
                   )}
                   <span>{formatTime(dur)}</span>
@@ -239,8 +221,8 @@ export function ChaoticNowPlaying({
                   href={nowPlaying.songUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group/btn inline-flex items-center gap-2 rounded-full border-[2.5px] border-ink px-5 py-2 font-mono text-xs font-bold uppercase tracking-widest transition-transform hover:-translate-y-0.5"
-                  style={{ background: accentColor, color: onAlbum, boxShadow: "3px 3px 0 0 rgb(var(--fg))" }}
+                  className="btn-sketch group/btn"
+
                 >
                   <svg className="h-4 w-4 transition-transform group-hover/btn:rotate-12" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
@@ -251,20 +233,24 @@ export function ChaoticNowPlaying({
             )}
           </div>
         </div>
+        ) : !isLoading ? (
+          <p role="status" className="relative py-8 text-center font-hand text-xl text-ink-faint">
+            {unavailable ? "listening status unavailable" : "nothing playing right now"}
+          </p>
         ) : (
         /* the blank panel — same flex frame, an empty sleeve where the art
            goes, and blank liner lines set in the exact type sizes so the
            ghost holds the loaded panel's height (echo layout: title, artist,
            album, progress loop, spotify pill). Dashed, faint, no motion. */
         <div className="relative z-10 flex flex-col items-center gap-7 md:flex-row md:items-center md:gap-10">
-          <div className="relative shrink-0 -rotate-2">
+          <div className="relative shrink-0 -rotate-[0.35deg]">
             <div className="border-[3px] border-dashed border-ink/30 bg-paper-2/40">
               <div className="h-40 w-40 md:h-48 md:w-48" />
             </div>
           </div>
 
           <div className="flex w-full flex-1 flex-col text-center md:text-left">
-            <h2 className="font-serif text-3xl font-semibold leading-[0.98] tracking-tight md:text-[2.7rem]">
+            <h2 className="font-serif text-3xl font-medium leading-[1.12] tracking-tight md:text-[2.7rem]">
               <span className="inline-block w-56 max-w-full border-b-2 border-dashed border-line align-baseline md:w-72">
                 &nbsp;
               </span>

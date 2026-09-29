@@ -324,7 +324,7 @@ export default function PostContent({
               <span className="font-hand text-2xl -rotate-1 text-accent-purple">
                 from the journal —
               </span>
-              <h1 className="mt-1 font-serif text-3xl font-medium leading-[1.04] tracking-tight text-ink sm:text-4xl md:text-5xl lg:text-6xl">
+              <h1 className="mt-1 font-serif text-3xl font-medium leading-[1.12] tracking-tight text-ink sm:text-4xl md:text-5xl lg:text-6xl">
                 {post.title}
               </h1>
             </header>
@@ -979,7 +979,7 @@ function CodeCard({
             type="button"
             onClick={copy}
             aria-label={copied ? "Code copied to clipboard" : "Copy code"}
-            className="font-hand text-base leading-none text-ink-faint transition-colors hover:text-accent-orange focus-visible:text-accent-orange lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+            className="min-h-11 px-2 font-hand text-base leading-none text-ink-faint transition-colors hover:text-accent-orange focus-visible:text-accent-orange"
             style={
               copied ? { color: "rgb(var(--accent-orange))", opacity: 1 } : undefined
             }

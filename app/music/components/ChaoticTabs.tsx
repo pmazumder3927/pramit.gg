@@ -17,7 +17,7 @@ interface ChaoticTabsProps {
 }
 
 // each tab is rotated slightly like a stuck-on paper index tab
-const TAB_ROT = [-2.4, 1.6, -1.2];
+const TAB_ROT = [-0.5, 0.35, -0.25];
 
 export function ChaoticTabs({
   tabs,
@@ -41,6 +41,8 @@ export function ChaoticTabs({
         return (
           <motion.button
             key={tab.id}
+            type="button"
+            aria-pressed={isSelected}
             onClick={() => onSelect(tab.id)}
             style={{
               transform: `rotate(${rot}deg)`,
@@ -79,9 +81,7 @@ export function ChaoticTabs({
                 <span
                   className="font-mono text-[0.62rem] uppercase tracking-[0.14em] tabular-nums transition-colors"
                   style={{
-                    color: isSelected
-                      ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
-                      : "rgb(var(--fg-faint))",
+                    color: "rgb(var(--fg-faint))",
                   }}
                 >
                   {tab.count} {tab.id === "playlists" ? "tapes" : "tracks"}

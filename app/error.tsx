@@ -15,16 +15,16 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
+    <div className="min-h-[70svh] flex items-center justify-center px-6 py-16">
       <div className="text-center">
         <span className="font-hand text-3xl -rotate-2 text-accent-rust">oops —</span>
         <h2 className="mt-1 font-serif text-3xl font-medium text-ink mb-4">
           a smudge in the ink
         </h2>
         <p className="text-ink-soft mb-8 max-w-md mx-auto">
-          an unexpected error occurred. please try again or return home.
+          couldn’t load this page. try again?
         </p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex flex-wrap gap-3 justify-center">
           <button onClick={reset} className="btn-sketch btn-sketch-solid">
             try again
           </button>

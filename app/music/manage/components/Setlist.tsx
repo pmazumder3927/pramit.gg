@@ -35,22 +35,22 @@ const KNOBS: Array<{ key: KnobKey; label: string; blurb: string }> = [
   {
     key: "shape",
     label: "how much arc",
-    blurb: "How hard each side is pulled onto its contour — hot open, drift down, lift two thirds in.",
+    blurb: "How closely each side follows its energy curve.",
   },
   {
     key: "movement",
     label: "how much movement",
-    blurb: "How much contrast is demanded between neighbours, and how much every four songs must move. This is the cure for bland.",
+    blurb: "How much the sound changes between songs and across each group of four.",
   },
   {
     key: "discovery",
     label: "how much discovery",
-    blurb: "How many songs almost nobody knows a side can carry, and how early they are allowed in.",
+    blurb: "How many lesser-known songs appear, and how early.",
   },
   {
     key: "leadWithNew",
     label: "lead with the new",
-    blurb: "Pull what you found lately, and what came out lately, toward the front of every side — and put the newest sides first. A different question from the one above: this is about what's new to you, that is about what a visitor knows.",
+    blurb: "Bring recent finds and releases forward, with the newest sides first.",
   },
 ];
 
@@ -823,8 +823,8 @@ function Bench({
               className="mt-1.5 w-full accent-[rgb(var(--accent-purple))]"
             />
             <div className="mt-1 flex justify-between text-xs text-ink-faint">
-              <span>how it sounds — loudness, brightness, timbre, tempo</span>
-              <span>what it&rsquo;s about — an embedding of the words</span>
+              <span>sound — loudness, brightness, timbre, tempo</span>
+              <span>lyrics and subject matter</span>
             </div>
           </div>
 

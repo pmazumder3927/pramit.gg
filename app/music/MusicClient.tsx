@@ -82,11 +82,7 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-// now-playing is different: even its error responses carry a settled
-// "nothing playing" JSON payload. Parse instead of throwing so a persistent
-// upstream failure resolves the panel rather than leaving the ghost interior
-// looking like it's loading forever.
-const nowPlayingFetcher = (url: string) => fetch(url).then((res) => res.json());
+const nowPlayingFetcher = fetcher;
 
 // Preload all Spotify data as soon as this module is imported on the client
 // (i.e. when Next.js prefetches the music page on link hover) so the SWR cache
@@ -159,7 +155,7 @@ export default function MusicClient({
     });
   };
 
-  const { data: nowPlaying } = useSWR<NowPlayingTrack>(
+  const { data: nowPlaying, error: nowPlayingError, isLoading: nowPlayingLoading } = useSWR<NowPlayingTrack>(
     "/api/spotify/now-playing",
     nowPlayingFetcher,
     { refreshInterval: 30000 },
@@ -304,7 +300,7 @@ export default function MusicClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
-          className="pt-20 pb-6 md:pt-28 md:pb-10"
+          className="pt-12 pb-6 md:pt-16 md:pb-8"
         >
           <div className="max-w-5xl mx-auto px-4 md:px-8">
             {/* Liner-note masthead */}
@@ -337,9 +333,6 @@ export default function MusicClient({
                 />
               </div>
 
-              <p className="mt-5 font-serif text-lg italic text-ink-soft md:text-xl">
-                a window into my (sonic) world
-              </p>
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                 <a
@@ -379,16 +372,6 @@ export default function MusicClient({
                 </button>
               </div>
 
-              {/* invisible (not removed) while the panel is open so nothing
-                  shifts — the button reads "maybe later" then, and the arrow
-                  pointing at it would lie */}
-              <p
-                className={`mt-3 -rotate-1 font-hand text-lg text-ink-faint ${
-                  showSuggest ? "invisible" : ""
-                }`}
-              >
-                ↑ suggest me a song
-              </p>
             </motion.div>
 
             {/* Suggest-a-song — collapses inline so it reads as a CTA */}
@@ -416,7 +399,9 @@ export default function MusicClient({
                 tracklist below never jump when the fetch lands; the panel's
                 interior inks itself in once the song arrives. */}
             <ChaoticNowPlaying
-              nowPlaying={nowPlaying ?? null}
+              nowPlaying={nowPlaying?.artist || nowPlaying?.songUrl ? nowPlaying : null}
+              isLoading={nowPlayingLoading}
+              unavailable={!!nowPlayingError}
               accentColor={nowPlayingColor}
               mouseX={mouseX}
               mouseY={mouseY}
@@ -618,12 +603,12 @@ function CrateNote({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-14 text-center">
       <p className="-rotate-1 font-hand text-2xl text-accent-rust">
-        the record crate is jammed
+        couldn’t load the music
       </p>
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 font-hand text-lg text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
+        className="mt-3 min-h-11 font-hand text-lg text-ink-faint underline decoration-dashed decoration-line underline-offset-4 transition-colors hover:text-accent-orange"
       >
         try again
       </button>
@@ -639,9 +624,8 @@ function EmptyState({ emoji, message }: { emoji: string; message: string }) {
       animate={{ opacity: 1, scale: 1 }}
     >
       <motion.div
-        animate={{ rotate: [0, 10, -10, 0] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="text-6xl mb-4"
+        aria-hidden
+        className="text-3xl mb-3"
       >
         {emoji}
       </motion.div>

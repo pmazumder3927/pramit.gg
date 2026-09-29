@@ -213,7 +213,7 @@ export default function Verso({
                   verso
                 </Stamp>
                 <HandNote tone="purple" rotate={-2} className="text-xl">
-                  the back of the page —
+                  post settings
                 </HandNote>
               </div>
               <button
@@ -221,7 +221,7 @@ export default function Verso({
                 onClick={onClose}
                 className="font-hand text-xl text-ink-faint transition-colors hover:text-accent-rust"
               >
-                tuck it away
+                close
               </button>
             </div>
 
@@ -236,8 +236,8 @@ export default function Verso({
                     className="font-hand text-lg text-ink-soft transition-colors hover:text-accent-orange disabled:opacity-60"
                   >
                     {ghostBusy
-                      ? "the ghost is reading the entry…"
-                      : "let the ghost fill this side ✦"}
+                      ? "reading the post…"
+                      : "suggest summary, tags & cover"}
                   </button>
                   {ghostFill && !ghostBusy && (
                     <button
@@ -245,7 +245,7 @@ export default function Verso({
                       onClick={putBack}
                       className="font-hand text-lg text-ink-faint transition-colors hover:text-accent-rust"
                     >
-                      put it back ↩
+                      undo suggestions
                     </button>
                   )}
                 </div>
@@ -267,18 +267,19 @@ export default function Verso({
 
               {/* blurb + live shelf ghost */}
               <div>
-                <FieldLabel>the blurb — cards &amp; link previews</FieldLabel>
+                <FieldLabel>summary</FieldLabel>
                 <textarea
                   rows={2}
+                  aria-label="Summary"
                   value={working.description}
                   onChange={(e) => setField("description", e.target.value)}
-                  placeholder="a line or two for the shelf and link unfurls…"
+                  placeholder="a short description for cards and links…"
                   className={`${inputCls} resize-none`}
                 />
                 <div className="mt-3 flex justify-center">
                   <div
                     className="sketch-card w-64 p-4"
-                    style={{ transform: "rotate(-1.2deg)" }}
+                    style={{ transform: "rotate(-0.35deg)" }}
                   >
                     <div className="mb-1.5 flex items-center gap-2">
                       <span
@@ -302,13 +303,13 @@ export default function Verso({
                   </div>
                 </div>
                 <p className="mt-2 text-center font-hand text-base text-ink-faint">
-                  ↑ how it sits on the shelf
+                  card preview
                 </p>
               </div>
 
               {/* size */}
               <div>
-                <FieldLabel>card size on the front page</FieldLabel>
+                <FieldLabel>homepage card size</FieldLabel>
                 <div className="flex flex-wrap gap-2">
                   {SIZES.map((s) => {
                     const active = working.display_size === s.value;
@@ -316,8 +317,9 @@ export default function Verso({
                       <button
                         key={s.label}
                         type="button"
+                        aria-pressed={active}
                         onClick={() => setField("display_size", s.value)}
-                        className={`rounded-full border px-3.5 py-1 text-xs transition-colors ${
+                        className={`min-h-11 rounded-full border px-3.5 py-2 text-sm transition-colors ${
                           active
                             ? "border-ink bg-ink text-paper"
                             : "border-line text-ink-soft hover:border-ink/40"
@@ -332,10 +334,11 @@ export default function Verso({
 
               {/* pin */}
               <div className="flex items-center justify-between">
-                <FieldLabel>pinned to the front</FieldLabel>
+                <FieldLabel>pin to homepage</FieldLabel>
                 <button
                   type="button"
                   role="switch"
+                  aria-label="Pin to homepage"
                   aria-checked={working.is_pinned}
                   onClick={() => setField("is_pinned", !working.is_pinned)}
                   className="flex items-center gap-2"
@@ -375,9 +378,10 @@ export default function Verso({
 
               {/* soundtrack */}
               <div>
-                <FieldLabel>soundtrack / embed — youtube or soundcloud</FieldLabel>
+                <FieldLabel>youtube or soundcloud link</FieldLabel>
                 <input
                   type="text"
+                  aria-label="YouTube or SoundCloud link"
                   value={working.media_url}
                   onChange={(e) => setField("media_url", e.target.value)}
                   placeholder="https://…"
@@ -387,10 +391,11 @@ export default function Verso({
 
               {/* meta image */}
               <div>
-                <FieldLabel>cover for link previews</FieldLabel>
+                <FieldLabel>preview image</FieldLabel>
                 <div className="flex gap-2">
                   <input
                     type="text"
+                    aria-label="Preview image URL"
                     value={working.meta_image}
                     onChange={(e) => setField("meta_image", e.target.value)}
                     placeholder="https://… (or upload)"
@@ -425,7 +430,7 @@ export default function Verso({
 
               {/* the url */}
               <div>
-                <FieldLabel>lives at</FieldLabel>
+                <FieldLabel>post URL</FieldLabel>
                 <p className="font-mono text-sm text-ink-soft">
                   /post/<span className="text-ink">{slugPreview}</span>
                   {!isPublished && (
@@ -445,16 +450,17 @@ export default function Verso({
                         }}
                         className="font-hand text-base text-ink-faint transition-colors hover:text-accent-rust"
                       >
-                        re-cut the url ✂
+                        change URL
                       </button>
                     ) : (
                       <div className="rounded-md border border-dashed border-accent-rust/50 bg-accent-rust/[0.06] p-3">
                         <p className="mb-2 font-hand text-lg text-accent-rust">
-                          this breaks the old link. people may be holding it.
+                          the old link will stop working.
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <input
                             type="text"
+                            aria-label="New post URL slug"
                             value={recutValue}
                             onChange={(e) => setRecutValue(e.target.value)}
                             className={inputCls}
@@ -471,14 +477,14 @@ export default function Verso({
                             }}
                             className="shrink-0 rounded-md border border-accent-rust px-3 py-2 text-xs text-accent-rust transition-colors hover:bg-accent-rust/10 disabled:opacity-40"
                           >
-                            re-cut
+                            change URL
                           </button>
                           <button
                             type="button"
                             onClick={() => setRecutOpen(false)}
                             className="shrink-0 rounded-md border border-line px-3 py-2 text-xs text-ink-soft"
                           >
-                            leave it
+                            cancel
                           </button>
                         </div>
                       </div>
@@ -525,7 +531,7 @@ export default function Verso({
                       onClick={onUnpublish}
                       className="font-hand text-base text-ink-faint transition-colors hover:text-accent-rust"
                     >
-                      pull it back to drafts
+                      unpublish
                     </button>
                   </div>
                 )}

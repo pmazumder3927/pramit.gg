@@ -145,6 +145,7 @@ export function Graveyard() {
             <div key={year.year}>
               <button
                 type="button"
+                aria-expanded={expanded}
                 onClick={() => setOpen(expanded ? -1 : year.year)}
                 className="flex w-full items-center gap-4 rounded-lg border border-line bg-card px-4 py-3 text-left shadow-paper transition-colors hover:border-ink/25"
               >
@@ -185,7 +186,7 @@ export function Graveyard() {
                       {year.tracks.map((track) => (
                         <div
                           key={track.id}
-                          className="group flex items-center gap-3 px-2 py-2"
+                          className="group flex flex-wrap items-center gap-3 px-2 py-2"
                         >
                           <Art
                             src={track.art}
@@ -200,7 +201,7 @@ export function Graveyard() {
                           <span className="flex-none font-mono text-[10px] text-ink-faint">
                             {formatAgo(track.retiredAt)}
                           </span>
-                          <div className="flex flex-none gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                          <div className="flex w-full flex-none justify-end gap-2 transition-opacity sm:w-auto sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
                             <Button
                               onClick={() => revive(track.id)}
                               disabled={reviving === track.id}
@@ -210,9 +211,10 @@ export function Graveyard() {
                             {track.songUrl && (
                               <a
                                 href={track.songUrl}
+                                aria-label={`Open ${track.title} in Spotify`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center rounded-md border border-line px-2 py-1.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-accent-orange"
+                                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-line px-2 py-1.5 font-mono text-xs text-ink-faint transition-colors hover:text-accent-orange"
                               >
                                 ↗
                               </a>
